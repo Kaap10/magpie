@@ -15,6 +15,8 @@
   - [Driving skills via agent frontends](#driving-skills-via-agent-frontends)
     - [OpenCode (reference harness)](#opencode-reference-harness)
     - [Aider CLI](#aider-cli)
+    - [Goose (Block)](#goose-block)
+    - [Continue.dev](#continuedev)
   - [Model capability floors and calibration](#model-capability-floors-and-calibration)
     - [Floor 1: 70B+ reasoning class](#floor-1-70b-reasoning-class)
     - [Floor 2: 8B–14B bounded class](#floor-2-8b14b-bounded-class)
