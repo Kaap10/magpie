@@ -392,7 +392,7 @@ authoritative runtime matrix. The current state per harness:
 | Codex CLI | Experimental first-class adapter — reads `.agents/skills/` natively, ships in-tree sandbox + HITL rules | [#313](https://github.com/apache/magpie/issues/313) |
 | Gemini CLI | Reads `.agents/skills/` natively; project action-guard hook and spec-loop profile — see the [runtime guide](docs/adapters/gemini.md) | [#314](https://github.com/apache/magpie/issues/314) |
 | Local LLM (Ollama / llama.cpp / vLLM) | Not yet ported | [#315](https://github.com/apache/magpie/issues/315) |
-| Cursor (Composer + Agent CLI) | Not yet ported | [#316](https://github.com/apache/magpie/issues/316) |
+| Cursor (Composer + Agent CLI) | Reads `.agents/skills/` natively; per-action confirmation and Composer/Agent CLI — see the [runtime guide](docs/adapters/cursor.md) | [#316](https://github.com/apache/magpie/issues/316) |
 | Aider | Not yet ported | [#317](https://github.com/apache/magpie/issues/317) |
 | GitHub Copilot CLI + Coding Agent | Not yet ported | [#318](https://github.com/apache/magpie/issues/318) |
 | Goose (Block) | Not yet ported | [#319](https://github.com/apache/magpie/issues/319) |

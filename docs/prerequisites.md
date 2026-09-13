@@ -69,8 +69,11 @@ on any single vendor for either — any agent that reads the shared
 - **[Gemini CLI](https://geminicli.com/)** reads Magpie's canonical
   `.agents/skills/` tree. Magpie provides a `BeforeTool` action-guard adapter
   and a spec-loop profile; see [the Gemini runtime guide](adapters/gemini.md).
+- **[Cursor](https://cursor.com/)** (Composer + `cursor-agent` CLI) reads Magpie's
+  canonical `.agents/skills/` tree natively and supports per-action confirmation
+  and clean-environment isolation; see [the Cursor runtime guide](adapters/cursor.md).
 
-Support for more runtimes (Cursor, Copilot, …) is tracked in
+Support for more runtimes (Copilot, …) is tracked in
 the
 [open adapter issues](https://github.com/apache/magpie/issues?q=is%3Aissue%20is%3Aopen%20adapter).
 
