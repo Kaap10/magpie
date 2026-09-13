@@ -117,6 +117,8 @@ mapping. The long-form sections below remain the canonical Claude Code
 setup; the four `setup-isolated-*` skills route Codex to the adapter
 before entering any Claude-only settings flow.
 
+The same four skills route Gemini CLI to its [setup lifecycle](../adapters/gemini.md#setup-isolated-lifecycle).
+
 ### Agent-guided (recommended)
 
 If you have Claude Code installed and a clone of `magpie`

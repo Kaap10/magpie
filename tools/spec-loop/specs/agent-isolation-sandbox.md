@@ -13,8 +13,9 @@ source: >
   tools/agent-guard/, tools/permission-audit/, tools/egress-gateway/,
   the setup-isolated-setup-* skills, and .claude/settings.json.
 acceptance:
-  - Every agent subprocess runs inside an OS-level sandbox with default-
-    deny filesystem reads and network egress.
+  - The reference setup uses an OS-level sandbox with default-deny
+    filesystem reads and network egress; runtime-specific exceptions
+    are documented in the adapter and this spec.
   - Credential-shaped env vars are stripped before the agent execs.
   - State-mutating shell calls (git push, and every gh command except
     allow-listed read-only ones) require a confirmation prompt;
@@ -25,10 +26,17 @@ acceptance:
 
 ## What it does
 
-Runs every agent invocation inside a layered sandbox so that even a
+Runs reference agent invocations inside a layered sandbox so that even a
 successful prompt injection cannot read credentials or reach a
 non-allowed host. The fallback when prompt engineering fails is the OS
 saying "no".
+
+Gemini CLI uses tool sandboxing rather than whole-process isolation.
+Its native file tools restrict reads to allowed directories, but the tested
+Linux backend exposes host files broadly read-only to approved shell commands.
+Native credential-path policy denies do not block equivalent shell reads.
+Tool network restrictions do not cover the CLI, hooks, or MCP servers;
+existing sandbox grants can widen the baseline. See `docs/adapters/gemini.md`.
 
 ## Where it lives
 
@@ -38,7 +46,7 @@ saying "no".
   (`stdlib`-only). Wired as a `PreToolUse` hook (Claude Code) or a
   `tool.execute.before` plugin (OpenCode), with a `--gemini` adapter for
   Gemini CLI's `BeforeTool` event (wired in the repository's
-  `.gemini/settings.json`; manual registration for snapshot adopters); inspects every shell command
+  `.gemini/settings.json`; registration for snapshot adopters); inspects every shell command
   before it runs and denies the ones that break a hard framework rule,
   independent of model memory. The guard decisions live in a single
   harness-agnostic `dispatch()` core so every wired harness enforces
@@ -57,6 +65,12 @@ saying "no".
 - `.claude/settings.json` — the `sandbox` block (filesystem
   allow/deny, network `allowedDomains`, `excludedCommands`) and
   `permissions` (`deny` / `ask`).
+- `.gemini/settings.json` and `.gemini/policies/magpie.toml` — Magpie's Gemini profile: tool-sandboxing and an explicitly loaded User-tier approval policy.
+  Scoped shell reads are allowed; other shell calls, native edits, and MCP calls ask; listed commands and credential paths deny.
+  Credential-path denies name the canonical `grep_search`; the native probe verifies its `search_file_content` alias, canonical policy names, and search/multi-file argument schemas against the loaded runtime.
+  `google_web_search` requires approval for each query in every mode, including Plan Mode, because API-backed searches bypass shell network isolation; headless calls are refused.
+  Plan Mode permits the scoped reads and denies other shell/edit/MCP operations; YOLO and remembered tool approvals are disabled.
+  `sandbox-lint --gemini .gemini` checks the static profile, with opt-in pytest integration tests against native 0.59.0 APIs for settings, policies, headless refusal, and Linux enforcement.
 - Skills: `setup-isolated-setup-install`, `-update`, `-verify`,
   `-doctor` (probes live sandbox restrictions — SSH-agent reachability,
   localhost port binding, docker/podman socket — and maps each to a
@@ -70,6 +84,9 @@ The reference model is four layers, layered:
 1. **Clean environment** — a wrapper strips the process env to a
    project-declared whitelist before exec (no `$GH_TOKEN`, `$AWS_*`,
    `$ANTHROPIC_API_KEY` leakage).
+   `AGENT_ISO_ALLOW` explicitly names additional variables required by runtime authentication or tooling.
+   It replaces `CLAUDE_ISO_ALLOW` when set, including an empty value; the legacy name remains supported otherwise.
+   Unlisted variables stay stripped and values are never printed by the wrapper.
 2. **Filesystem + network sandbox** — Linux `bubblewrap` + `socat` SNI
    proxy; macOS `sandbox-exec`. Default-deny reads outside the tree and
    egress to non-allowed hosts. `sandbox.excludedCommands` carves out
@@ -94,7 +111,8 @@ cooldown window; bumps are PRs, not silent updates.
 
 ## Acceptance criteria
 
-1. Filesystem and network default-deny with explicit allow-lists.
+1. Filesystem and network default-deny with explicit allow-lists in the
+   reference setup; Gemini's different boundaries are documented above.
 2. The clean-env wrapper strips credential-shaped vars before exec.
 3. `git push` and `Bash(gh *)` are in `permissions.ask` (read-only `gh`
    exempted via `allow`); secret/cred files are in `permissions.deny`.
@@ -103,7 +121,7 @@ cooldown window; bumps are PRs, not silent updates.
 
 ```bash
 uv run --project tools/agent-isolation --group dev pytest
-uv run --project tools/agent-guard --group dev pytest
+uv run --directory tools/agent-guard --group dev pytest
 uv run --project tools/permission-audit --group dev pytest
 uv run --project tools/egress-gateway --group dev pytest
 python3 -c "import json,sys; s=json.load(open('.claude/settings.json')); \
@@ -118,3 +136,16 @@ python3 -c "import json,sys; s=json.load(open('.claude/settings.json')); \
 - **`tools/agent-guard/` and `tools/egress-gateway/` are new additions**
   since the last pilot cycle; end-to-end integration with a real adopter
   session has not yet been exercised.
+
+## Gemini setup lifecycle
+
+The four `setup-isolated-setup-*` skills route Gemini requests to
+`docs/adapters/gemini.md` and stop before the Claude-specific procedure.
+The install route merges the workspace profile and a single guard registration
+from the existing extension, snapshot, or framework checkout, preserving
+unrelated settings and requiring review of conflicts.
+Extension setup must not introduce a second snapshot installation.
+Verification distinguishes static configuration from live enforcement;
+update and doctor report drift or diagnoses without applying changes.
+Generic setup reconciles installed profiles and removes their guard references
+before uninstalling the source.
