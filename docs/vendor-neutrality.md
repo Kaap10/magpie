@@ -323,9 +323,11 @@ shell-hook adapter and a spec-loop profile; see the
 Cursor reads Magpie's canonical `.agents/skills/` tree and supports per-action
 confirmation in Composer and the `cursor-agent` CLI; see the
 [Cursor runtime guide](adapters/cursor.md).
+Local LLMs (Ollama, llama.cpp, vLLM) serve open-weight models via
+OpenAI-compatible endpoints with calibrated capability floors; see the
+[Local LLM runtime guide](adapters/local-llm.md).
 The remaining extension points are
 already open, labelled `good first issue`:
-[local LLM (Ollama / llama.cpp / vLLM)](https://github.com/apache/magpie/issues/315),
 [Aider](https://github.com/apache/magpie/issues/317),
 [GitHub Copilot](https://github.com/apache/magpie/issues/318),
 [Goose](https://github.com/apache/magpie/issues/319),
