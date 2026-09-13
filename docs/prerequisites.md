@@ -85,7 +85,8 @@ the
 - an **organisation-hosted LLM** — for example the planned
   [`llm.apache.org`](https://llm.apache.org) endpoint for ASF projects;
 - an **open-weight model** — hosted on a provider of your choice, or run
-  **locally** (Ollama, llama.cpp, vLLM) for sovereign or air-gapped use.
+  **locally** (Ollama, llama.cpp, vLLM) for sovereign or air-gapped use;
+  see [the Local LLM runtime guide](adapters/local-llm.md).
 
 Because **OpenCode is model-agnostic it is the reference tool — it allows
 all of the above**; Claude Code is the complete alternative for the
