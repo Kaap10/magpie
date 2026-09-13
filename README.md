@@ -52,9 +52,9 @@ agent you already use.
 ```
 
 Install **one plugin per family you actually want** — that keeps the always-on
-context cost proportional (~0.2–2.0k tokens a family). The all-in-one
-`magpie` plugin installs all 74 skills at ~8.6k always-on tokens and is **not
-recommended** unless you genuinely need every family.
+context cost proportional (~0.2–2.0k tokens a family). There is no
+install-everything plugin: every installed skill costs context on every turn,
+used or not, so the framework asks you to pick.
 
 Codex, VS Code / Copilot, and Gemini are one-liners too — the
 [quick start](docs/quick-start.md) has all four, plus what to run next to put
@@ -67,7 +67,7 @@ contributor and CI job pinned to one committed version with drift detection.
 
 1. [Download / pin a release](https://magpie.apache.org/downloads/)
 2. Set up the symlinks and git-ignores — see
-   [`docs/setup/install-recipes.md`](docs/setup/install-recipes.md)
+   [`docs/setup/install-recipes.md`](docs/quick-start/other-install-methods.md)
 3. Ask your agent to complete the install: `/magpie-setup install`
 
 The two are complementary, not exclusive.
@@ -88,7 +88,7 @@ or skill calls starting with a slash, like
 > /magpie-repo-health:dependency-audit
 
 (the family-plugin form, assuming the recommended marketplace install above —
-see [Skill names differ by install method](docs/setup/marketplaces.md#skill-names-differ-by-install-method)
+see [Skill names differ by install method](docs/setup/marketplace.md#skill-names-differ-by-install-method)
 if you're on the pinned-snapshot fallback instead).
 
 ## Update / maintain
@@ -171,7 +171,7 @@ files are reproduced in [`NOTICE`](NOTICE).
 
 - [`MISSION.md`](MISSION.md) — founding mission of the established TLP: motivation, scope, design commitments, initial PMC composition target.
 - [`docs/setup/agentic-overrides.md`](docs/setup/agentic-overrides.md) — the contract between adopters who write overrides and framework skills that read them.
-- [`docs/prerequisites.md`](docs/prerequisites.md) — what a maintainer needs installed before invoking any framework skill (Claude Code, Gmail MCP, GitHub auth, browser, `uv`, etc.).
+- [`docs/prerequisites.md`](docs/quick-start/prerequisites.md) — what a maintainer needs installed before invoking any framework skill (Claude Code, Gmail MCP, GitHub auth, browser, `uv`, etc.).
 - [`docs/source-release-contents.md`](docs/source-release-contents.md) — what ships in the signed `apache-magpie-<version>-source.zip` (and what is excluded), with the rationale for the repository-root metadata/config files it keeps.
 - [`docs/release-management/manual-release-process.md`](docs/release-management/manual-release-process.md) — the concrete, as-executed runbook for cutting a Magpie release by hand on the current hybrid SVN-dist + ATR-vote backend (with the abstract per-backend runbooks and the 14-step lifecycle alongside it in [`docs/release-management/`](docs/release-management/README.md)).
 - [`AGENTS.md`](AGENTS.md) — agent instructions, placeholder convention, framework conventions.

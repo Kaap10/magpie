@@ -1,0 +1,120 @@
+{
+  "_comment": [
+    "Third-party skill packages that pair well with a Magpie family, and where to get",
+    "them for the harness you actually use.",
+    "",
+    "Magpie recommends none of these as a dependency: every family works with none of",
+    "them installed. They are named because a maintainer who has just installed, say,",
+    "the security family is about to go looking for exactly this, and the answer",
+    "differs per harness in a way no single install line can express.",
+    "",
+    "Rules for an entry, enforced by tools/dev/check-companion-skills.py:",
+    "  - `harnesses` names every harness the package is actually available on. Each",
+    "    value carries `install` (that harness's own command) and `marketplace`.",
+    "  - `marketplace` is the catalogue the agent must be pointed at first, as",
+    "    `owner/repo`, or null when there is none to add -- because the package is in",
+    "    a catalogue the agent already has, or because that harness installs straight",
+    "    from a URL. It is a separate field because adding somebody else's",
+    "    marketplace is a trust decision, not an implementation detail of an install",
+    "    command: the install flow asks about it on its own, names whose it is, and",
+    "    never adds one without a yes.",
+    "  - `url` points at the package's own documentation, never at a directory site,",
+    "    so the link survives a directory going away.",
+    "  - `why` says what it adds *to that family*. An entry that cannot say this is",
+    "    an advert, not a recommendation, and does not belong here.",
+    "  - `vendor` is recorded because docs/vendor-neutrality.md is a live metric and",
+    "    a reader deserves to see whose tool they are being pointed at."
+  ],
+  "companions": [
+    {
+      "id": "superpowers",
+      "title": "Superpowers",
+      "vendor": "obra (community)",
+      "url": "https://github.com/obra/superpowers",
+      "what": "A skills library and development methodology: brainstorming, plan writing, subagent-driven execution, systematic debugging.",
+      "why": {
+        "utilities": "write-skill and optimize-skill author Magpie skills; Superpowers' brainstorming and plan-writing skills are the discipline for deciding what a skill should do before writing it.",
+        "pairing": "self-review and multi-agent-review are pre-flight reads of your own diff; Superpowers adds the test-first and systematic-debugging habits upstream of them."
+      },
+      "harnesses": {
+        "claude-code": {
+          "marketplace": "obra/superpowers-marketplace",
+          "install": "/plugin install superpowers@superpowers-marketplace"
+        },
+        "codex": {
+          "marketplace": "obra/superpowers-marketplace",
+          "install": "codex plugin install superpowers"
+        },
+        "cursor": {
+          "marketplace": null,
+          "install": "install from github.com/obra/superpowers through Cursor's plugin flow"
+        },
+        "gemini": {
+          "marketplace": null,
+          "install": "gemini extensions install https://github.com/obra/superpowers"
+        },
+        "copilot": {
+          "marketplace": null,
+          "install": "install from github.com/obra/superpowers"
+        },
+        "opencode": {
+          "marketplace": null,
+          "install": "clone the skills you want into .opencode/skills/ from github.com/obra/superpowers"
+        }
+      },
+      "note": "Ships a plugin manifest per harness and one shared skills/ tree, the same shape Magpie uses, so it is not a Claude Code-only package."
+    },
+    {
+      "id": "claude-security",
+      "title": "Claude Security",
+      "vendor": "Anthropic",
+      "url": "https://code.claude.com/docs/en/claude-security",
+      "what": "A multi-agent vulnerability scan of your own repository, run inside the session; each finding carries a severity, a CWE category and reproduction steps, and the ones you pick become patch files you review before applying.",
+      "why": {
+        "security": "This family handles reports that arrive — intake, triage, CVE, advisory. Scanning finds the ones nobody reported. The two meet at security-issue-import-from-scan, which imports scanner output as trackers.",
+        "repo-health": "The audits here read dependencies, workflows and licences. This reads the project's own code, which none of them do."
+      },
+      "harnesses": {
+        "claude-code": {
+          "marketplace": null,
+          "install": "/plugin install claude-security"
+        }
+      },
+      "note": "Claude Code only: it drives subagents and a scan workflow that Agent Plugins 1.0 has no component for. Listed with its harness named rather than presented as the answer for everyone."
+    },
+    {
+      "id": "aikido",
+      "title": "Aikido Security",
+      "vendor": "Aikido",
+      "url": "https://www.aikido.dev/",
+      "what": "SAST, secrets and infrastructure-as-code scanning surfaced in the session.",
+      "why": {
+        "security": "A second opinion from a conventional scanner, and a different class of finding — committed secrets — from the ones a code-reading scan surfaces.",
+        "repo-health": "Covers the infrastructure-as-code surface that workflow-security-audit does not read."
+      },
+      "harnesses": {
+        "claude-code": {
+          "marketplace": null,
+          "install": "/plugin install aikido"
+        }
+      }
+    },
+    {
+      "id": "code-review",
+      "title": "Code Review",
+      "vendor": "Anthropic",
+      "url": "https://github.com/anthropics/claude-plugins-official/tree/main/plugins/code-review",
+      "what": "Automated pull-request review through several specialised agents, scored by confidence.",
+      "why": {
+        "pr-management": "pr-management-code-review walks a maintainer through reviewing one PR at a time and drafts the review they post. This is the other half — a broad automated pass whose findings that review can weigh.",
+        "pairing": "Runs the same kind of pass over a PR that self-review runs over your local diff."
+      },
+      "harnesses": {
+        "claude-code": {
+          "marketplace": null,
+          "install": "/plugin install code-review"
+        }
+      }
+    }
+  ]
+}

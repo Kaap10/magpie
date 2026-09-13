@@ -32,7 +32,7 @@ choosing between plugins, not an accounting of a specific tokenizer's output.
 It is deliberately not a live tokenizer call: the number must be reproducible
 offline, in CI, with no model dependency and no network.
 
-Published figures live in the plugin tables of ``docs/setup/marketplaces.md``
+Published figures live in the plugin tables of ``docs/setup/marketplace.md``
 and ``docs/quick-start.md``. ``--check`` compares those tables against the live
 frontmatter and fails on drift, which is how ``check-doc-sync.py`` gates them.
 
@@ -51,20 +51,15 @@ from pathlib import Path
 
 SKILLS_DIR = Path("skills")
 
-# Tables that publish the estimate, as `| `magpie-security` | 15 | ~2.0k |`
-# and a bolded all-in-one row. Same files the count checks in check-doc-sync.py
-# already read.
-PUBLISHED_IN = (Path("docs/setup/marketplaces.md"), Path("docs/quick-start.md"))
+# Tables that publish the estimate, as `| `magpie-security` | 15 | ~2.0k |`.
+# Same files the count checks in check-doc-sync.py already read.
+PUBLISHED_IN = (Path("docs/setup/marketplace.md"), Path("docs/quick-start.md"))
 
 CHARS_PER_TOKEN = 4
 
 _FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n", re.S)
 # `| `magpie-security` | 15 | ~2.0k |` — plugin, count, then the token cell.
 _PUBLISHED_ROW = re.compile(r"^\|\s*`magpie-(?P<family>[a-z-]+)`\s*\|\s*\d+\s*\|\s*~(?P<tokens>[\d.]+)k\s*\|")
-# `| **`magpie`** (all) | **74** | **~8.6k** |`
-_PUBLISHED_ALL = re.compile(
-    r"^\|\s*\*?\*?`magpie`\*?\*?\s*\(all\)\s*\|\s*\*?\*?\d+\*?\*?\s*\|\s*\*?\*?~(?P<tokens>[\d.]+)k"
-)
 
 
 def _scalar(frontmatter: str, key: str) -> str:
@@ -112,7 +107,6 @@ def _round_k(tokens: float) -> float:
 def check(errors: list[str]) -> None:
     """Compare every published figure against the live frontmatter."""
     live = measure()
-    total_k = _round_k(sum(t for _, t in live.values()))
     for path in PUBLISHED_IN:
         if not path.is_file():
             continue
@@ -128,13 +122,6 @@ def check(errors: list[str]) -> None:
                         f"{path}:{lineno}: 'magpie-{family}' publishes ~{m.group('tokens')}k "
                         f"always-on tokens; measured ~{want}k"
                     )
-                continue
-            m = _PUBLISHED_ALL.match(line)
-            if m and abs(float(m.group("tokens")) - total_k) > 0.05:
-                errors.append(
-                    f"{path}:{lineno}: the all-in-one row publishes ~{m.group('tokens')}k "
-                    f"always-on tokens; measured ~{total_k}k"
-                )
 
 
 def main() -> int:

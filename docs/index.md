@@ -9,7 +9,8 @@
   - [How it works](#how-it-works)
   - [Need help with one of these? Adopt a family of skills](#need-help-with-one-of-these-adopt-a-family-of-skills)
   - [Who is this for?](#who-is-this-for)
-    - [Maintainers wanting to adopt Magpie in their project](#maintainers-wanting-to-adopt-magpie-in-their-project)
+    - [Anyone who wants agent help on a repo](#anyone-who-wants-agent-help-on-a-repo)
+    - [Maintainers adopting Magpie for their project](#maintainers-adopting-magpie-for-their-project)
     - [Security team members](#security-team-members)
     - [Contributors to the Magpie framework itself](#contributors-to-the-magpie-framework-itself)
     - [People evaluating whether to adopt](#people-evaluating-whether-to-adopt)
@@ -24,6 +25,10 @@
 Apache Magpie is an AI assistant for open-source project maintainers. It handles the repetitive parts of running a project — triaging issues, reviewing PRs, onboarding contributors, managing security reports, cutting releases — so maintainers can spend their time on design, relationships, and the work that actually requires a human.
 
 **The agent proposes. The human decides.** Magpie never merges, never pushes, never sends mail, never flips a label without a maintainer confirming first.
+
+**Before you start**, check what the skills need to run — an agent, a mail
+backend, tracker access: [prerequisites](quick-start/prerequisites.md). The
+[quick start](quick-start.md) is two commands once those are in place.
 
 ---
 
@@ -74,17 +79,23 @@ Start with [`setup`](setup/README.md) regardless — it is the prerequisite ever
 
 ## Who is this for?
 
-### Maintainers wanting to adopt Magpie in their project
+### Anyone who wants agent help on a repo
 
-You have an open-source project with an issue tracker and/or PR queue, and you want agent assistance with the mechanical parts.
+You work on a project with an issue tracker and/or PR queue, and you want agent assistance with the mechanical parts. You do not need the project's permission, and nothing gets committed.
 
-→ Start with the [quick start](quick-start.md) — install into your agent in two commands. If a marketplace is not an option, the [install recipes](setup/install-recipes.md) cover the pinned snapshot install.
+→ Start with the [quick start](quick-start.md) — install into your agent in two commands — then [individual use](setup/individual-use.md). If a marketplace is not an option, [other installation methods](quick-start/other-install-methods.md) cover the pinned snapshot install.
+
+### Maintainers adopting Magpie for their project
+
+You want contributors to arrive with a sensible set of families already enabled, and the repo's own conventions encoded where the skills will read them.
+
+→ [Team adoption](setup/team-adoption.md) — what a repo commits, how to decide it, and how to keep it current. Adoption is a recommendation to your contributors, not a requirement on them.
 
 ### Security team members
 
 You handle CVE reports and want agent help with the 16-step lifecycle — import, triage, fix, allocate, publish.
 
-→ Start with [security workflow overview](security/README.md), then [new member onboarding](security/new-members-onboarding.md).
+→ Start with [security workflow overview](security/README.md), then [how the security team works](security/how-the-security-team-works.md).
 
 ### Contributors to the Magpie framework itself
 
@@ -124,16 +135,18 @@ from mailing lists, slack etc.
 |---|---|
 | Understand the full vision | [MISSION.md](../MISSION.md) |
 | Understand how it stays vendor-neutral | [vendor-neutrality.md](vendor-neutrality.md) |
-| Find or author a backend adapter | [adapters/registry.md](adapters/registry.md) |
+| Find or author a backend adapter | [adapters/](adapters/README.md) |
 | Pull a skill/family from a trusted external source | [skill-sources/README.md](skill-sources/README.md) |
 | Extend Magpie (project / org / individual) | [extending.md](extending.md) |
 | See what skills exist today | [modes.md](modes.md) |
 | Install it right now | [quick-start.md](quick-start.md) |
+| Check what a skill needs before it runs | [quick-start/prerequisites.md](quick-start/prerequisites.md) |
 | Install in my project | [README → Install](../README.md#install) |
 | Set up the secure agent sandbox | [setup/](setup/README.md) |
 | Understand the security workflow | [security/](security/README.md) |
 | Know what it costs to run | [mode-economics.md](mode-economics.md) |
 | Read the design behind a change in flight | [designs/](designs/README.md) |
 | Understand the privacy model | [rfcs/RFC-AI-0003.md](rfcs/RFC-AI-0003.md) |
+| Read the RFCs behind the design | [rfcs/](rfcs/README.md) |
 | Contribute to the framework | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | Learn to build and extend skills | [education/](education/README.md) |

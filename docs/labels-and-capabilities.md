@@ -160,7 +160,7 @@ security?" by filtering on `capability:triage` alone, without
 enumerating per-area queries.
 
 **Agent-harness support (substrate tools only).** A substrate tool that
-integrates with the agent runtime (a hook, a settings file, a launcher)
+integrates with the agent harness (a hook, a settings file, a launcher)
 declares a `**Harness:**` field naming the harness(es) it supports, or
 `agnostic` when it depends on none. This is the *agent-harness* axis of
 LLM-integration neutrality and is scored by
@@ -379,7 +379,7 @@ source of truth; this table mirrors it for a one-glance overview.
 
 Non-MCP backends fulfil the same contracts: JIRA is reached over REST
 and `gh` is the CLI fallback, both `contract:tracker`. See
-[`docs/prerequisites.md`](prerequisites.md) for connection setup.
+[`docs/prerequisites.md`](quick-start/prerequisites.md) for connection setup.
 
 **MCP servers are installed for the user, not the project.** They are
 registered at **user scope** (`claude mcp add … -s user`), so a single

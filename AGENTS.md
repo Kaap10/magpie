@@ -62,7 +62,7 @@ and a project-template scaffold — and **no project-specific
 content**. Adopting projects fetch this repository as a gitignored
 **snapshot** at `<adopter-tracker>/.apache-magpie/` (managed by
 the [`setup`](skills/setup/SKILL.md) skill —
-see [`docs/setup/install-recipes.md`](docs/setup/install-recipes.md))
+see [`docs/setup/install-recipes.md`](docs/quick-start/other-install-methods.md))
 and configure their project-specific bits alongside the snapshot
 in their adopter repo. The framework refers to that adopter-side
 configuration as `<project-config>`.
@@ -76,7 +76,13 @@ The framework has two layers:
    release trains, canned responses, security-model references, and
    milestone conventions. Lives in the adopter's
    `<project-config>/` directory and is **not** shipped with this
-   framework. The
+   framework. `<project-config>` resolves **per file, local first**:
+   `.apache-magpie-local/<file>` (personal, gitignored, written by
+   `/magpie-setup config`) if it exists, else
+   `.apache-magpie-overrides/<file>` (committed, project-wide,
+   written by `/magpie-setup adopt`). See
+   [`docs/setup/agentic-overrides.md`](docs/setup/agentic-overrides.md).
+   The
    [`projects/_template/`](projects/_template/) directory in this
    repo is the bootstrap scaffold a new adopter copies into their
    `<project-config>/` to get started.
@@ -84,8 +90,8 @@ The framework has two layers:
 Repo-root files:
 
 - [`README.md`](README.md) — the end-to-end process for handling security issues (generic lifecycle).
-- [`docs/security/how-to-fix-a-security-issue.md`](docs/security/how-to-fix-a-security-issue.md) — high-level description of the fix workflow.
-- [`docs/security/new-members-onboarding.md`](docs/security/new-members-onboarding.md) — onboarding guide for new security team members.
+- [`docs/security/fixing-security-issues.md`](docs/security/fixing-security-issues.md) — high-level description of the fix workflow.
+- [`docs/security/how-the-security-team-works.md`](docs/security/how-the-security-team-works.md) — how the security team operates, and the onboarding guide for new members.
 - [`projects/_template/`](projects/_template/) — bootstrap scaffold for a new adopter's `<project-config>/`.
 - [`tools/<name>/`](tools/) — tool adapters (GitHub operations, issue-template schema, project-board GraphQL, …) for the external tools the skills invoke.
 - [`skills/<name>/SKILL.md`](skills/) — the agentic workflows.
@@ -469,7 +475,7 @@ egress is a real exfiltration risk. See
 [`docs/setup/secure-agent-setup.md`](docs/setup/secure-agent-setup.md)
 for the layered defence the framework dogfoods (sandbox + tool
 permissions + clean-env wrapper, sandbox primitives pinned with a
-7-day upstream cooldown, and an agent runtime installed at the latest
+7-day upstream cooldown, and an agent harness installed at the latest
 release subject to a minimum-version floor).
 
 **Tool credentials live under `$HOME`, never in the project tree.** Any

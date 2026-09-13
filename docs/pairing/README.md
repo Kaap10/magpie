@@ -7,6 +7,8 @@
 
 - [Agentic Pairing skill family](#agentic-pairing-skill-family)
   - [Install & first runs](#install--first-runs)
+    - [Before the first run](#before-the-first-run)
+    - [Works well with](#works-well-with)
     - [Try these first](#try-these-first)
   - [Skills](#skills)
     - [When to use which](#when-to-use-which)
@@ -44,44 +46,97 @@ happens, no comment is posted, and the working tree is never mutated.
 
 ---
 
+> [!TIP]
+> **Why this family**
+> - Review your own diff before a maintainer spends their time on it
+> - Findings split into blocking and non-blocking, so the nits do not drown the real problems
+> - Nothing is sent, posted, or merged — the report is the output
+
 ## Install & first runs
 
 Install just this family — one plugin, 2 skills. Review your own change before anyone else has to.
 
+Once you have [added the marketplace](../setup/marketplace-install.md):
+
 ```text
-/plugin marketplace add apache/magpie
 /plugin install magpie-pairing@apache-magpie
 ```
 
-<!-- CAPTURE: assets/quickstart/README.md -->
-![Claude Code showing the magpie-pairing plugin installed and enabled](../../assets/quickstart/families/pairing-install.png)
+New to Magpie? The [quick start](../quick-start.md) walks the whole path in
+one place — install, the first `/magpie-setup` run, and a recording of it
+happening — plus the other agents and the secure-isolation setup to run next.
 
-New to Magpie? The [quick start](../quick-start.md) covers the other agents,
-the all-in-one alternative, and the secure-isolation setup to run next.
+### Before the first run
+
+<!-- BEGIN generated: skill-config (tools/dev/check-skill-config.py --fix) -->
+
+**Nothing here has to be configured.** These skills read the file below
+when it exists — yours in `.apache-magpie-local/` or the project's in
+`.apache-magpie-overrides/` — and fall back to a documented default when
+it does not.
+
+**Optional.** Each has a documented fallback; absent, the skill still runs.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`project.md`](../../projects/_template/project.md) | Project manifest. Identity, repositories, mailing lists, tools enabled, CVE tooling, GitHub project-board + issue-template field declarations. The single file every skill reads to resolve project-scoped references. | `multi-agent-review`, `self-review` |
+
+<!-- END generated: skill-config -->
+
+<!-- BEGIN generated: companion-skills (tools/dev/check-companion-skills.py --fix) -->
+
+### Works well with
+
+Third-party packages, none of them required: this family works with none of
+them installed, and Magpie neither bundles nor depends on any. They are named
+because they are what a maintainer goes looking for next, and because the
+answer differs by agent.
+
+**[Code Review](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/code-review)** — Anthropic
+
+Automated pull-request review through several specialised agents, scored by confidence.
+
+*With this family:* Runs the same kind of pass over a PR that self-review runs over your local diff.
+
+Available on **Claude Code** only.
+
+**[Superpowers](https://github.com/obra/superpowers)** — obra (community)
+
+A skills library and development methodology: brainstorming, plan writing, subagent-driven execution, systematic debugging.
+
+*With this family:* self-review and multi-agent-review are pre-flight reads of your own diff; Superpowers adds the test-first and systematic-debugging habits upstream of them.
+
+Available on **Claude Code**, **OpenAI Codex CLI**, **VS Code / GitHub Copilot**, **Google Gemini CLI**, **Cursor**, **OpenCode**.
+
+Installing it means first adding a marketplace Magpie does not publish — `obra/superpowers-marketplace`. The install flow asks before it does, and names whose it is.
+
+Ships a plugin manifest per harness and one shared skills/ tree, the same shape Magpie uses, so it is not a Claude Code-only package.
+
+Install commands per agent are in
+[**Companion skill packages**](../setup/companion-skills.md).
+
+<!-- END generated: companion-skills -->
 
 ### Try these first
 
-*Illustrative shapes, not real transcripts — your output will differ. Nothing
-below sends, merges, or posts anything without you confirming it.*
+*Illustrative shapes, not real transcripts — your output will differ.
+Both skills are read-only: nothing is sent, merged, or posted.*
 
 **Self-review before you push.**
 
 ```text
-> /magpie-pairing:self-review
-
-  Reviewing 7 files, +240 -66
-  1 likely bug   cache key omits the tenant id (cache.py:44)
-  2 test gaps    no case for an empty batch
+/magpie-pairing:self-review
 ```
+
+![A self-review run over four changed files: one blocking finding and two non-blocking ones, with nothing sent, posted or merged](../../assets/quickstart/families/pairing/self-review.svg)
 
 **Send it through an adversarial panel.**
 
 ```text
-> /magpie-pairing:multi-agent-review
-
-  4 reviewers, 11 candidate findings, 3 survived verification
-  CONFIRMED  race between the writer and the eviction thread
+/magpie-pairing:multi-agent-review
 ```
+
+![A multi-agent-review run showing what two independent reads of the same diff each found, and what only one of them found](../../assets/quickstart/families/pairing/multi-agent-review.svg)
 
 ## Skills
 
@@ -118,18 +173,10 @@ instead.
 
 ## Adopter contract
 
-The Agentic Pairing skills have no project-specific config files. They resolve
-two standard placeholders from the adopter's `<project-config>/`:
-
-| Placeholder | Resolved from |
-|---|---|
-| `<upstream>` | `project.md → upstream_repo` (owner/name of the public source repo) |
-| `<default-branch>` | `project.md → upstream_default_branch` (e.g. `main`) |
-
-No additional config files are required. The skills do not write to the
-project's tracker, label set, or any shared infrastructure.
-
----
+The Agentic Pairing skills read local git state and write nothing: no PR is
+opened, no comment posted, and the working tree is never mutated. They resolve
+`<upstream>` and `<project-config>` placeholders when the project defines
+them, and run without either.
 
 ## Status
 

@@ -7,6 +7,8 @@
 
 - [Repo-health audits — family overview](#repo-health-audits--family-overview)
   - [Install & first runs](#install--first-runs)
+    - [Before the first run](#before-the-first-run)
+    - [Works well with](#works-well-with)
     - [Try these first](#try-these-first)
   - [Current skills](#current-skills)
     - [`audit-finding-fix` (experimental)](#audit-finding-fix-experimental)
@@ -43,20 +45,91 @@ follow. See [`docs/modes.md` § Triage](../modes.md#triage).
 
 ---
 
+> [!TIP]
+> **Why this family**
+> - Read-only audits that find what CI does not: unmaintained dependencies, unsafe workflow triggers, licence gaps
+> - Flakes separated from real regressions, so the regression hiding among them gets found
+> - Findings first, fixes second — the audit never edits a workflow or opens a PR on its own
+
 ## Install & first runs
 
 Install just this family — one plugin, 7 skills. Read-only repository-health audits, plus fixes for what they find.
 
+Once you have [added the marketplace](../setup/marketplace-install.md):
+
 ```text
-/plugin marketplace add apache/magpie
 /plugin install magpie-repo-health@apache-magpie
 ```
 
-<!-- CAPTURE: assets/quickstart/README.md -->
-![Claude Code showing the magpie-repo-health plugin installed and enabled](../../assets/quickstart/families/repo-health-install.png)
+New to Magpie? The [quick start](../quick-start.md) walks the whole path in
+one place — install, the first `/magpie-setup` run, and a recording of it
+happening — plus the other agents and the secure-isolation setup to run next.
 
-New to Magpie? The [quick start](../quick-start.md) covers the other agents,
-the all-in-one alternative, and the secure-isolation setup to run next.
+### Before the first run
+
+<!-- BEGIN generated: skill-config (tools/dev/check-skill-config.py --fix) -->
+
+![An animated `/magpie-setup config` run for the repo-health family: the check failing, the values derived from the repository, one question for the rest, and gitignored files written](../../assets/quickstart/wizard/repo-health.svg)
+
+*Illustrative — the real run derives more and asks better. What is true is
+the shape: it runs itself, it writes only gitignored files, and it stages
+nothing.*
+
+Every skill here resolves project-specific values from the adopter's
+[`<project-config>/`](../../projects/_template/) directory — which is
+`.apache-magpie-local/` (gitignored, yours) first, then
+`.apache-magpie-overrides/` (committed, the project's).
+
+**For yourself:** `/magpie-setup config` scaffolds and fills these locally.
+Nothing is staged, nothing is committed, and it works on a repository that
+has never adopted Magpie.
+
+**For the project:** [`/magpie-setup adopt`](../setup/team-adoption.md)
+commits them for every contributor, either scaffolded directly or promoted
+from what you configured locally.
+
+**Required.** Without these a skill would act on a guess, so it stops and
+says which file is missing.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`fix-workflow.md`](../../projects/_template/fix-workflow.md) | Fork / clone / toolchain specifics, backport-label policy, commit-trailer wording, PR scrubbing, private-PR fallback. | `audit-finding-fix` |
+| [`repo-health-config.md`](../../projects/_template/repo-health-config.md) | Per-skill switches: deprecated runner labels, zizmor rule classes, dependency managers, SPDX expression, flaky-test thresholds. | `dependency-audit`, `flaky-test-triage`, `license-compliance-audit`, `workflow-security-audit` |
+| [`runtime-invocation.md`](../../projects/_template/runtime-invocation.md) | Build prerequisite, run-a-single-file recipe, stream-capture conventions, network/dependency handling. | `audit-finding-fix` |
+
+<!-- END generated: skill-config -->
+
+<!-- BEGIN generated: companion-skills (tools/dev/check-companion-skills.py --fix) -->
+
+### Works well with
+
+Third-party packages, none of them required: this family works with none of
+them installed, and Magpie neither bundles nor depends on any. They are named
+because they are what a maintainer goes looking for next, and because the
+answer differs by agent.
+
+**[Aikido Security](https://www.aikido.dev/)** — Aikido
+
+SAST, secrets and infrastructure-as-code scanning surfaced in the session.
+
+*With this family:* Covers the infrastructure-as-code surface that workflow-security-audit does not read.
+
+Available on **Claude Code** only.
+
+**[Claude Security](https://code.claude.com/docs/en/claude-security)** — Anthropic
+
+A multi-agent vulnerability scan of your own repository, run inside the session; each finding carries a severity, a CWE category and reproduction steps, and the ones you pick become patch files you review before applying.
+
+*With this family:* The audits here read dependencies, workflows and licences. This reads the project's own code, which none of them do.
+
+Available on **Claude Code** only.
+
+Claude Code only: it drives subagents and a scan workflow that Agent Plugins 1.0 has no component for. Listed with its harness named rather than presented as the answer for everyone.
+
+Install commands per agent are in
+[**Companion skill packages**](../setup/companion-skills.md).
+
+<!-- END generated: companion-skills -->
 
 ### Try these first
 
@@ -66,31 +139,26 @@ below sends, merges, or posts anything without you confirming it.*
 **Audit dependencies for CVEs.**
 
 ```text
-> /magpie-repo-health:dependency-audit
-
-  312 deps, 4 advisories
-  HIGH  urllib3 1.26.5  -> 1.26.19  (CVE-2024-37891)
-  LOW   idna 3.4        -> 3.7
+/magpie-repo-health:dependency-audit
 ```
+
+![A dependency-audit run grouping findings into outdated-with-a-fix, unmaintained, and pinned-but-unused, having upgraded nothing](../../assets/quickstart/families/repo-health/dependency-audit.svg)
 
 **Audit the Actions workflows.**
 
 ```text
-> /magpie-repo-health:workflow-security-audit
-
-  9 workflows
-  HIGH  release.yml:31  pull_request_target + checkout of PR head
-  MED   ci.yml:88       3 actions pinned by tag, not SHA
+/magpie-repo-health:workflow-security-audit
 ```
+
+![A workflow-security-audit run: one failure where a workflow runs untrusted code with write permissions, two warnings about pinning and permissions, and nine clean files](../../assets/quickstart/families/repo-health/workflow-security-audit.svg)
 
 **Find the flaky tests.**
 
 ```text
-> /magpie-repo-health:flaky-test-triage
-
-  200 runs: 6 tests failed non-deterministically
-  test_scheduler_timing  11 fails / 200 — all on the 4-core runner
+/magpie-repo-health:flaky-test-triage
 ```
+
+![A flaky-test-triage run separating two genuine flakes from a real regression that had been hiding among them](../../assets/quickstart/families/repo-health/flaky-test-triage.svg)
 
 ## Current skills
 
@@ -269,10 +337,8 @@ uv run --project tools/pilot-report-validator pilot-report-validate <your-report
 
 ## Adopter contract
 
-`projects/_template/repo-health-config.md` provides the per-project
-configuration scaffold for all repo-health skills. Copy it into your
-`<project-config>/` directory and fill in the `TODO` fields for each skill
-you enable:
+The shape of `repo-health-config.md`, which the table under
+[*Before the first run*](#before-the-first-run) links:
 
 ```yaml
 repo_health:

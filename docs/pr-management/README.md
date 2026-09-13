@@ -7,9 +7,10 @@
 
 - [PR management skill family](#pr-management-skill-family)
   - [Install & first runs](#install--first-runs)
+    - [Before the first run](#before-the-first-run)
+    - [Works well with](#works-well-with)
     - [Try these first](#try-these-first)
   - [Skills](#skills)
-  - [Adopter contract](#adopter-contract)
   - [Cross-references](#cross-references)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -69,20 +70,94 @@ framework lets other adopters reuse the playbook with their own
 knobs (committers team handle, area-label prefix, comment-template
 wording, CI-check → doc-URL map, review-criteria source files).
 
+> [!TIP]
+> **Why this family**
+> - A maintainer's review queue, sorted by what actually needs you today
+> - Deep, sequential review of one PR at a time, with the draft review shown before it is posted
+> - Nothing is posted, merged or closed without your explicit confirmation on that PR
+
 ## Install & first runs
 
 Install just this family — one plugin, 8 skills. Maintainer-facing PR-queue management.
 
+Once you have [added the marketplace](../setup/marketplace-install.md):
+
 ```text
-/plugin marketplace add apache/magpie
 /plugin install magpie-pr-management@apache-magpie
 ```
 
-<!-- CAPTURE: assets/quickstart/README.md -->
-![Claude Code showing the magpie-pr-management plugin installed and enabled](../../assets/quickstart/families/pr-management-install.png)
+New to Magpie? The [quick start](../quick-start.md) walks the whole path in
+one place — install, the first `/magpie-setup` run, and a recording of it
+happening — plus the other agents and the secure-isolation setup to run next.
 
-New to Magpie? The [quick start](../quick-start.md) covers the other agents,
-the all-in-one alternative, and the secure-isolation setup to run next.
+### Before the first run
+
+<!-- BEGIN generated: skill-config (tools/dev/check-skill-config.py --fix) -->
+
+![An animated `/magpie-setup config` run for the pr-management family: the check failing, the values derived from the repository, one question for the rest, and gitignored files written](../../assets/quickstart/wizard/pr-management.svg)
+
+*Illustrative — the real run derives more and asks better. What is true is
+the shape: it runs itself, it writes only gitignored files, and it stages
+nothing.*
+
+Every skill here resolves project-specific values from the adopter's
+[`<project-config>/`](../../projects/_template/) directory — which is
+`.apache-magpie-local/` (gitignored, yours) first, then
+`.apache-magpie-overrides/` (committed, the project's).
+
+**For yourself:** `/magpie-setup config` scaffolds and fills these locally.
+Nothing is staged, nothing is committed, and it works on a repository that
+has never adopted Magpie.
+
+**For the project:** [`/magpie-setup adopt`](../setup/team-adoption.md)
+commits them for every contributor, either scaffolded directly or promoted
+from what you configured locally.
+
+**Required.** Without these a skill would act on a guess, so it stops and
+says which file is missing.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`pr-management-code-review-criteria.md`](../../projects/_template/pr-management-code-review-criteria.md) | List of project's review-criteria source files (repo-wide AGENTS.md, code-review docs, per-area AGENTS.md), security-model calibration doc, backport-branch pattern, section-anchor URLs. | `code-review` |
+| [`pr-management-config.md`](../../projects/_template/pr-management-config.md) | Committers team handle, area-label prefix, project-specific labels (`ready for maintainer review`, etc.), grace windows. | `quick-merge`, `stale-sweep`, `stats`, `triage` |
+| [`pr-management-quick-merge-config.md`](../../projects/_template/pr-management-quick-merge-config.md) | Thresholds, path globs, and the merge-command template for the express lane. | `quick-merge` |
+| [`pr-management-triage-comment-templates.md`](../../projects/_template/pr-management-triage-comment-templates.md) | Comment-body URLs (PR quality criteria, two-stage triage rationale), AI-attribution footer wording, project display name. | `triage` |
+| [`project.md`](../../projects/_template/project.md) | Project manifest. Identity, repositories, mailing lists, tools enabled, CVE tooling, GitHub project-board + issue-template field declarations. The single file every skill reads to resolve project-scoped references. | `code-review`, `mentor`, `quick-merge`, `reviewer-routing`, `stale-sweep`, `triage` |
+| [`reviewer-roster.md`](../../projects/_template/reviewer-roster.md) | Who reviews what. | `reviewer-routing` |
+
+**Optional.** Each has a documented fallback; absent, the skill still runs.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`mentoring-config.md`](../../projects/_template/mentoring-config.md) | Tone knobs and hand-off protocol for the thread-level mentoring skill. | `mentor` |
+| [`pr-management-triage-ci-check-map.md`](../../projects/_template/pr-management-triage-ci-check-map.md) | CI-check name pattern → category name + doc-URL mapping for the violations comment. | `triage` |
+| [`privacy-llm.md`](../../projects/_template/privacy-llm.md) | Which model tier may see which class of content, for projects routing foundation-private information away from third-party models. | `reviewer-routing` |
+| [`release-trains.md`](../../projects/_template/release-trains.md) | Active release branches, release-manager attribution per cut, rotation rosters, security-team roster. | `code-review`, `reviewer-routing` |
+| [`stale-sweep-config.md`](../../projects/_template/stale-sweep-config.md) | Grace windows and exemption labels for stale sweeps. Absent, the framework defaults apply. | `stale-sweep` |
+
+<!-- END generated: skill-config -->
+
+<!-- BEGIN generated: companion-skills (tools/dev/check-companion-skills.py --fix) -->
+
+### Works well with
+
+Third-party packages, none of them required: this family works with none of
+them installed, and Magpie neither bundles nor depends on any. They are named
+because they are what a maintainer goes looking for next, and because the
+answer differs by agent.
+
+**[Code Review](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/code-review)** — Anthropic
+
+Automated pull-request review through several specialised agents, scored by confidence.
+
+*With this family:* pr-management-code-review walks a maintainer through reviewing one PR at a time and drafts the review they post. This is the other half — a broad automated pass whose findings that review can weigh.
+
+Available on **Claude Code** only.
+
+Install commands per agent are in
+[**Companion skill packages**](../setup/companion-skills.md).
+
+<!-- END generated: companion-skills -->
 
 ### Try these first
 
@@ -103,21 +178,18 @@ below sends, merges, or posts anything without you confirming it.*
 **Triage the whole queue.**
 
 ```text
-> /magpie-pr-management:triage
-
-  41 open PRs
-  12 ready to merge     9 need review     14 waiting on author
-   6 stale > 90 days -> stale-sweep candidates
+/magpie-pr-management:triage
 ```
+
+![A triage run proposing one action each for four PRs — mark ready, ask if still active, ask for a rebase, promote out of draft — each needing confirmation](../../assets/quickstart/families/pr-management/triage.svg)
 
 **See where the queue is stuck.**
 
 ```text
-> /magpie-pr-management:stats
-
-  median time-to-first-review   6.1 days (was 4.2 last quarter)
-  oldest unreviewed             #4871, 143 days
+/magpie-pr-management:stats
 ```
+
+![A stats run: a FAIR health rating, this week's and last week's open/close counts, the three areas under most pressure, and the triage funnel](../../assets/quickstart/families/pr-management/stats.svg)
 
 ## Skills
 
@@ -131,27 +203,6 @@ below sends, merges, or posts anything without you confirming it.*
 | [`pr-stale-sweep`](../../skills/pr-stale-sweep/SKILL.md) | Sweep open PRs for inactivity past a configurable threshold; classify as `NUDGE` or `CLOSE-STALE` and post one comment per PR on confirmation. |
 | [`pre-first-pr-check`](../../skills/pre-first-pr-check/SKILL.md) | Pre-flight a contributor's first PR against project conventions before it reaches a human reviewer. |
 | [`reviewer-routing`](../../skills/reviewer-routing/SKILL.md) | Suggest the best-fit reviewer(s) for a new PR based on path ownership, recent review history, and current load. |
-
-## Adopter contract
-
-The skills resolve project-specific content from these files in
-the adopter's `<project-config>/` directory:
-
-| File | Used by |
-|---|---|
-| [`pr-management-config.md`](../../projects/_template/pr-management-config.md) | `pr-management-triage`, `pr-management-stats`, `pr-management-quick-merge` (Real-CI patterns) |
-| [`pr-management-triage-comment-templates.md`](../../projects/_template/pr-management-triage-comment-templates.md) | `pr-management-triage` |
-| [`pr-management-triage-ci-check-map.md`](../../projects/_template/pr-management-triage-ci-check-map.md) | `pr-management-triage` |
-| [`pr-management-code-review-criteria.md`](../../projects/_template/pr-management-code-review-criteria.md) | `pr-management-code-review` |
-| [`pr-management-quick-merge-config.md`](../../projects/_template/pr-management-quick-merge-config.md) | `pr-management-quick-merge` (thresholds, path globs, merge-command template) |
-| [`mentoring-config.md`](../../projects/_template/mentoring-config.md) | `pr-management-mentor` (tone knobs, hand-off protocol) |
-
-The skills read project-specific defaults from the `<project-config>/`
-files above. Adopters customise by editing their copy of each
-template; illustrative examples in skill prose may still use the
-patterns that motivated the framework (monorepo `<area>/` layout,
-`area:*` labels, etc.) — the *behaviour* is config-driven, the
-*example wording* is not.
 
 ## Cross-references
 

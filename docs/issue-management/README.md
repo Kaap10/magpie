@@ -7,10 +7,10 @@
 
 - [Issue management skill family](#issue-management-skill-family)
   - [Install & first runs](#install--first-runs)
+    - [Before the first run](#before-the-first-run)
     - [Try these first](#try-these-first)
   - [Family boundary](#family-boundary)
   - [Skills](#skills)
-  - [Adopter contract](#adopter-contract)
   - [Status](#status)
   - [Cross-references](#cross-references)
 
@@ -62,20 +62,71 @@ read-only reporting:
    age and staleness breakdowns, area pressure ranking, and a
    triage-funnel summary without modifying any tracker state.
 
+> [!TIP]
+> **Why this family**
+> - A triage pass over the backlog that proposes a disposition per issue instead of a label per issue
+> - A runnable reproducer extracted from a bug report, so "cannot reproduce" stops being the first reply
+> - Duplicates merged without losing the second reporter's detail, or their credit
+
 ## Install & first runs
 
 Install just this family — one plugin, 8 skills. General-issue lifecycle: triage, reproduction, dedup, backlog.
 
+Once you have [added the marketplace](../setup/marketplace-install.md):
+
 ```text
-/plugin marketplace add apache/magpie
 /plugin install magpie-issue@apache-magpie
 ```
 
-<!-- CAPTURE: assets/quickstart/README.md -->
-![Claude Code showing the magpie-issue plugin installed and enabled](../../assets/quickstart/families/issue-install.png)
+New to Magpie? The [quick start](../quick-start.md) walks the whole path in
+one place — install, the first `/magpie-setup` run, and a recording of it
+happening — plus the other agents and the secure-isolation setup to run next.
 
-New to Magpie? The [quick start](../quick-start.md) covers the other agents,
-the all-in-one alternative, and the secure-isolation setup to run next.
+### Before the first run
+
+<!-- BEGIN generated: skill-config (tools/dev/check-skill-config.py --fix) -->
+
+![An animated `/magpie-setup config` run for the issue family: the check failing, the values derived from the repository, one question for the rest, and gitignored files written](../../assets/quickstart/wizard/issue.svg)
+
+*Illustrative — the real run derives more and asks better. What is true is
+the shape: it runs itself, it writes only gitignored files, and it stages
+nothing.*
+
+Every skill here resolves project-specific values from the adopter's
+[`<project-config>/`](../../projects/_template/) directory — which is
+`.apache-magpie-local/` (gitignored, yours) first, then
+`.apache-magpie-overrides/` (committed, the project's).
+
+**For yourself:** `/magpie-setup config` scaffolds and fills these locally.
+Nothing is staged, nothing is committed, and it works on a repository that
+has never adopted Magpie.
+
+**For the project:** [`/magpie-setup adopt`](../setup/team-adoption.md)
+commits them for every contributor, either scaffolded directly or promoted
+from what you configured locally.
+
+**Required.** Without these a skill would act on a guess, so it stops and
+says which file is missing.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`fix-workflow.md`](../../projects/_template/fix-workflow.md) | Fork / clone / toolchain specifics, backport-label policy, commit-trailer wording, PR scrubbing, private-PR fallback. | `fix-workflow` |
+| [`issue-tracker-config.md`](../../projects/_template/issue-tracker-config.md) | Tracker URL, project key, auth model, default query templates. | `backlog-stats`, `deduplicate`, `reassess`, `reassess-stats`, `reproducer`, `stale-sweep`, `triage` |
+| [`project.md`](../../projects/_template/project.md) | Project manifest. Identity, repositories, mailing lists, tools enabled, CVE tooling, GitHub project-board + issue-template field declarations. The single file every skill reads to resolve project-scoped references. | `stale-sweep`, `triage` |
+| [`reassess-pool-defaults.md`](../../projects/_template/reassess-pool-defaults.md) | Named pools for reassessment sweeps (`open-eol`, `reopened`, `stale-unresolved`, project-specific). | `reassess` |
+| [`reproducer-conventions.md`](../../projects/_template/reproducer-conventions.md) | Evidence-package directory layout and frozen-copy discipline. | `reproducer` |
+| [`runtime-invocation.md`](../../projects/_template/runtime-invocation.md) | Build prerequisite, run-a-single-file recipe, stream-capture conventions, network/dependency handling. | `fix-workflow`, `reproducer` |
+
+**Optional.** Each has a documented fallback; absent, the skill still runs.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`canned-responses.md`](../../projects/_template/canned-responses.md) | Reusable reporter-facing reply templates. | `triage` |
+| [`release-trains.md`](../../projects/_template/release-trains.md) | Active release branches, release-manager attribution per cut, rotation rosters, security-team roster. | `triage` |
+| [`scope-labels.md`](../../projects/_template/scope-labels.md) | Scope label → CVE product / `packageName` / collection-URL mapping. Exactly one scope label per tracker. | `backlog-stats`, `reassess`, `triage` |
+| [`stale-sweep-config.md`](../../projects/_template/stale-sweep-config.md) | Grace windows and exemption labels for stale sweeps. Absent, the framework defaults apply. | `backlog-stats`, `stale-sweep` |
+
+<!-- END generated: skill-config -->
 
 ### Try these first
 
@@ -85,31 +136,26 @@ below sends, merges, or posts anything without you confirming it.*
 **Triage the new issues.**
 
 ```text
-> /magpie-issue:triage
-
-  #9021  bug, needs-repro     -> labels proposed
-  #9022  duplicate of #8877   -> close comment drafted
-  #9023  question             -> discussions, reply drafted
+/magpie-issue:triage
 ```
+
+![A triage run sorting four needs-triage issues into a reproducible bug, a feature request routed to discussion, one needing more information, and a duplicate](../../assets/quickstart/families/issue/triage.svg)
 
 **Find the duplicates.**
 
 ```text
-> /magpie-issue:deduplicate
-
-  4 clusters in 312 open issues
-  'OOM on large parquet' -> #7712 (keep) + #8109, #8330, #8901
+/magpie-issue:deduplicate
 ```
+
+![A deduplicate run: one strong duplicate match proposed for merging, keeping the second reporter's detail, and one weaker pair flagged for a human to look at](../../assets/quickstart/families/issue/deduplicate.svg)
 
 **Try to reproduce one.**
 
 ```text
-> /magpie-issue:reproducer
-
-  #9021 on 3.2.1: reproduced (traceback matches)
-         on main:  not reproduced -> fixed by #8990?
-  Repro script written to /tmp/repro-9021.py
+/magpie-issue:reproducer
 ```
+
+![A reproducer run that extracted an eleven-line stdlib probe from a bug report and reproduced the same error](../../assets/quickstart/families/issue/reproducer.svg)
 
 ## Family boundary
 
@@ -145,23 +191,6 @@ configured with different trackers.
 `issue-reproducer` and `issue-reassess-stats` sit outside the MISSION
 mode taxonomy; they are mechanical / read-only, not classificatory or
 mutating.
-
-## Adopter contract
-
-The skills resolve project-specific content from these files in the
-adopter's `<project-config>/` directory:
-
-| File | Used by |
-|---|---|
-| [`project.md`](../../projects/_template/project.md) | all `issue-*` skills (identifiers, `upstream_default_branch`) |
-| [`issue-tracker-config.md`](../../projects/_template/issue-tracker-config.md) | all `issue-*` skills (URL, project key, auth, default queries) |
-| [`scope-labels.md`](../../projects/_template/scope-labels.md) | `issue-triage`, `issue-reassess`, `issue-backlog-stats` (component / area routing and area pressure ranking) |
-| [`release-trains.md`](../../projects/_template/release-trains.md) | `issue-triage` (`@`-mention routing) |
-| [`canned-responses.md`](../../projects/_template/canned-responses.md) | `issue-triage` (NEEDS-INFO templates) |
-| [`runtime-invocation.md`](../../projects/_template/runtime-invocation.md) | `issue-reproducer` (how to invoke the project's runtime on extracted code) |
-| [`reassess-pool-defaults.md`](../../projects/_template/reassess-pool-defaults.md) | `issue-reassess` (pool definitions extending the default queries in `issue-tracker-config.md`) |
-| [`reproducer-conventions.md`](../../projects/_template/reproducer-conventions.md) | `issue-reproducer` (evidence-package directory layout) |
-| [`stale-sweep-config.md`](../../projects/_template/stale-sweep-config.md) | `issue-stale-sweep`, `issue-backlog-stats` (warn / close / hard-close thresholds; omit to use framework defaults of 90 / 180 / 365 days) |
 
 ## Status
 

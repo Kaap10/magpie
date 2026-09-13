@@ -216,12 +216,12 @@ def test_missing_glance_table_is_not_an_error(repo: Path) -> None:
 
 
 def test_matching_total_is_silent(repo: Path) -> None:
-    (repo / "docs" / "setup" / "marketplaces.md").write_text("Installs 2 skills.\n", encoding="utf-8")
+    (repo / "docs" / "setup" / "marketplace.md").write_text("Installs 2 skills.\n", encoding="utf-8")
     assert _errors(mod.check_total_counts, 2) == []
 
 
 def test_every_stale_total_is_reported_not_just_the_first(repo: Path) -> None:
-    (repo / "docs" / "setup" / "marketplaces.md").write_text(
+    (repo / "docs" / "setup" / "marketplace.md").write_text(
         "Installs 71 skills.\nAll 71 skills load.\nThe 71 skills are namespaced.\n", encoding="utf-8"
     )
     errs = _errors(mod.check_total_counts, 74)
@@ -241,7 +241,7 @@ def test_totals_check_reads_only_the_allowlist(repo: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _plugin_table(repo: Path, rows: list[str], *, path: str = "docs/setup/marketplaces.md") -> None:
+def _plugin_table(repo: Path, rows: list[str], *, path: str = "docs/setup/marketplace.md") -> None:
     target = repo / path
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
@@ -255,7 +255,7 @@ def test_matching_plugin_counts_are_silent(repo: Path) -> None:
     _skill(repo, "b", "security", "Triage")
     _skill(repo, "c", "pairing", "Pairing")
     _plugin_table(repo, ["| `magpie-security` | 2 | ~0.6k |", "| `magpie-pairing` | 1 | ~0.3k |"])
-    assert _errors(mod.check_family_plugin_counts, 3) == []
+    assert _errors(mod.check_family_plugin_counts) == []
 
 
 def test_stale_plugin_count_is_reported_with_both_numbers(repo: Path) -> None:
@@ -264,17 +264,9 @@ def test_stale_plugin_count_is_reported_with_both_numbers(repo: Path) -> None:
     _skill(repo, "a", "security", "Triage")
     _skill(repo, "b", "security", "Triage")
     _plugin_table(repo, ["| `magpie-security` | 12 | ~3.9k |"])
-    errs = _errors(mod.check_family_plugin_counts, 2)
+    errs = _errors(mod.check_family_plugin_counts)
     assert len(errs) == 1
     assert "says 12 skills" in errs[0] and "has 2" in errs[0]
-
-
-def test_stale_all_in_one_row_is_reported(repo: Path) -> None:
-    _skill(repo, "a", "security", "Triage")
-    _plugin_table(repo, ["| **`magpie`** (all) | **70** | **~21.7k** |"])
-    errs = _errors(mod.check_family_plugin_counts, 1)
-    assert len(errs) == 1
-    assert "all-in-one" in errs[0] and "says 70" in errs[0]
 
 
 def test_plugin_naming_no_live_family_is_reported(repo: Path) -> None:
@@ -282,29 +274,35 @@ def test_plugin_naming_no_live_family_is_reported(repo: Path) -> None:
     there would let the table advertise an uninstallable plugin."""
     _skill(repo, "a", "security", "Triage")
     _plugin_table(repo, ["| `magpie-ghost` | 3 | ~0.9k |"])
-    errs = _errors(mod.check_family_plugin_counts, 1)
+    errs = _errors(mod.check_family_plugin_counts)
     assert len(errs) == 1
     assert "names no live family" in errs[0]
 
 
-def test_plugin_counts_are_checked_in_the_quick_start_too(repo: Path) -> None:
+def test_plugin_counts_are_checked_on_the_families_page_too(repo: Path) -> None:
+    """The families table moved out of the walkthrough into its own page; the
+    count check followed it, and this is what proves it still bites there."""
     _skill(repo, "a", "setup", "Triage")
-    _plugin_table(repo, ["| `magpie-setup` | 9 | Sandbox, install |"], path="docs/quick-start.md")
-    errs = _errors(mod.check_family_plugin_counts, 1)
+    _plugin_table(
+        repo,
+        ["| `magpie-setup` | 9 | Sandbox, install |"],
+        path="docs/quick-start/families.md",
+    )
+    errs = _errors(mod.check_family_plugin_counts)
     assert len(errs) == 1
-    assert "docs/quick-start.md" in errs[0]
+    assert "docs/quick-start/families.md" in errs[0]
 
 
 def test_prose_mentioning_a_plugin_is_not_a_table_row(repo: Path) -> None:
     """Only a leading table cell counts — `magpie-security` named mid-sentence,
     or in a bulleted trade-off list, carries no count to check."""
     _skill(repo, "a", "security", "Triage")
-    (repo / "docs" / "setup" / "marketplaces.md").write_text(
+    (repo / "docs" / "setup" / "marketplace.md").write_text(
         "Install `magpie-security` for 12 reasons.\n"
         "- \u2705 `magpie-security` \u2248 3.9k always-on tokens.\n",
         encoding="utf-8",
     )
-    assert _errors(mod.check_family_plugin_counts, 1) == []
+    assert _errors(mod.check_family_plugin_counts) == []
 
 
 # ---------------------------------------------------------------------------
@@ -417,7 +415,7 @@ def test_eval_fixtures_are_not_scanned(repo: Path) -> None:
 
 
 def test_a_marked_line_may_show_the_stutter(repo: Path) -> None:
-    """marketplaces.md documents the anti-pattern, so it has to print one."""
+    """marketplace.md documents the anti-pattern, so it has to print one."""
     _skill(repo, "security-issue-triage", "security", "Triage")
     (repo / "docs" / "guide.md").write_text(
         f"`/magpie-security:security-issue-triage` says security twice. {mod.STUTTER_ALLOW}\n",
@@ -480,7 +478,7 @@ def test_a_filesystem_path_is_not_an_invocation(repo: Path) -> None:
 def test_allowlisted_pages_may_show_both_forms(repo: Path) -> None:
     _skill(repo, "issue-triage", "issue", "Triage")
     (repo / "docs" / "setup").mkdir(parents=True, exist_ok=True)
-    (repo / "docs" / "setup" / "marketplaces.md").write_text(
+    (repo / "docs" / "setup" / "marketplace.md").write_text(
         "Portable: `/magpie-issue-triage`.\n", encoding="utf-8"
     )
     assert _errors(mod.check_portable_form_is_flagged) == []
@@ -536,7 +534,7 @@ def test_main_exits_1_and_names_every_problem(repo: Path, capsys: pytest.Capture
     _modes(repo, [("Triage", 9)])
     _specs(repo, ["adapters.md"], [], [])
     _dev(repo, ["check-x.sh"], [])
-    (repo / "docs" / "setup" / "marketplaces.md").write_text("Installs 9 skills.\n", encoding="utf-8")
+    (repo / "docs" / "setup" / "marketplace.md").write_text("Installs 9 skills.\n", encoding="utf-8")
 
     assert mod.main() == 1
     err = capsys.readouterr().err
@@ -550,7 +548,199 @@ def test_main_exits_0_on_a_consistent_tree(repo: Path, capsys: pytest.CaptureFix
     _modes(repo, [("Triage", 1)])
     _specs(repo, ["adapters.md"], ["adapters.md"], ["adapters.md"])
     _dev(repo, ["check-x.sh"], ["check-x.sh"])
-    (repo / "docs" / "setup" / "marketplaces.md").write_text("Installs 1 skills.\n", encoding="utf-8")
+    (repo / "docs" / "setup" / "marketplace.md").write_text("Installs 1 skills.\n", encoding="utf-8")
 
     assert mod.main() == 0
     assert "OK" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# 11. Eval-case counts
+# ---------------------------------------------------------------------------
+
+
+def _evals(repo: Path, tree: dict[str, dict[str, int]]) -> None:
+    """Build `evals/<family>/<suite>/fixtures/case-N/` dirs matching *tree*."""
+    for family, suites in tree.items():
+        for suite, n in suites.items():
+            fixtures = repo / "tools" / "skill-evals" / "evals" / family / suite / "fixtures"
+            fixtures.mkdir(parents=True)
+            for i in range(n):
+                (fixtures / f"case-{i + 1}-x").mkdir()
+
+
+def _eval_family_readme(repo: Path, family: str, text: str) -> Path:
+    path = repo / "tools" / "skill-evals" / "evals" / family / "README.md"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def _eval_index(repo: Path, text: str) -> Path:
+    path = repo / "tools" / "skill-evals" / "README.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_eval_counts_clean(repo: Path) -> None:
+    _evals(repo, {"setup": {"alpha": 2, "beta": 3}})
+    _eval_family_readme(repo, "setup", "## Suites (5 cases total)\n\n| alpha | x | 2 |\n| beta | x | 3 |\n")
+    _eval_index(repo, "- **setup** — 5 cases across 2 steps (alpha, beta)\n")
+    assert _errors(mod.check_eval_counts) == []
+
+
+def test_eval_counts_flags_stale_total(repo: Path) -> None:
+    _evals(repo, {"setup": {"alpha": 2, "beta": 3}})
+    _eval_family_readme(repo, "setup", "## Suites (4 cases total)\n\n| alpha | x | 2 |\n| beta | x | 3 |\n")
+    _eval_index(repo, "- **setup** — 5 cases across 2 steps (alpha, beta)\n")
+    errs = _errors(mod.check_eval_counts)
+    assert any("heading says 4 cases, 5 on disk" in e for e in errs)
+
+
+def test_eval_counts_flags_stale_suite_row(repo: Path) -> None:
+    _evals(repo, {"setup": {"alpha": 2, "beta": 3}})
+    _eval_family_readme(repo, "setup", "## Suites (5 cases total)\n\n| alpha | x | 9 |\n| beta | x | 3 |\n")
+    _eval_index(repo, "- **setup** — 5 cases across 2 steps (alpha, beta)\n")
+    errs = _errors(mod.check_eval_counts)
+    assert any("suite 'alpha' declares 9 cases, 2 on disk" in e for e in errs)
+
+
+def test_eval_counts_flags_stale_index_line(repo: Path) -> None:
+    """The exact drift this check was written for: a hand-maintained total."""
+    _evals(repo, {"setup": {"alpha": 2, "beta": 3}})
+    _eval_family_readme(repo, "setup", "## Suites (5 cases total)\n")
+    _eval_index(repo, "- **setup** — 49 cases across 2 steps (alpha, beta)\n")
+    errs = _errors(mod.check_eval_counts)
+    assert any("says 49 cases across 2 steps, disk has 5 across 2" in e for e in errs)
+
+
+def test_eval_counts_flags_unlisted_family(repo: Path) -> None:
+    _evals(repo, {"setup": {"alpha": 1}, "issue-triage": {"beta": 2}})
+    _eval_family_readme(repo, "setup", "## Suites (1 cases total)\n")
+    _eval_family_readme(repo, "issue-triage", "## Suites (2 cases total)\n")
+    _eval_index(repo, "- **setup** — 1 cases across 1 steps (alpha)\n")
+    errs = _errors(mod.check_eval_counts)
+    assert any("'issue-triage'" in e and "no entry" in e for e in errs)
+
+
+def test_eval_counts_flags_listed_family_with_no_suites(repo: Path) -> None:
+    _evals(repo, {"setup": {"alpha": 1}})
+    _eval_family_readme(repo, "setup", "## Suites (1 cases total)\n")
+    _eval_index(
+        repo, "- **setup** — 1 cases across 1 steps (alpha)\n- **ghost** — 3 cases across 1 steps (x)\n"
+    )
+    errs = _errors(mod.check_eval_counts)
+    assert any("'ghost' is listed but has no eval suites on disk" in e for e in errs)
+
+
+def test_eval_counts_readme_without_a_total_is_not_drift(repo: Path) -> None:
+    """A README that declares no total makes no claim that can go stale."""
+    _evals(repo, {"setup": {"alpha": 2}})
+    _eval_family_readme(repo, "setup", "# setup evals\n\nProse, no headline total.\n")
+    _eval_index(repo, "- **setup** — 2 cases across 1 steps (alpha)\n")
+    assert _errors(mod.check_eval_counts) == []
+
+
+def test_eval_counts_fix_rewrites_numbers(repo: Path) -> None:
+    _evals(repo, {"setup": {"alpha": 2, "beta": 3}})
+    readme = _eval_family_readme(
+        repo, "setup", "## Suites (4 cases total)\n\n| alpha | x | 9 |\n| beta | x | 3 |\n"
+    )
+    index = _eval_index(repo, "- **setup** — 49 cases across 7 steps (alpha, beta)\n")
+    errs = _errors(mod.check_eval_counts, True)
+    assert errs == []
+    assert "## Suites (5 cases total)" in readme.read_text()
+    assert "| alpha | x | 2 |" in readme.read_text()
+    assert "- **setup** — 5 cases across 2 steps (alpha, beta)" in index.read_text()
+    assert _errors(mod.check_eval_counts) == []
+
+
+def test_eval_counts_fix_generates_missing_entry(repo: Path) -> None:
+    _evals(repo, {"setup": {"alpha": 1}, "issue-triage": {"beta": 2, "gamma": 1}})
+    _eval_family_readme(repo, "setup", "## Suites (1 cases total)\n")
+    _eval_family_readme(repo, "issue-triage", "## Suites (3 cases total)\n")
+    index = _eval_index(repo, "- **setup** — 1 cases across 1 steps (alpha)\n")
+    assert _errors(mod.check_eval_counts, True) == []
+    assert "- **issue-triage** — 3 cases across 2 suites (beta, gamma)" in index.read_text()
+    assert _errors(mod.check_eval_counts) == []
+
+
+def test_eval_counts_fix_preserves_colon_separator(repo: Path) -> None:
+    """One line uses ':' and 'suites'; --fix re-derives numbers, not wording."""
+    _evals(repo, {"pr-management-code-review": {"alpha": 2}})
+    _eval_family_readme(repo, "pr-management-code-review", "## Suites (2 cases total)\n")
+    index = _eval_index(
+        repo, "- **pr-management-code-review**: 99 cases across 27 suites (step-4-* checks)\n"
+    )
+    assert _errors(mod.check_eval_counts, True) == []
+    assert "- **pr-management-code-review**: 2 cases across 1 suites (step-4-* checks)" in index.read_text()
+
+
+def test_eval_counts_fix_keeps_the_blank_line_below_the_heading(repo: Path) -> None:
+    """Rewriting the heading must not eat the blank line the table needs.
+
+    With ``re.M``, a trailing ``\\s*$`` in the heading pattern also matches the
+    newlines after it, so the substitution silently joined the heading to the
+    table and tripped markdownlint's MD058.
+    """
+    _evals(repo, {"setup": {"alpha": 2}})
+    readme = _eval_family_readme(
+        repo, "setup", "# setup evals\n\n## Suites (9 cases total)\n\n| alpha | x | 2 |\n"
+    )
+    _eval_index(repo, "- **setup** — 2 cases across 1 steps (alpha)\n")
+    assert _errors(mod.check_eval_counts, True) == []
+    assert "## Suites (2 cases total)\n\n| alpha" in readme.read_text()
+
+
+# ---------------------------------------------------------------------------
+# 12. The marketplace add lives on one page
+# ---------------------------------------------------------------------------
+
+
+def test_marketplace_add_outside_the_allowed_pages_is_reported(repo: Path) -> None:
+    setup = repo / "docs" / "setup"
+    setup.mkdir(parents=True, exist_ok=True)
+    (setup / "marketplace-install.md").write_text("/plugin marketplace add apache/magpie\n", encoding="utf-8")
+    (repo / "docs" / "pairing").mkdir(parents=True)
+    (repo / "docs" / "pairing" / "README.md").write_text(
+        "```text\n/plugin marketplace add apache/magpie\n```\n", encoding="utf-8"
+    )
+    errs = _errors(mod.check_marketplace_add_is_not_repeated)
+    assert len(errs) == 1
+    assert "docs/pairing/README.md" in errs[0]
+
+
+def test_marketplace_add_in_the_allowed_pages_is_silent(repo: Path) -> None:
+    setup = repo / "docs" / "setup"
+    setup.mkdir(parents=True, exist_ok=True)
+    for name in ("marketplace-install.md", "marketplace.md"):
+        (setup / name).write_text("/plugin marketplace add apache/magpie\n", encoding="utf-8")
+    assert _errors(mod.check_marketplace_add_is_not_repeated) == []
+
+
+def test_the_other_harnesses_add_commands_are_caught_too(repo: Path) -> None:
+    """Claude Code is not the only one that repeats: Codex, Gemini and apm each
+    have their own one-time add, and each was carried on several pages."""
+    setup = repo / "docs" / "setup"
+    setup.mkdir(parents=True, exist_ok=True)
+    (repo / "docs" / "utilities").mkdir(parents=True)
+    (repo / "docs" / "utilities" / "README.md").write_text(
+        "```bash\ncodex plugin marketplace add apache/magpie\n"
+        "gemini extensions install https://github.com/apache/magpie\n"
+        "apm install apache/magpie\n```\n",
+        encoding="utf-8",
+    )
+    errs = _errors(mod.check_marketplace_add_is_not_repeated)
+    assert len(errs) == 3
+
+
+def test_a_design_document_may_quote_the_command(repo: Path) -> None:
+    """docs/designs/ records what was decided, including the commands a plan
+    told an implementer to write. Rewriting history to satisfy a linter would
+    make the record wrong."""
+    designs = repo / "docs" / "designs"
+    designs.mkdir(parents=True)
+    (designs / "2026-01-01-something.md").write_text(
+        "/plugin marketplace add apache/magpie\n", encoding="utf-8"
+    )
+    assert _errors(mod.check_marketplace_add_is_not_repeated) == []

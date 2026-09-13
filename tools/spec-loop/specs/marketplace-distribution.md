@@ -7,7 +7,7 @@ status: experimental
 kind: feature
 mode: infra
 source: >
-  docs/setup/marketplaces.md. The manifest set at .claude-plugin/,
+  docs/setup/marketplace.md. The manifest set at .claude-plugin/,
   .codex-plugin/, .agents/plugins/, plugins/magpie-*/, and the repo-root
   plugin.json / marketplace.json / apm.yml / gemini-extension.json.
   Enforced by tools/dev/check-family-plugins.py.
@@ -15,8 +15,9 @@ acceptance:
   - Every ecosystem manifest mirrors pyproject.toml's project.version
     verbatim, including the .devN suffix.
   - Every skill family has a plugins/magpie-<family>/ plugin whose skills/
-    directory contains exactly that family's skills as single-hop symlinks.
-  - Manifests are generated from pyproject.toml and the all-in-one manifest,
+    directory contains exactly that family's skills as real directories, which
+    the flat skills/ tree mirrors back with single-hop symlinks.
+  - Manifests are generated from pyproject.toml and the root metadata anchor,
     never hand-edited; the generator is idempotent and CI fails on drift.
 ---
 
@@ -54,7 +55,7 @@ the shared `skills/<skill>` tree.
 
 `tools/dev/check-family-plugins.py` is both the generator (`--fix`) and the
 CI gate — the prek hook runs it in `--fix` mode, so the gate corrects drift
-rather than only reporting it. `docs/setup/marketplaces.md` is the
+rather than only reporting it. `docs/setup/marketplace.md` is the
 adopter-facing page.
 
 ## Behaviour & contract
@@ -91,15 +92,15 @@ adopter-facing page.
   (`pr-stale-sweep`, `pre-first-pr-check` and `reviewer-routing` are all
   `family: pr-management`).
 
-- **The per-family plugins are Claude Code only.** The Codex and Copilot
-  catalogs list the all-in-one plugin and nothing else; advertising a family
-  plugin there would offer those clients something they cannot install.
+- **Per-family works on every client, and there is no all-in-one.** A family
+  plugin owns its skills as real directories, so a client that drops symlinks
+  still installs them intact — measured on Codex, which used to install such a
+  plugin with zero skills and no error. Every catalogue lists all ten families.
 
-- **The same skill is invoked by a different name per install method**, and all
-  three are correct: `/magpie-<name>` under the portable snapshot install
-  (where the `magpie-` prefix *is* the namespace), `/magpie:<name>` under the
-  all-in-one marketplace plugin, and `/magpie-<family>:<name>` under a family
-  plugin (where `plugin:skill` supplies the namespace).
+- **The same skill is invoked by a different name per install method**, and
+  both are correct: `/magpie-<name>` under the portable snapshot install (where
+  the `magpie-` prefix *is* the namespace), and `/magpie-<family>:<name>` under
+  a family plugin (where `plugin:skill` supplies the namespace).
 
 - **Placeholder syntax in a skill `description` is conformant, not a
   portability risk.** 45 of the 74 descriptions contain `<tracker>`,
@@ -125,7 +126,7 @@ adopter-facing page.
 2. `--fix` regenerates every manifest from `pyproject.toml` and is idempotent —
    a second run is a no-op.
 3. A version bump is a one-line edit to `pyproject.toml` plus a regeneration.
-4. The Codex and Copilot catalogs list only the all-in-one plugin.
+4. Every catalogue lists all ten family plugins and no all-in-one.
 
 ## Validation
 

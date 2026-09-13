@@ -50,16 +50,18 @@ repos:
         files: ^.+\.(md|rst)$
         # Skip agent-facing skill definitions across every skill-dir layout
         # (.agents/skills canonical home, plus the .claude/skills and
-        # .github/skills relays, and the skills/ source): their YAML
+        # .github/skills relays, and the plugins/magpie-*/skills/ source
+        # together with the flat skills/ tree that mirrors it): their YAML
         # frontmatter must be the first thing in the file, which is
-        # incompatible with doctoc inserting a TOC block at the top. Also skip skill-evals fixture and
+        # incompatible with doctoc inserting a TOC block at the top. Also
+        # skip skill-evals fixture and
         # README files, and the spec-loop specs/prompts (YAML-frontmatter
         # specs and short single-purpose prompts, same rationale as skills)
         # — short docs that don't warrant a TOC.
         # Skip the PR template — GitHub pre-populates a new PR description
         # with the template verbatim, so a TOC block becomes per-PR noise the
         # contributor has to delete by hand.
-        exclude: ^(\.claude/skills/.*|\.agents/skills/.*|\.github/skills/.*|skills/.*|tools/cve-tool-vulnogram/generate-cve-json/SKILL\.md|tools/skill-evals/.*|tools/spec-loop/.*|\.github/PULL_REQUEST_TEMPLATE\.md)$
+        exclude: ^(\.claude/skills/.*|\.agents/skills/.*|\.github/skills/.*|skills/.*|plugins/magpie-[^/]+/skills/.*|tools/cve-tool-vulnogram/generate-cve-json/SKILL\.md|tools/skill-evals/.*|tools/spec-loop/.*|\.github/PULL_REQUEST_TEMPLATE\.md)$
         args:
           - "--maxlevel"
           - "3"
@@ -97,7 +99,8 @@ repos:
       # write-denies three tracked path sets — the agent's own config
       # (`.claude/settings.json`), the self-adoption skill relays
       # (`.claude/skills/*` symlinks), and the plugin hook scripts
-      # (`hooks/`) — because agents must never modify them. A hook script
+      # (`plugins/magpie-setup/hooks/`) — because agents must never
+      # modify them. A hook script
       # runs automatically on a harness event, so an agent that could
       # rewrite one could arrange to run arbitrary code on the next
       # session start; the deny is the point, not an oversight. So on
@@ -106,14 +109,14 @@ repos:
       # and the whole run aborts, even though the files need no fix.
       # Exclude them: `.claude/settings.json` is gated by the
       # sandbox-lint baseline, the skill symlinks are validated by
-      # `symlink-lint`, and `hooks/check-upgrade.sh` is checked for
+      # `symlink-lint`, and the upgrade hook script is checked for
       # existence and correct wiring by `check-family-plugins.py`, so
       # none of them loses coverage by skipping EOF / whitespace /
       # line-ending normalisation here. This keeps prek a single
       # invocation that runs cleanly in-sandbox with no bypass.
       - id: end-of-file-fixer
         name: Make sure that there is an empty line at the end
-        exclude: &sandbox_write_denied ^(\.claude/(settings\.json|skills/)|hooks/)
+        exclude: &sandbox_write_denied ^(\.claude/(settings\.json|skills/)|plugins/magpie-setup/hooks/)
       - id: mixed-line-ending
         name: Detect if mixed line ending is used (\r vs. \r\n)
         exclude: *sandbox_write_denied
@@ -208,7 +211,7 @@ repos:
         name: check-placeholders
         language: system
         entry: tools/dev/check-placeholders.sh
-        files: ^(skills/.*|tools/.*)\.(md|sh|py|yaml|yml|toml)$
+        files: ^(skills/.*|plugins/magpie-[^/]+/skills/.*|tools/.*)\.(md|sh|py|yaml|yml|toml)$
         pass_filenames: false
   # Vendor-neutrality score — regenerate the block embedded in
   # docs/vendor-neutrality.md from repository metadata (tool README
@@ -228,7 +231,7 @@ repos:
         name: Regenerate the vendor-neutrality score in docs/vendor-neutrality.md
         language: system
         entry: uv run --project tools/vendor-neutrality-score vendor-neutrality-score --in-place
-        files: ^(tools/[^/]+/README\.md|tools/privacy-llm/models\.md|tools/vendor-neutrality-score/.*|skills/[^/]+/SKILL\.md|docs/vendor-neutrality\.md)$
+        files: ^(tools/[^/]+/README\.md|tools/privacy-llm/models\.md|tools/vendor-neutrality-score/.*|skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/[^/]+/SKILL\.md|docs/vendor-neutrality\.md)$
         pass_filenames: false
   # AI-tutor knowledge-base sync — fail when a `docs/education/` source
   # page (or a training lesson) changes without regenerating the tutor
@@ -258,7 +261,7 @@ repos:
         name: symlink-lint
         language: system
         entry: python3 tools/symlink-lint/src/symlink_lint/__init__.py
-        files: ^(\.(agents|claude|github|kiro)/skills/.*|skills/.*)$
+        files: ^(\.(agents|claude|github|kiro)/skills/.*|skills/.*|plugins/magpie-[^/]+/skills/.*)$
         types_or: [symlink, file]
         pass_filenames: false
   # Release-archive guard: build the source archive exactly as the release
@@ -275,22 +278,24 @@ repos:
         name: symlink-lint (release archive)
         language: system
         entry: python3 tools/symlink-lint/src/symlink_lint/__init__.py --archive
-        files: ^(\.gitattributes|\.(agents|claude|github|kiro)/skills/.*|skills/.*|projects/_template/.*)$
+        files: ^(\.gitattributes|\.(agents|claude|github|kiro)/skills/.*|skills/.*|plugins/magpie-[^/]+/skills/.*|projects/_template/.*)$
         types_or: [symlink, file]
         pass_filenames: false
   # Marketplace-plugin consistency guard. Validates that every plugin is
   # properly defined and in sync with the skills' `family:` frontmatter (the
-  # source of truth): the all-in-one `magpie` manifest + its upgrade-hook
-  # script, each per-family manifest (name / skills / description), every
+  # source of truth): magpie-setup's upgrade-hook wiring + script, each
+  # per-family manifest (name / skills / description), every
   # `.claude-plugin/marketplace.json` entry resolving to a matching, uniquely
-  # named plugin.json, and each family's skills present as single-hop symlinks
-  # into the shared skills/ tree. Catches a new skill, a changed family, a stale
-  # symlink, or a malformed manifest.
+  # named plugin.json, and each family's skills present as real directories
+  # that the flat skills/ tree mirrors back with single-hop symlinks. Catches a
+  # new skill, a changed family, a stale symlink, or a malformed manifest.
   #
   # Runs as `--fix`, so the hook *regenerates* rather than merely reporting: the
-  # generated tree is a pure function of the frontmatter and `pyproject.toml`'s
-  # version, so there is nothing for a contributor to decide when it drifts, and
-  # a check-only hook just made them run the fixer by hand. prek fails the run
+  # manifests and catalogue entries are a pure function of the frontmatter and
+  # `pyproject.toml`'s version, so there is nothing for a contributor to decide
+  # when they drift, and a check-only hook just made them run the fixer by hand.
+  # Skill directories are source and are never generated — moving one is a
+  # decision `--fix` refuses to make. prek fails the run
   # when a hook modifies files, so drift still stops the commit — it now arrives
   # already corrected and staged-ready instead of as an instruction.
   - repo: local
@@ -299,16 +304,16 @@ repos:
         name: check-family-plugins (marketplace plugins vs frontmatter)
         language: system
         entry: python3 tools/dev/check-family-plugins.py --fix
-        files: ^(skills/.*/SKILL\.md|plugins/.*|\.claude-plugin/(marketplace|plugin)\.json|\.codex-plugin/plugin\.json|\.agents/plugins/marketplace\.json|(plugin|marketplace)\.json|gemini-extension\.json|apm\.yml|pyproject\.toml|hooks/check-upgrade\.sh)$
+        files: ^(skills/.*/SKILL\.md|plugins/.*|\.claude-plugin/(marketplace|plugin)\.json|\.codex-plugin/plugin\.json|\.agents/plugins/marketplace\.json|(plugin|marketplace)\.json|gemini-extension\.json|apm\.yml|pyproject\.toml)$
         pass_filenames: false
   # The shared setup pre-flight every skill runs before it acts. It cannot be
   # a hook: on most harnesses *no code runs at all* when a plugin is installed
   # or upgraded (AP1 defines no hook component; Claude Code's SessionStart hook
-  # is wired only into the all-in-one plugin), so the check has to be
-  # instructions the agent reads on invocation. It cannot be an include either:
-  # a family plugin symlinks `skills/<skill>` and AP1 forbids a symlink
-  # escaping the plugin root, so a shared file would be unreachable from the
-  # install shape most adopters use. That leaves one source and 65 generated
+  # is wired only into magpie-setup), so the check has to be instructions the
+  # agent reads on invocation. It cannot be an include either: a family plugin
+  # must be self-contained — the packagers drop symlinks rather than follow
+  # them — so a shared file outside the plugin root would be unreachable from
+  # the install shape most adopters use. That leaves one source and 65 generated
   # copies, which is exactly the drift this hook exists to prevent — edit
   # `tools/dev/preflight-block.md` and let `--fix` propagate it. The `setup`
   # family is exempt: those skills perform the setup the block asks for.
@@ -318,7 +323,7 @@ repos:
         name: check-skill-preflight (shared pre-flight block in every SKILL.md)
         language: system
         entry: python3 tools/dev/check-skill-preflight.py --fix
-        files: ^(skills/[^/]+/SKILL\.md|tools/dev/preflight-block\.md)$
+        files: ^(skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/[^/]+/SKILL\.md|tools/dev/preflight-block\.md)$
         pass_filenames: false
   # Deterministic full-file token measurements. Run after skill fixers.
   # The dedicated path-filtered CI workflow also catches deleted skills.
@@ -328,7 +333,7 @@ repos:
         name: Check measured skill tokens in docs/mode-economics.md
         language: system
         entry: uv run --project tools/skill-token-count skill-token-count --check
-        files: ^(skills/.*/SKILL\.md|tools/dev/preflight-block\.md|tools/skill-token-count/.*|docs/mode-economics\.md|uv\.lock|\.pre-commit-config\.yaml)$
+        files: ^(skills/.*/SKILL\.md|plugins/magpie-[^/]+/skills/.*/SKILL\.md|tools/dev/preflight-block\.md|tools/skill-token-count/.*|docs/mode-economics\.md|uv\.lock|\.pre-commit-config\.yaml)$
         pass_filenames: false
   # Quick-start screenshot set. Three lists have to agree — the harnesses
   # `capture-screenshot.sh` offers, the ecosystem manifests that make a harness
@@ -341,11 +346,11 @@ repos:
   # documented interim state, so they are reported, not failed.
   - repo: local
     hooks:
-      - id: check-quickstart-screenshots
-        name: check-quickstart-screenshots (harness/family shots vs manifests)
+      - id: check-quickstart-recording
+        name: check-quickstart-recording (setup, first-run and example SVGs)
         language: system
-        entry: python3 tools/dev/check-quickstart-screenshots.py
-        files: ^(assets/quickstart/.*|skills/[^/]+/SKILL\.md|tools/dev/capture-screenshot\.sh|\.claude-plugin/marketplace\.json|\.agents/plugins/marketplace\.json|marketplace\.json|gemini-extension\.json)$
+        entry: python3 tools/dev/check-quickstart-recording.py
+        files: ^(assets/(quickstart|examples)/.*|docs/.*\.md|README\.md|plugins/.*|skills/[^/]+/SKILL\.md|tools/dev/render-wizard\.py)$
         pass_filenames: false
   # Documentation claims that must track the tree. Four mechanical checks,
   # each added after the drift it catches was found by hand:
@@ -358,13 +363,51 @@ repos:
   #     `mode:` frontmatter (the validator's modes-doc rule checks section
   #     membership but reads only the mode and status columns, so the counts
   #     were unguarded);
-  #   - bare "N skills" totals in docs/setup/marketplaces.md match the
+  #   - bare "N skills" totals in docs/setup/marketplace.md match the
   #     catalogue;
   #   - every script in tools/dev/ is named in tools/dev/README.md — these are
   #     the framework's own gates, and an undocumented one is invisible to the
   #     next contributor deciding whether it applies to their change.
   # None of these break anything when wrong, which is exactly why they rot:
   # they are numbers a human must remember to update while thinking about
+  # Per-family configuration table. Which `<project-config>/` files a family's
+  # skills read -- and which of them an adopter must actually create -- was
+  # carried by a hand-maintained table in nine of the ten family READMEs, and
+  # had drifted exactly as far as an unguarded table does: `security` listed
+  # none of the thirteen files its skills read. The required set is now
+  # declared per skill in `requires_config:` frontmatter, the optional set is
+  # derived from what each skill references, and the table is generated from
+  # both. Runs as `--fix`, like check-family-plugins: the block is a pure
+  # function of the frontmatter, so there is nothing for a contributor to
+  # decide when it drifts.
+  # Companion skill packages. Third-party, per family AND per harness, and never
+  # a dependency -- the generated block is what keeps all three of those true in
+  # ten READMEs at once. Runs as `--fix` for the same reason its neighbours do.
+  - repo: local
+    hooks:
+      - id: check-companion-skills
+        name: check-companion-skills (companion registry vs family READMEs)
+        language: system
+        entry: python3 tools/dev/check-companion-skills.py --fix
+        files: ^(tools/dev/(companion-skills\.json|check-companion-skills\.py)|docs/[^/]+/README\.md|docs/setup/companion-skills\.md|plugins/magpie-[^/]+/skills/.*)$
+        pass_filenames: false
+  - repo: local
+    hooks:
+      - id: check-skill-config
+        name: check-skill-config (family config tables vs requires_config)
+        language: system
+        entry: python3 tools/dev/check-skill-config.py --fix
+        files: ^(skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/.*|projects/_template/.*|docs/[^/]+/README\.md|tools/dev/check-skill-config\.py)$
+        pass_filenames: false
+      # The animated wizard runs derive from the same frontmatter, so they move
+      # when it moves. Regenerated here rather than only checked, for the same
+      # reason as its neighbours: the output is a pure function of the source.
+      - id: render-wizard
+        name: render-wizard (animated setup + per-family config runs)
+        language: system
+        entry: python3 tools/dev/render-wizard.py
+        files: ^(skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/.*/SKILL\.md|projects/_template/.*|tools/dev/(render-wizard|check-skill-config)\.py)$
+        pass_filenames: false
   # something else.
   - repo: local
     hooks:
@@ -372,7 +415,7 @@ repos:
         name: check-doc-sync (spec indexes + declared skill counts)
         language: system
         entry: python3 tools/dev/check-doc-sync.py
-        files: ^(skills/[^/]+/SKILL\.md|tools/spec-loop/specs/.*\.md|README\.md|docs/modes\.md|docs/setup/marketplaces\.md|tools/dev/.*)$
+        files: ^(skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/[^/]+/SKILL\.md|tools/spec-loop/specs/.*\.md|README\.md|docs/modes\.md|docs/setup/marketplace\.md|tools/dev/.*)$
         pass_filenames: false
   # Workspace-membership guard. The single source of truth for
   # which Python projects get pre-commit hooks + the CI pytest
@@ -451,7 +494,7 @@ repos:
         name: skill-and-tool-validate (skills, tools, capability sync)
         language: system
         entry: uv run --project tools/skill-and-tool-validator skill-and-tool-validate
-        files: ^(skills/.*\.md|tools/[^/]+/README\.md|docs/labels-and-capabilities\.md|tools/skill-and-tool-validator/(src|pyproject\.toml))
+        files: ^(skills/.*\.md|plugins/magpie-[^/]+/skills/.*\.md|tools/[^/]+/README\.md|docs/labels-and-capabilities\.md|tools/skill-and-tool-validator/(src|pyproject\.toml))
         pass_filenames: false
 
   # Validate `tools/spec-loop/specs/` frontmatter and required body sections

@@ -242,7 +242,7 @@ Apache-2.0 licensed.
 >
 > 1. **Get set up.** Clone the framework repository and confirm you can run `uv`
 >    and the validators. See `CONTRIBUTING.md` (../../CONTRIBUTING.md) and
->    `docs/prerequisites.md` (../prerequisites.md).
+>    `docs/prerequisites.md` (../quick-start/prerequisites.md).
 > 2. **Make the smallest change that stands on its own.** One skill, one fix, one
 >    page. Small changes are reviewed and merged faster.
 > 3. **Update the spec if behaviour changes.** For anything beyond a wording fix,
@@ -295,7 +295,7 @@ This is the full `docs/education/training/lesson-11-how-to-contribute.md` lesson
 learning objectives, learner-facing self-check questions, and embedded
 self-check answers.
 
-> # Lesson 11 — How to contribute
+> # Lesson 11: How to contribute
 >
 > **Source page:** How to contribute (../contributing.md)
 > **Estimated time:** 30 minutes (10 min reading + 20 min exercises and self-check)

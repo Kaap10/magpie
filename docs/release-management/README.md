@@ -7,11 +7,11 @@
 
 - [Release-management skill family](#release-management-skill-family)
   - [Install & first runs](#install--first-runs)
+    - [Before the first run](#before-the-first-run)
     - [Try these first](#try-these-first)
   - [Status](#status)
   - [Skills](#skills)
   - [Deep documentation](#deep-documentation)
-  - [Adopter contract](#adopter-contract)
   - [Mode mapping](#mode-mapping)
   - [Cross-references](#cross-references)
 
@@ -74,20 +74,66 @@ stay identical too. See
 [`process.md` § Adopter backends](process.md#adopter-backends)
 for the full backend table and per-step mapping.
 
+> [!TIP]
+> **Why this family**
+> - The 14-step ASF release lifecycle as a walkthrough, not a wiki page you re-read every six months
+> - Pre-flight on a staged candidate before the vote — signatures, checksums, RAT, NOTICE, stray binaries
+> - The agent never holds your signing key: every command that signs or publishes is one you run yourself
+
 ## Install & first runs
 
 Install just this family — one plugin, 10 skills. The 14-step ASF release lifecycle. The agent never holds your signing key.
 
+Once you have [added the marketplace](../setup/marketplace-install.md):
+
 ```text
-/plugin marketplace add apache/magpie
 /plugin install magpie-release-management@apache-magpie
 ```
 
-<!-- CAPTURE: assets/quickstart/README.md -->
-![Claude Code showing the magpie-release-management plugin installed and enabled](../../assets/quickstart/families/release-management-install.png)
+New to Magpie? The [quick start](../quick-start.md) walks the whole path in
+one place — install, the first `/magpie-setup` run, and a recording of it
+happening — plus the other agents and the secure-isolation setup to run next.
 
-New to Magpie? The [quick start](../quick-start.md) covers the other agents,
-the all-in-one alternative, and the secure-isolation setup to run next.
+### Before the first run
+
+<!-- BEGIN generated: skill-config (tools/dev/check-skill-config.py --fix) -->
+
+![An animated `/magpie-setup config` run for the release-management family: the check failing, the values derived from the repository, one question for the rest, and gitignored files written](../../assets/quickstart/wizard/release-management.svg)
+
+*Illustrative — the real run derives more and asks better. What is true is
+the shape: it runs itself, it writes only gitignored files, and it stages
+nothing.*
+
+Every skill here resolves project-specific values from the adopter's
+[`<project-config>/`](../../projects/_template/) directory — which is
+`.apache-magpie-local/` (gitignored, yours) first, then
+`.apache-magpie-overrides/` (committed, the project's).
+
+**For yourself:** `/magpie-setup config` scaffolds and fills these locally.
+Nothing is staged, nothing is committed, and it works on a repository that
+has never adopted Magpie.
+
+**For the project:** [`/magpie-setup adopt`](../setup/team-adoption.md)
+commits them for every contributor, either scaffolded directly or promoted
+from what you configured locally.
+
+**Required.** Without these a skill would act on a guess, so it stops and
+says which file is missing.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`pmc-roster.md`](../../projects/_template/pmc-roster.md) | Who is binding. Read wherever a vote is counted or a PMC-only action is gated. | `promote`, `vote-tally` |
+| [`release-build.md`](../../projects/_template/release-build.md) | How this project builds and signs artefacts: build command, artefact names, checksum algorithm, signing-key expectations. | `rc-cut`, `verify-rc` |
+| [`release-management-config.md`](../../projects/_template/release-management-config.md) | Vote window and pass rule, distribution backend and paths, announce/vote list addresses, retention rule. | `announce-draft`, `archive-sweep`, `audit-report`, `keys-sync`, `prepare`, `promote`, `rc-cut`, `verify-rc`, `vote-draft`, `vote-tally` |
+| [`release-trains.md`](../../projects/_template/release-trains.md) | Active release branches, release-manager attribution per cut, rotation rosters, security-team roster. | `archive-sweep`, `prepare` |
+
+**Optional.** Each has a documented fallback; absent, the skill still runs.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`canned-responses.md`](../../projects/_template/canned-responses.md) | Reusable reporter-facing reply templates. | `announce-draft`, `vote-draft` |
+
+<!-- END generated: skill-config -->
 
 ### Try these first
 
@@ -97,32 +143,26 @@ below sends, merges, or posts anything without you confirming it.*
 **Open the release plan.**
 
 ```text
-> /magpie-release-management:prepare
-
-  Target 2.9.0, branch release-2.9
-  14 steps, 3 need you: sign the RC, cast the VOTE, publish
-  Planning issue drafted.
+/magpie-release-management:prepare
 ```
+
+![A prepare run that drafted a planning issue and a version-bump PR for 1.4.0 and filed neither](../../assets/quickstart/families/release-management/prepare.svg)
 
 **Check an RC before you vote.**
 
 ```text
-> /magpie-release-management:verify-rc
-
-  signature      OK (key in KEYS)
-  sha512         OK
-  LICENSE/NOTICE OK
-  binaries       FAIL: 2 .jar files under src/vendor/
+/magpie-release-management:verify-rc
 ```
+
+![A verify-rc run: five green checks across signatures, checksums, licence headers, NOTICE and prohibited binaries, one warning about a stale version string, and a PASS WITH WARNINGS verdict](../../assets/quickstart/families/release-management/verify-rc.svg)
 
 **Tally the vote thread.**
 
 ```text
-> /magpie-release-management:vote-tally
-
-  +1 binding 4   +1 non-binding 2   0: 0   -1: 0
-  72h elapsed -> passes. [RESULT] mail drafted, not sent.
+/magpie-release-management:vote-tally
 ```
+
+![A vote-tally run counting three binding +1s and no -1s, and drafting the RESULT email without sending it](../../assets/quickstart/families/release-management/vote-tally.svg)
 
 ## Status
 
@@ -238,31 +278,6 @@ referenced from it:
   scaffold for security use; release-management reuses it).
 - [`<project-config>/release-management-config.md`](../../projects/_template/release-management-config.md)
  , the family's adopter contract (new in this PR).
-
-## Adopter contract
-
-The skills resolve project-specific content from the release-
-workflow files in
-[`<project-config>/`](../../projects/_template/), see the
-adopter scaffold's
-[`README.md`](../../projects/_template/README.md) for the
-file-by-file index. Required at minimum:
-
-- `project.md`, identity, repos, mailing lists, tools
-- `release-management-config.md`, vote window, vote-pass rule,
-  signing-key requirements, audit-log location, retention rule,
-  build command, KEYS file path
-- `release-trains.md`, release-train identity (shared with the
-  security family)
-- `release-build.md`, build invocation, digest set, binary-exclude
-  list (new in this PR; minimal scaffold)
-- `pmc-roster.md`, PMC member roster used by
-  `release-vote-tally`
-  to classify binding vs non-binding votes (new in this PR;
-  minimal scaffold)
-- `site-repo.md`, site-bump PR target for
-  `release-announce-draft`
-  (new in this PR; minimal scaffold)
 
 ## Mode mapping
 

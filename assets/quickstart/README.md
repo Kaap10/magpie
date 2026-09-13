@@ -5,142 +5,163 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [Quick-start screenshots — capture checklist](#quick-start-screenshots--capture-checklist)
-  - [Per-family install shots — `families/`](#per-family-install-shots--families)
-  - [The capture helper](#the-capture-helper)
-  - [The auto-install shot — `claude-code-default-install.png` *(optional)*](#the-auto-install-shot--claude-code-default-installpng-optional)
-  - [Capture conventions](#capture-conventions)
-  - [Regenerating the placeholders](#regenerating-the-placeholders)
+- [One recording, and a set of authored screenshots](#one-recording-and-a-set-of-authored-screenshots)
+  - [Why one is recorded and the rest are written](#why-one-is-recorded-and-the-rest-are-written)
+  - [What the check can prove, and what it cannot](#what-the-check-can-prove-and-what-it-cannot)
+  - [Adding a screenshot](#adding-a-screenshot)
+  - [Conventions](#conventions)
+  - [The animated runs](#the-animated-runs)
+  - [Why SVG](#why-svg)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-# Quick-start screenshots — capture checklist
+<!-- SPDX-License-Identifier: Apache-2.0
+     https://www.apache.org/licenses/LICENSE-2.0 -->
 
-This directory holds two sets of screenshots: four **harness** shots
-referenced by [`docs/quick-start.md`](../../docs/quick-start.md), and ten
-**family** shots (below, in `families/`) referenced by each family README.
-Eleven of the fourteen are now real captures; `codex-install.png`,
-`vscode-install.png`, and `gemini-install.png` still ship as **generated
-placeholders**, not real captures — the pages render and the link check
-passes, but those three images say so on their face.
-[`tools/dev/check-quickstart-screenshots.py`](../../tools/dev/check-quickstart-screenshots.py)
-reports which ones remain placeholders on every run.
+# One recording, and a set of authored screenshots
 
-To finish the page, capture each remaining shot below and overwrite the file
-**at the same path and name**. No documentation change is needed; the alt
-text in `quick-start.md` already describes what each shot must show.
-
-| File | Agent | Capture this |
+| File | Embedded by | Shows |
 |---|---|---|
-| `claude-code-install.png` | Claude Code | Run `/plugin marketplace add apache/magpie`, then `/plugin install magpie-setup@apache-magpie` and `/plugin install magpie-pr-management@apache-magpie`, then `/plugin`. Frame the plugin list with **both family plugins** installed and enabled — per-family is the recommended install, so don't capture the all-in-one `magpie` plugin here. |
-| `codex-install.png` | OpenAI Codex CLI | Run `codex plugin marketplace add apache/magpie` and `codex plugin install magpie`, then `/plugins` inside Codex (or `codex plugin list`). Frame the output listing **magpie**. |
-| `vscode-install.png` | VS Code / GitHub Copilot | Install from the repo URL `https://github.com/apache/magpie`. Frame the VS Code plugin view showing **Apache Magpie** installed. |
-| `gemini-install.png` | Google Gemini CLI | Run `gemini extensions install https://github.com/apache/magpie`, then `gemini extensions list`. Frame the terminal output showing the **magpie** extension. |
+| `magpie-setup.svg` | [`docs/quick-start.md`](../../docs/quick-start.md), and [`docs/setup/README.md`](../../docs/setup/README.md) | `/magpie-setup` detecting the checkout, printing its plan, and waiting for approval. A real recording of a real run. |
+| `wizard/<family>.svg` | that family's README, *Before the first run* | An **animated** `/magpie-setup config` run for that family. Generated from `requires_config:` frontmatter by [`render-wizard.py`](../../tools/dev/render-wizard.py) — there is no transcript to edit. Illustrative of the shape of a run, not a recording of one. |
+| `families/<family>/<skill>.txt` | — | The authored transcript. This is the source file. |
+| `families/<family>/<skill>.svg` | that family's README, *Try these first* | The transcript rendered. Generated; never hand-edited. |
 
-## Per-family install shots — `families/`
+The setup family has no screenshot of `/magpie-setup` itself: its first run
+*is* `magpie-setup.svg`, so `docs/setup/README.md` embeds that rather than a
+copy.
 
-Each family README carries an **Install & first runs** section with one
-screenshot: `families/<family>-install.png`. All ten are now real captures.
+## Why one is recorded and the rest are written
 
-Ten files, one per family: `setup`, `utilities`, `security`, `pr-management`,
-`issue`, `release-management`, `repo-health`, `pairing`, `mentoring`,
-`contributor-growth`.
+A capture needs a terminal, a scratch project, and a human — and it needs all
+three again the next time any output moves.
 
-Capture each the same way, in Claude Code:
+That price is worth paying once. `/magpie-setup` is the run a reader has not
+done yet, and seeing it actually happen, at the pace it happens, is worth more
+than a description of it. So that one is a recording.
 
-```text
-/plugin marketplace add apache/magpie
-/plugin install magpie-<family>@apache-magpie
-/plugin
-```
+It was not worth paying ten times, and the proof is what happened when the
+repository tried: nine family recordings sat in the tree as placeholders for
+months, and when they were written they all showed the *same* thing — a
+pre-flight stopping on an unadopted repo, which is setup's arc, not the
+family's. Nine copies of the quick start, filed under ten families.
 
-Frame the plugin list showing **that one family plugin** installed and enabled.
-One family per shot — the point of the section is that you install only what
-you need, so a screenshot showing six plugins undercuts the page it sits on.
+A screenshot's job on a family page is to show the shape of a run: what comes
+back, and how it is laid out. That does not need a capture. It needs someone
+to write down what a typical run looks like, which is a text file anyone can
+fix in a pull request without booking a recording session.
 
-> [!IMPORTANT]
-> **Capture these outside a Magpie-adopting project.** Since the default set
-> landed, a project that commits the
-> [auto-install block](../../docs/setup/marketplaces.md#claude-code-the-default-set)
-> — this repository included — opens with `magpie-setup`, `magpie-utilities`
-> and `magpie-agent-guard` already enabled, so `/plugin` shows *four* entries
-> where the shot needs one. Use a scratch project with no such block, and clear
-> the `magpie-*` entries from your own user-scope `enabledPlugins` first. The
-> same applies to `claude-code-install.png`. The capture helper prints this
-> reminder for every Claude Code target.
+## What the check can prove, and what it cannot
 
-The usage examples in those sections are deliberately **text blocks, not
-screenshots**: they are illustrative shapes rather than real transcripts, and
-they are labelled as such in each README. Do not replace them with real
-captures without checking that no private tracker content, reporter address,
-or embargoed security detail is in frame.
+[`render-screenshot.sh`](../../tools/dev/render-screenshot.sh) is
+deterministic: the same `.txt` produces the same `.svg`, byte for byte, on any
+machine. So
+[`check-quickstart-recording.py`](../../tools/dev/check-quickstart-recording.py)
+can prove that **every committed `.svg` still matches its transcript**. Edit
+one without re-rendering and the build fails.
 
-## The capture helper
+It **cannot** prove that a transcript still matches what the skill prints
+today. Nothing here can. That is the real cost of authoring rather than
+capturing, and it is accepted deliberately: a screenshot on these pages is
+there to show the shape of a run, not to serve as a test oracle. Write
+transcripts to be robust to cosmetic change and the gap stays small — see the
+conventions below.
 
-`tools/dev/capture-screenshot.sh` does the whole job for one shot — brief,
-capture, resize, strip metadata, write to the right path:
-
-```bash
-tools/dev/capture-screenshot.sh security      # a family shot
-tools/dev/capture-screenshot.sh claude-code   # a harness shot
-tools/dev/capture-screenshot.sh --list        # every valid target
-```
-
-You click the window you want and it captures that window whole, so the crop is
-identical across a set. It applies the conventions below for you. macOS only,
-and run it from your own terminal: Screen Recording permission is granted per calling application, so
-calling it from inside an agent's shell tends to fail silently.
-
-## The auto-install shot — `claude-code-default-install.png` *(optional)*
-
-[`docs/setup/marketplaces.md`](../../docs/setup/marketplaces.md#auto-install-arriving-magpie-ready)
-describes a project that commits `enabledPlugins`, so a contributor who clones
-it finds the **default set** already installed: `magpie-setup`,
-`magpie-utilities`, and the `magpie-agent-guard` substrate plugin. This shot is
-**optional** — unlike the others it has to be *staged*, not merely captured,
-and the capture helper has no target for it.
-
-What makes it hard: the shot has to prove you installed nothing. Taken on your
-own machine it proves the opposite, because your user-scope `enabledPlugins`
-already has Magpie in it.
-
-1. Temporarily remove the `magpie-*` entries from your **user-scope**
-   `~/.claude/settings.json` `enabledPlugins` — keep a copy to restore.
-2. Open Claude Code in a project whose committed `.claude/settings.json` has
-   the `extraKnownMarketplaces` + `enabledPlugins` block, and accept the trust
-   prompt.
-3. Run `/plugin` and frame the list showing **all three default plugins
-   installed and enabled, and every opt-in family absent**. The absence is the
-   whole point — a shot that also shows `magpie-security` demonstrates nothing
-   the manual-install shots do not. Include `magpie-agent-guard`: it is the
-   least obvious member of the set and the one a reader is most likely to
-   assume they have to install by hand.
-4. Restore your own settings.
-
-Same conventions as every other shot; `check-quickstart-screenshots.py` holds
-it to them if it exists, and ignores it if it does not.
-
-## Capture conventions
-
-- **Size the window tight.** The capture is the window, so the window *is* the
-  crop: shrink it to the command and its result — no empty scrollback below.
-  The reader is checking "did it work", nothing more.
-- **Dark or light is fine**, but keep all four consistent within a set.
-- **No secrets in frame** — no tokens, no private repo names, no email
-  addresses in a prompt or status line. Check the terminal title bar too.
-- **1700px wide.** That is the *source* window width — the capture helper
-  and `check-quickstart-screenshots.py` both expect it (`WIDTH=1700` /
-  `CAPTURE_WIDTH = 1700`), and a capture taken from a narrower window fails
-  pre-commit rather than being silently upscaled.
-- **PNG**, and keep each file well under 500 KB.
-
-## Regenerating the placeholders
-
-The placeholders are produced by ImageMagick, one command per file, e.g.:
+## Adding a screenshot
 
 ```bash
-magick -size 1200x300 canvas:'#1d1f21' \
-  -fill '#c5c8c6' -pointsize 30 -gravity center \
-  -annotate 0 'screenshot pending\nclaude-code-install.png\nsee assets/quickstart/README.md' \
-  assets/quickstart/claude-code-install.png
+$EDITOR assets/quickstart/families/pairing/self-review.txt
+tools/dev/render-screenshot.sh assets/quickstart/families/pairing/self-review.txt
 ```
+
+Then embed the `.svg` in that family's README under *Try these first*, with
+alt text describing what the run shows. `--all` re-renders everything and
+`--check` fails on anything stale, which is what runs on commit.
+
+Colour comes from the line itself, so a transcript stays something you read as
+a terminal rather than as markup:
+
+| Line | Rendered |
+|---|---|
+| starts with `> ` | the command, in the prompt colour |
+| starts with `✓` | green |
+| starts with `⚠` | amber |
+| starts with `✗` | red |
+| ALL CAPS on its own | a section label, in amber |
+| anything else | ordinary output |
+
+## Conventions
+
+- **Under ~20 lines.** A screenshot shows a shape. A reader who wants the
+  whole output runs the command.
+- **No version strings, no dates, no counts a minor change would move.** The
+  check cannot tell you a transcript has gone stale, so write ones that do not
+  go stale easily. "reviewed 4 changed files" is fine; "74 skills" is a number
+  that will be wrong.
+- **Nothing secret in frame** — tokens, private repository names, reporter
+  addresses. These files are *text*: anything in them is greppable in the
+  repository forever. For `magpie-security` in particular, invent the tracker
+  numbers and use a scratch tracker name; a real transcript would put an
+  embargoed report in a public repository permanently.
+- **Say what the skill does not do.** Most of these skills are read-only or
+  draft-then-confirm, and that is the single most reassuring thing a first-time
+  reader can see. Several transcripts end on it.
+- **Keep the ASF header.** Every `.txt` opens with the licence header as a
+  block of `#` comments, exactly like any other authored file here, and the
+  renderer strips it before drawing — so it satisfies Apache RAT without being
+  rendered into the picture and without needing a `.rat-excludes` entry. The
+  one constraint it buys: a transcript cannot open with a literal `#` line.
+- **Never hand-edit an `.svg`.** It is generated. Edit the `.txt` and
+  re-render.
+- **Under 1536 KB**, enforced on commit. Nothing generated here comes close;
+  the cap catches a transcript that grew without anyone noticing.
+
+## The animated runs
+
+[`tools/dev/render-wizard.py`](../../tools/dev/render-wizard.py) writes them
+all:
+
+```bash
+python3 tools/dev/render-wizard.py           # write
+python3 tools/dev/render-wizard.py --check   # fail on drift
+```
+
+`magpie-setup.svg` is one fixed arc — the agent detected, the families picked,
+the install commands, then the secure-agent setup applying the sandbox, the
+clean-environment wrapper, the hooks and the status line. Edit
+`setup_script()` to change it. The per-family runs under `wizard/` have no
+script to edit: they are derived from each family's skills' `requires_config:`
+frontmatter, so a family that gains a required file gains a frame by itself.
+
+Animation is SMIL — one `<animate>` on opacity per line, all sharing one
+duration so the sequence loops as a unit. A viewer that does not animate SVG
+shows the first frame, which is the command about to be typed.
+
+**Nothing in this repository is captured.** `magpie-setup.svg` was the last
+recording, made with `asciinema` and `svg-term-cli`. It was also wrong: it
+opened with the marketplace install, which became a prerequisite with its own
+page, and fixing that needed a terminal, a scratch project and a human — which
+is why it stayed wrong for as long as it did. The recorder is retired and the
+Node dependency with it.
+
+What that costs is the same thing the authored screenshots cost, and it is
+worth restating here: a generated animation cannot prove the program still
+behaves the way the picture says. It shows the *shape* of a run — what is
+asked, in what order, and what is written where — and every embed says so.
+
+## Why SVG
+
+The output is text, which is most of the argument:
+
+- it goes through review as a diff, not as an opaque binary blob;
+- it carries its own Apache licence header, so RAT is satisfied by the file
+  itself;
+- it needs no player and no external host;
+- it stays sharp at any width;
+- it costs a fraction of what a terminal GIF or a PNG set would add to every
+  source release.
+
+The tradeoff for the one animated file: a renderer that does not run SVG
+animation shows the first frame rather than the loop. That is an acceptable
+still, and GitHub — where these pages are actually read — animates it. The
+authored screenshots are static, so they have no such tradeoff.

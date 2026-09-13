@@ -88,87 +88,87 @@ Measured on (UTC): 2026-09-13.
 Tokenizer: **tiktoken 0.12.0, `cl100k_base`**. Method: full UTF-8 file,
 including frontmatter and comments; line endings normalized to LF;
 special-token spellings counted as ordinary text.
-Coverage: **74 of 74 local `skills/**/SKILL.md` files**.
+Coverage: **74 of 74 local `skills/*/SKILL.md` files**.
 External `source.md` redirects and harness symlinks are excluded.
 
-Measurement manifest SHA-256: `fd7616246fa2e8d2e30959bbd3305cc152f0fc5efc2b36438afd827066c15a8c`.
+Measurement manifest SHA-256: `b9932dfb84f29864750b585a537b098c9eb03d6653f9c82a2556e10e69db440f`.
 
 | Skill file | Measured tokens | Source SHA-256 (first 16 characters) |
 |---|---:|---|
-| [audit-finding-fix](../skills/audit-finding-fix/SKILL.md) | 4,856 | `ec0ec27a9bbefdbd` |
-| [ci-runner-audit](../skills/ci-runner-audit/SKILL.md) | 2,161 | `e955adb1505e9479` |
-| [committer-onboarding](../skills/committer-onboarding/SKILL.md) | 7,250 | `027ea03fd0f440bd` |
-| [contributor-activity-sweep](../skills/contributor-activity-sweep/SKILL.md) | 3,273 | `a12075cbff14340e` |
-| [contributor-nomination](../skills/contributor-nomination/SKILL.md) | 4,699 | `9314dc6f3521e414` |
-| [contributor-sentiment](../skills/contributor-sentiment/SKILL.md) | 4,668 | `c61377d495bc9c6e` |
-| [contributor-to-committer](../skills/contributor-to-committer/SKILL.md) | 4,639 | `c7b06d51a3823780` |
-| [dependency-audit](../skills/dependency-audit/SKILL.md) | 3,062 | `aa2894fffe1b96b1` |
-| [dependency-license-audit](../skills/dependency-license-audit/SKILL.md) | 5,206 | `1538ed69a3a56965` |
-| [flaky-test-triage](../skills/flaky-test-triage/SKILL.md) | 3,018 | `bb31ef1ab791295e` |
-| [good-first-issue-author](../skills/good-first-issue-author/SKILL.md) | 3,536 | `fa2fa9c100099e85` |
-| [good-first-issue-sweep](../skills/good-first-issue-sweep/SKILL.md) | 4,060 | `74dc908e6e48fbc6` |
-| [issue-backlog-stats](../skills/issue-backlog-stats/SKILL.md) | 6,091 | `127256ebf660e008` |
-| [issue-deduplicate](../skills/issue-deduplicate/SKILL.md) | 4,484 | `a9314de110f8a7d2` |
-| [issue-fix-workflow](../skills/issue-fix-workflow/SKILL.md) | 5,967 | `bc8a00d030cc4a36` |
-| [issue-reassess](../skills/issue-reassess/SKILL.md) | 5,611 | `e5b7e4633bed292c` |
-| [issue-reassess-stats](../skills/issue-reassess-stats/SKILL.md) | 2,937 | `28b6c692475a0a64` |
-| [issue-reproducer](../skills/issue-reproducer/SKILL.md) | 6,476 | `8d069819de820538` |
-| [issue-stale-sweep](../skills/issue-stale-sweep/SKILL.md) | 6,355 | `d0a6c188e475669d` |
-| [issue-triage](../skills/issue-triage/SKILL.md) | 8,445 | `5b48347045deff86` |
-| [license-compliance-audit](../skills/license-compliance-audit/SKILL.md) | 4,580 | `43cd5aa4f96fbf68` |
-| [list-skills](../skills/list-skills/SKILL.md) | 2,224 | `022b516276b62e2a` |
-| [mentoring-welcome](../skills/mentoring-welcome/SKILL.md) | 3,163 | `a245871e572b8087` |
-| [newcomer-issue-explainer](../skills/newcomer-issue-explainer/SKILL.md) | 3,441 | `5c29eb31eb3c0391` |
-| [onboarding-concierge](../skills/onboarding-concierge/SKILL.md) | 3,297 | `cacfba7e70981c52` |
-| [optimize-skill](../skills/optimize-skill/SKILL.md) | 3,753 | `d455dfef901f0a2d` |
-| [pairing-multi-agent-review](../skills/pairing-multi-agent-review/SKILL.md) | 3,720 | `be66e6488625a9b9` |
-| [pairing-self-review](../skills/pairing-self-review/SKILL.md) | 3,470 | `b4e805d4e09a53f5` |
-| [pr-management-code-review](../skills/pr-management-code-review/SKILL.md) | 8,808 | `b336469b3f5d59b2` |
-| [pr-management-mentor](../skills/pr-management-mentor/SKILL.md) | 2,931 | `fa887219033e6b9b` |
-| [pr-management-quick-merge](../skills/pr-management-quick-merge/SKILL.md) | 7,315 | `1a17f3f5322641bb` |
-| [pr-management-stats](../skills/pr-management-stats/SKILL.md) | 7,155 | `0abdbccc25d53dbe` |
-| [pr-management-triage](../skills/pr-management-triage/SKILL.md) | 11,530 | `b0499fd4be2027e2` |
-| [pr-stale-sweep](../skills/pr-stale-sweep/SKILL.md) | 6,665 | `679b23344ae1815c` |
-| [pre-first-pr-check](../skills/pre-first-pr-check/SKILL.md) | 3,400 | `50d9198d7859c86f` |
-| [release-announce-draft](../skills/release-announce-draft/SKILL.md) | 5,856 | `ac0b800323339e00` |
-| [release-archive-sweep](../skills/release-archive-sweep/SKILL.md) | 4,080 | `9c5bd915a65dc619` |
-| [release-audit-report](../skills/release-audit-report/SKILL.md) | 5,639 | `dd931d4a61a49325` |
-| [release-keys-sync](../skills/release-keys-sync/SKILL.md) | 4,578 | `61c24efcb06f1dd2` |
-| [release-prepare](../skills/release-prepare/SKILL.md) | 6,818 | `a357dda14857620f` |
-| [release-promote](../skills/release-promote/SKILL.md) | 6,031 | `77ae6c7a6a8ee6dd` |
-| [release-rc-cut](../skills/release-rc-cut/SKILL.md) | 6,473 | `ddb6c6c25aacf132` |
-| [release-verify-rc](../skills/release-verify-rc/SKILL.md) | 7,636 | `c2feccf82acc4d86` |
-| [release-vote-draft](../skills/release-vote-draft/SKILL.md) | 5,192 | `12518835b2f23c85` |
-| [release-vote-tally](../skills/release-vote-tally/SKILL.md) | 5,553 | `e00605ffdc9cc310` |
-| [report-framework-issue](../skills/report-framework-issue/SKILL.md) | 4,574 | `d0f76de0d33269bd` |
-| [reviewer-routing](../skills/reviewer-routing/SKILL.md) | 5,127 | `8a3a31403e0af0ef` |
-| [security-cve-allocate](../skills/security-cve-allocate/SKILL.md) | 11,139 | `330c65db3ed1e8ab` |
-| [security-issue-deduplicate](../skills/security-issue-deduplicate/SKILL.md) | 7,985 | `00905921821904c5` |
-| [security-issue-fix](../skills/security-issue-fix/SKILL.md) | 11,846 | `7814e7d35744865b` |
-| [security-issue-import](../skills/security-issue-import/SKILL.md) | 28,876 | `38c9d2f145f8d82c` |
-| [security-issue-import-from-md](../skills/security-issue-import-from-md/SKILL.md) | 9,112 | `e0beea2ce188338a` |
-| [security-issue-import-from-pr](../skills/security-issue-import-from-pr/SKILL.md) | 9,987 | `006579946d0591db` |
-| [security-issue-import-from-scan](../skills/security-issue-import-from-scan/SKILL.md) | 4,461 | `91a818360f376ddd` |
-| [security-issue-import-via-forwarder](../skills/security-issue-import-via-forwarder/SKILL.md) | 7,900 | `0dd48183e6598491` |
-| [security-issue-invalidate](../skills/security-issue-invalidate/SKILL.md) | 12,325 | `fa6fccb54bbfd346` |
-| [security-issue-sync](../skills/security-issue-sync/SKILL.md) | 9,669 | `bf2f8b23df65dcfa` |
-| [security-issue-triage](../skills/security-issue-triage/SKILL.md) | 13,075 | `c26acc8adee19bc2` |
-| [security-model-prepare](../skills/security-model-prepare/SKILL.md) | 3,609 | `410f819d6fceafa1` |
-| [security-model-update](../skills/security-model-update/SKILL.md) | 4,809 | `55dc0a32ecf6887e` |
-| [security-model-verify](../skills/security-model-verify/SKILL.md) | 5,494 | `3fe1223783defe4f` |
-| [security-tracker-stats-dashboard](../skills/security-tracker-stats-dashboard/SKILL.md) | 3,745 | `e7d2f223b63ad132` |
-| [setup](../skills/setup/SKILL.md) | 7,682 | `ea48f4ad09b1e857` |
-| [setup-isolated-setup-doctor](../skills/setup-isolated-setup-doctor/SKILL.md) | 3,379 | `3db53adc1adddee9` |
-| [setup-isolated-setup-install](../skills/setup-isolated-setup-install/SKILL.md) | 7,742 | `c98576bc5114f467` |
-| [setup-isolated-setup-update](../skills/setup-isolated-setup-update/SKILL.md) | 4,596 | `77836b1c7e3c1e35` |
-| [setup-isolated-setup-verify](../skills/setup-isolated-setup-verify/SKILL.md) | 4,533 | `129e816486c88da8` |
-| [setup-override-upstream](../skills/setup-override-upstream/SKILL.md) | 4,008 | `9694cc73e1ecb2a0` |
-| [setup-shared-config-sync](../skills/setup-shared-config-sync/SKILL.md) | 4,270 | `1f4d5373af095b3c` |
-| [setup-status](../skills/setup-status/SKILL.md) | 2,401 | `2f86d2fc612e3492` |
-| [setup-upstream-fix](../skills/setup-upstream-fix/SKILL.md) | 4,603 | `1ef9b63d182ffa6e` |
-| [skill-reconciler](../skills/skill-reconciler/SKILL.md) | 4,391 | `2aa89dcafe326342` |
-| [workflow-security-audit](../skills/workflow-security-audit/SKILL.md) | 3,126 | `d9cc6c8e56c2b3c0` |
-| [write-skill](../skills/write-skill/SKILL.md) | 5,458 | `954ec0d57946c346` |
+| [audit-finding-fix](../skills/audit-finding-fix/SKILL.md) | 5,621 | `102680117fc6878f` |
+| [ci-runner-audit](../skills/ci-runner-audit/SKILL.md) | 2,860 | `83f79a5b2f236d90` |
+| [committer-onboarding](../skills/committer-onboarding/SKILL.md) | 7,966 | `8829d0559ba263fa` |
+| [contributor-activity-sweep](../skills/contributor-activity-sweep/SKILL.md) | 3,980 | `66b3073d4cc5399c` |
+| [contributor-nomination](../skills/contributor-nomination/SKILL.md) | 5,419 | `168aaead5e78a60d` |
+| [contributor-sentiment](../skills/contributor-sentiment/SKILL.md) | 5,384 | `31f2c7909b0175b1` |
+| [contributor-to-committer](../skills/contributor-to-committer/SKILL.md) | 5,359 | `686fb666ce7c5411` |
+| [dependency-audit](../skills/dependency-audit/SKILL.md) | 3,771 | `66bc9114813e7f27` |
+| [dependency-license-audit](../skills/dependency-license-audit/SKILL.md) | 5,905 | `b769f955c4336899` |
+| [flaky-test-triage](../skills/flaky-test-triage/SKILL.md) | 3,727 | `a8adc0bec7d95b55` |
+| [good-first-issue-author](../skills/good-first-issue-author/SKILL.md) | 4,267 | `1ccf7882f1a2a70f` |
+| [good-first-issue-sweep](../skills/good-first-issue-sweep/SKILL.md) | 4,783 | `0e5e26d4c943d4d1` |
+| [issue-backlog-stats](../skills/issue-backlog-stats/SKILL.md) | 6,792 | `65dc630d3681e489` |
+| [issue-deduplicate](../skills/issue-deduplicate/SKILL.md) | 5,199 | `6b0293ce0fe9e096` |
+| [issue-fix-workflow](../skills/issue-fix-workflow/SKILL.md) | 6,688 | `37c3768487ac4035` |
+| [issue-reassess](../skills/issue-reassess/SKILL.md) | 6,325 | `b373bc2170359eef` |
+| [issue-reassess-stats](../skills/issue-reassess-stats/SKILL.md) | 3,655 | `e48a816ef14b8cb8` |
+| [issue-reproducer](../skills/issue-reproducer/SKILL.md) | 7,206 | `a4c86a13b0676c88` |
+| [issue-stale-sweep](../skills/issue-stale-sweep/SKILL.md) | 7,079 | `1f0422688534e7b4` |
+| [issue-triage](../skills/issue-triage/SKILL.md) | 9,171 | `ecf7f50054a98d03` |
+| [license-compliance-audit](../skills/license-compliance-audit/SKILL.md) | 5,289 | `fcb70458ddc13fde` |
+| [list-skills](../skills/list-skills/SKILL.md) | 2,943 | `c1695b123c8033f4` |
+| [mentoring-welcome](../skills/mentoring-welcome/SKILL.md) | 3,882 | `8dd97e0b61c3dd4b` |
+| [newcomer-issue-explainer](../skills/newcomer-issue-explainer/SKILL.md) | 4,152 | `6db91b49010fdfc4` |
+| [onboarding-concierge](../skills/onboarding-concierge/SKILL.md) | 4,030 | `edf6ec016beba702` |
+| [optimize-skill](../skills/optimize-skill/SKILL.md) | 4,457 | `7f78534b0d93063c` |
+| [pairing-multi-agent-review](../skills/pairing-multi-agent-review/SKILL.md) | 4,424 | `ef812e2ec2ddb9df` |
+| [pairing-self-review](../skills/pairing-self-review/SKILL.md) | 4,174 | `6fb6e3eece03a95c` |
+| [pr-management-code-review](../skills/pr-management-code-review/SKILL.md) | 9,528 | `92ddaccb57274c1e` |
+| [pr-management-mentor](../skills/pr-management-mentor/SKILL.md) | 3,634 | `4f15e26c70874572` |
+| [pr-management-quick-merge](../skills/pr-management-quick-merge/SKILL.md) | 8,009 | `736fdad343284b82` |
+| [pr-management-stats](../skills/pr-management-stats/SKILL.md) | 7,869 | `18c35521a3a42116` |
+| [pr-management-triage](../skills/pr-management-triage/SKILL.md) | 12,264 | `49538b71489ff97e` |
+| [pr-stale-sweep](../skills/pr-stale-sweep/SKILL.md) | 7,383 | `cc4fed87c283ffcd` |
+| [pre-first-pr-check](../skills/pre-first-pr-check/SKILL.md) | 4,104 | `d5f9189e0d8d6415` |
+| [release-announce-draft](../skills/release-announce-draft/SKILL.md) | 6,570 | `3ab02f48d08efe50` |
+| [release-archive-sweep](../skills/release-archive-sweep/SKILL.md) | 4,801 | `463319e772b01ec0` |
+| [release-audit-report](../skills/release-audit-report/SKILL.md) | 6,353 | `6509498a565b8329` |
+| [release-keys-sync](../skills/release-keys-sync/SKILL.md) | 5,292 | `08ef22e760f85c09` |
+| [release-prepare](../skills/release-prepare/SKILL.md) | 7,539 | `c4f3df11fd8eaaf7` |
+| [release-promote](../skills/release-promote/SKILL.md) | 6,753 | `0bd0d011274eb5b5` |
+| [release-rc-cut](../skills/release-rc-cut/SKILL.md) | 7,193 | `5d00a3326fdfc05e` |
+| [release-verify-rc](../skills/release-verify-rc/SKILL.md) | 8,356 | `d28159b38e971e69` |
+| [release-vote-draft](../skills/release-vote-draft/SKILL.md) | 5,906 | `7d21f87a43139701` |
+| [release-vote-tally](../skills/release-vote-tally/SKILL.md) | 6,275 | `29e99015c9f45915` |
+| [report-framework-issue](../skills/report-framework-issue/SKILL.md) | 5,282 | `b394dc7638f29603` |
+| [reviewer-routing](../skills/reviewer-routing/SKILL.md) | 5,851 | `2a3ed746f3a1311d` |
+| [security-cve-allocate](../skills/security-cve-allocate/SKILL.md) | 11,857 | `56b9390fac301a8e` |
+| [security-issue-deduplicate](../skills/security-issue-deduplicate/SKILL.md) | 8,708 | `26a49979565f6b65` |
+| [security-issue-fix](../skills/security-issue-fix/SKILL.md) | 12,566 | `a503afb5af76558f` |
+| [security-issue-import](../skills/security-issue-import/SKILL.md) | 29,589 | `d14e6fdff5ccf73f` |
+| [security-issue-import-from-md](../skills/security-issue-import-from-md/SKILL.md) | 9,830 | `0951139f05273507` |
+| [security-issue-import-from-pr](../skills/security-issue-import-from-pr/SKILL.md) | 10,707 | `c9ab289423902f6f` |
+| [security-issue-import-from-scan](../skills/security-issue-import-from-scan/SKILL.md) | 5,162 | `8f8b848bc198ff0f` |
+| [security-issue-import-via-forwarder](../skills/security-issue-import-via-forwarder/SKILL.md) | 8,611 | `d7a8a0422ed7936c` |
+| [security-issue-invalidate](../skills/security-issue-invalidate/SKILL.md) | 13,035 | `e4ab6b31ff8facea` |
+| [security-issue-sync](../skills/security-issue-sync/SKILL.md) | 10,391 | `1c4b149b2eb701a5` |
+| [security-issue-triage](../skills/security-issue-triage/SKILL.md) | 13,786 | `eb52ab10890607e0` |
+| [security-model-prepare](../skills/security-model-prepare/SKILL.md) | 4,312 | `ef1d88bf5ba6ced7` |
+| [security-model-update](../skills/security-model-update/SKILL.md) | 5,503 | `2e9eace1ff380c52` |
+| [security-model-verify](../skills/security-model-verify/SKILL.md) | 6,204 | `858952f16ee6208d` |
+| [security-tracker-stats-dashboard](../skills/security-tracker-stats-dashboard/SKILL.md) | 4,476 | `42e1f09070b00cac` |
+| [setup](../skills/setup/SKILL.md) | 8,534 | `3d267588860920a3` |
+| [setup-isolated-setup-doctor](../skills/setup-isolated-setup-doctor/SKILL.md) | 3,376 | `d0d7c6398c4a9186` |
+| [setup-isolated-setup-install](../skills/setup-isolated-setup-install/SKILL.md) | 7,746 | `2f58ce8ace670ec2` |
+| [setup-isolated-setup-update](../skills/setup-isolated-setup-update/SKILL.md) | 4,598 | `19b7707579055299` |
+| [setup-isolated-setup-verify](../skills/setup-isolated-setup-verify/SKILL.md) | 4,537 | `fb98bbeb136b9212` |
+| [setup-override-upstream](../skills/setup-override-upstream/SKILL.md) | 4,012 | `fb583feb56b7f77c` |
+| [setup-shared-config-sync](../skills/setup-shared-config-sync/SKILL.md) | 4,274 | `4b787b01a2d11602` |
+| [setup-status](../skills/setup-status/SKILL.md) | 2,401 | `790c0a0e61b1e8a4` |
+| [setup-upstream-fix](../skills/setup-upstream-fix/SKILL.md) | 4,607 | `984f3deae625f19f` |
+| [skill-reconciler](../skills/skill-reconciler/SKILL.md) | 5,095 | `acf9baf2b289e2cf` |
+| [workflow-security-audit](../skills/workflow-security-audit/SKILL.md) | 3,835 | `276cd10be9e308a7` |
+| [write-skill](../skills/write-skill/SKILL.md) | 6,173 | `c0b7c47d3c5c44e2` |
 
 <!-- END GENERATED SKILL TOKEN COUNTS -->
 
@@ -476,4 +476,4 @@ estimates, so the endpoint sizing argument rests on evidence.
 
 - [`MISSION.md` § Affordability](../MISSION.md#affordability-and-vendor-neutrality--the-public-good-commitment) — the policy commitment behind this page.
 - [`docs/modes.md`](modes.md) — per-mode skill catalogue and maturity status.
-- [`docs/prerequisites.md`](prerequisites.md) — what you need to run the framework, including model-backend setup.
+- [`docs/prerequisites.md`](quick-start/prerequisites.md) — what you need to run the framework, including model-backend setup.

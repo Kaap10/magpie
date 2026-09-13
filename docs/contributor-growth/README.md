@@ -7,11 +7,11 @@
 
 - [Contributor-growth skill family](#contributor-growth-skill-family)
   - [Install & first runs](#install--first-runs)
+    - [Before the first run](#before-the-first-run)
     - [Try these first](#try-these-first)
   - [Stage coverage](#stage-coverage)
   - [Skills](#skills)
   - [Family boundary](#family-boundary)
-  - [Adopter contract](#adopter-contract)
   - [Status](#status)
   - [Cross-references](#cross-references)
 
@@ -41,20 +41,69 @@ PR to committer status keeps the contributor pipeline healthy. These
 skills were designed independently but cover a contiguous path; grouping
 them makes the adopter configuration and the evaluation story coherent.
 
+> [!TIP]
+> **Why this family**
+> - A nomination brief built from a year of evidence rather than a recent impression
+> - The post-vote checklist, from ICLA to welcome mail, with the steps that need a PMC chair marked
+> - It names what GitHub cannot see — mailing lists, release votes, mentoring — instead of quietly scoring without them
+
 ## Install & first runs
 
 Install just this family — one plugin, 6 skills. The path-to-committer track.
 
+Once you have [added the marketplace](../setup/marketplace-install.md):
+
 ```text
-/plugin marketplace add apache/magpie
 /plugin install magpie-contributor-growth@apache-magpie
 ```
 
-<!-- CAPTURE: assets/quickstart/README.md -->
-![Claude Code showing the magpie-contributor-growth plugin installed and enabled](../../assets/quickstart/families/contributor-growth-install.png)
+New to Magpie? The [quick start](../quick-start.md) walks the whole path in
+one place — install, the first `/magpie-setup` run, and a recording of it
+happening — plus the other agents and the secure-isolation setup to run next.
 
-New to Magpie? The [quick start](../quick-start.md) covers the other agents,
-the all-in-one alternative, and the secure-isolation setup to run next.
+### Before the first run
+
+<!-- BEGIN generated: skill-config (tools/dev/check-skill-config.py --fix) -->
+
+![An animated `/magpie-setup config` run for the contributor-growth family: the check failing, the values derived from the repository, one question for the rest, and gitignored files written](../../assets/quickstart/wizard/contributor-growth.svg)
+
+*Illustrative — the real run derives more and asks better. What is true is
+the shape: it runs itself, it writes only gitignored files, and it stages
+nothing.*
+
+Every skill here resolves project-specific values from the adopter's
+[`<project-config>/`](../../projects/_template/) directory — which is
+`.apache-magpie-local/` (gitignored, yours) first, then
+`.apache-magpie-overrides/` (committed, the project's).
+
+**For yourself:** `/magpie-setup config` scaffolds and fills these locally.
+Nothing is staged, nothing is committed, and it works on a repository that
+has never adopted Magpie.
+
+**For the project:** [`/magpie-setup adopt`](../setup/team-adoption.md)
+commits them for every contributor, either scaffolded directly or promoted
+from what you configured locally.
+
+**Required.** Without these a skill would act on a guess, so it stops and
+says which file is missing.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`committer-onboarding-config.md`](../../projects/_template/committer-onboarding-config.md) | Capability-flag vocabulary for committer intake and governance models (`icla`/`dco`/`no-cla`; `asf-pmc`/`github-codeowners`/`maintainer-roster`). | `committer-onboarding` |
+| [`committer-readiness.md`](../../projects/_template/committer-readiness.md) | The project's declared committer and PMC thresholds — what a contributor's activity is measured against. | `contributor-to-committer` |
+| [`contributor-nomination-config.md`](../../projects/_template/contributor-nomination-config.md) | Nomination-brief thresholds and assessment window. | `nomination` |
+| [`contributor-sentiment-config.md`](../../projects/_template/contributor-sentiment-config.md) | Signal thresholds for the sentiment gate. Every key has a default. | `sentiment` |
+| [`onboarding-concierge-config.md`](../../projects/_template/onboarding-concierge-config.md) | The path a new contributor is walked through, and who owns each step. | `onboarding-concierge` |
+| [`project.md`](../../projects/_template/project.md) | Project manifest. Identity, repositories, mailing lists, tools enabled, CVE tooling, GitHub project-board + issue-template field declarations. The single file every skill reads to resolve project-scoped references. | `activity-sweep`, `committer-onboarding`, `contributor-to-committer`, `nomination`, `onboarding-concierge`, `sentiment` |
+
+**Optional.** Each has a documented fallback; absent, the skill still runs.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`pmc-roster.md`](../../projects/_template/pmc-roster.md) | Who is binding. Read wherever a vote is counted or a PMC-only action is gated. | `nomination` |
+| [`privacy-llm.md`](../../projects/_template/privacy-llm.md) | Which model tier may see which class of content, for projects routing foundation-private information away from third-party models. | `committer-onboarding` |
+
+<!-- END generated: skill-config -->
 
 ### Try these first
 
@@ -64,30 +113,26 @@ below sends, merges, or posts anything without you confirming it.*
 **Sweep recent contributor activity.**
 
 ```text
-> /magpie-contributor-growth:activity-sweep
-
-  Last 180 days, 4 contributors past the review threshold
-  @kasia-w   31 PRs, 44 reviews  -> nomination-ready
-  @dmitry-p  12 PRs,  3 reviews  -> watch
+/magpie-contributor-growth:activity-sweep
 ```
+
+![An activity-sweep run: ninety days of authored PRs, reviews, issues and comments for one contributor, with a note that mailing lists and release votes are not in the total](../../assets/quickstart/families/contributor-growth/activity-sweep.svg)
 
 **Draft a nomination brief.**
 
 ```text
-> /magpie-contributor-growth:nomination
-
-  Brief for @kasia-w: 31 merged PRs, 44 reviews, 2 releases helped
-  Private [DISCUSS] mail drafted for the PMC list, not sent.
+/magpie-contributor-growth:nomination
 ```
+
+![A nomination run summarising a year of GitHub activity, naming the off-GitHub evidence it cannot see, and drafting the discussion thread without sending it](../../assets/quickstart/families/contributor-growth/nomination.svg)
 
 **Onboard a new committer.**
 
 ```text
-> /magpie-contributor-growth:committer-onboarding
-
-  Checklist for @kasia-w: ICLA on file, account requested,
-  karma pending, welcome mail drafted. 2 items need a PMC chair.
+/magpie-contributor-growth:committer-onboarding
 ```
+
+![A committer-onboarding run: two steps done, two waiting on a PMC chair, and the welcome announcement drafted but not sent](../../assets/quickstart/families/contributor-growth/committer-onboarding.svg)
 
 ## Stage coverage
 
@@ -147,20 +192,6 @@ nominator executes as themselves; no skill submits an ICLA form, invites
 an account, or modifies repository permissions without the nominator's
 direct action.
 
-## Adopter contract
-
-The skills resolve project-specific content from these files in the
-adopter's `<project-config>/` directory:
-
-| File | Used by |
-|---|---|
-| [`project.md`](../../projects/_template/project.md) | all skills (upstream repo slug, GitHub token context, `<tracker>` reference) |
-| [`pmc-roster.md`](../../projects/_template/pmc-roster.md) | `contributor-nomination`, `committer-onboarding` (PMC and committer rosters, ICLA-checker URL) |
-| [`contributor-nomination-config.md`](../../projects/_template/contributor-nomination-config.md) | `contributor-nomination` (activity-window length, committer / PMC thresholds, required-areas gates); also used by `contributor-to-committer` as a fallback when `committer-readiness.md` is absent |
-| [`committer-readiness.md`](../../projects/_template/committer-readiness.md) | `contributor-to-committer` (per-target threshold tables for committer/PMC readiness, assessment window; takes precedence over `contributor-nomination-config.md`) |
-| [`mentoring-welcome-config.md`](../../projects/_template/mentoring-welcome-config.md) | `mentoring-welcome` (tone knobs, contributing-doc links, AI-attribution footer wording) |
-| [`good-first-issue-config.md`](../../projects/_template/good-first-issue-config.md) | `good-first-issue-author`, `good-first-issue-sweep` (issue-tracker URL, getting-started link, GFI-label name, suitability rubric threshold) |
-
 ## Status
 
 **Experimental.** All nine skills are on main with eval suites; no
@@ -189,7 +220,7 @@ per-project policy knobs before a skill can safely propose anything):
   mode family overview, which cross-references `mentoring-welcome`,
   `good-first-issue-author`, and `good-first-issue-sweep`.
 - [`projects/_template/README.md`](../../projects/_template/README.md) —
-  adopter scaffold index, including the three contributor-growth config
-  templates listed in the Adopter contract above.
+  adopter scaffold index, with a purpose line for every file the table under
+  *Before the first run* links.
 - [`docs/setup/agentic-overrides.md`](../setup/agentic-overrides.md) —
   the override mechanism every skill in this family supports.

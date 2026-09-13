@@ -7,6 +7,8 @@
 
 - [Setup skill family](#setup-skill-family)
   - [Install & first runs](#install--first-runs)
+    - [The first run](#the-first-run)
+    - [Before the first run](#before-the-first-run)
     - [Try these first](#try-these-first)
   - [Security mailing-list configuration](#security-mailing-list-configuration)
   - [Skills](#skills)
@@ -23,17 +25,6 @@
 
 > **Scope.** Works on any project, ASF or not — no
 > Apache-Software-Foundation-specific assumptions baked in.
-
-> **Two ways to install, and they are complementary.** A **marketplace
-> install** puts the skills straight into your agent, per machine, with
-> nothing in the repo — the recommended path, see
-> [`marketplaces.md`](marketplaces.md). The **pinned snapshot install**,
-> `/magpie-setup install`, sets up the gitignored snapshot, the skill
-> symlinks, and the overrides scaffold in the repo so every contributor and CI
-> job runs one committed version; reach for it when your agent has no
-> marketplace, when you need the signed ASF source release, or when the
-> project wants that pin. (`adopt` remains an accepted alias of `install`;
-> `uninstall` / `unadopt` reverse it.)
 
 The **setup** skill family is the prerequisite for running any
 framework skill. It walks a new adopter (or a fresh dev machine on
@@ -52,20 +43,54 @@ pre-disclosure content into the model provider's training data or
 into a public PR. The setup family is what makes the rest of the
 framework safe to use.
 
+> [!TIP]
+> **Why this family**
+> - Install, upgrade and adopt the framework without hand-editing a settings file
+> - A sandboxed agent with a clean environment, walked through step by step — nothing runs with sudo behind your back
+> - One command tells you what is installed, what the project expects, and whether the two agree
+
 ## Install & first runs
 
 Install just this family — one plugin, 9 skills. Sandbox, clean environment, and the framework's own install/upgrade.
 
+Once you have [added the marketplace](../setup/marketplace-install.md):
+
 ```text
-/plugin marketplace add apache/magpie
 /plugin install magpie-setup@apache-magpie
 ```
 
-<!-- CAPTURE: assets/quickstart/README.md -->
-![Claude Code showing the magpie-setup plugin installed and enabled](../../assets/quickstart/families/setup-install.png)
+New to Magpie? The [quick start](../quick-start.md) walks the whole path in
+one place — install, the first `/magpie-setup` run, and a recording of it
+happening — plus the other agents and the secure-isolation setup to run next.
 
-New to Magpie? The [quick start](../quick-start.md) covers the other agents,
-the all-in-one alternative, and the secure-isolation setup to run next.
+### The first run
+
+This family is what the other nine defer to. `/magpie-setup` works out how
+Magpie should be wired into the checkout in front of it, prints the plan, and
+waits — the same run the quick start opens with:
+
+![A `/magpie-setup` run in Claude Code: the marketplace install, then the skill detecting the checkout, printing the method and plan it intends to carry out, and waiting for approval before writing anything](../../assets/quickstart/magpie-setup.svg)
+
+Nothing is written before you approve it.
+
+### Before the first run
+
+<!-- BEGIN generated: skill-config (tools/dev/check-skill-config.py --fix) -->
+
+**Nothing here has to be configured.** These skills read the file below
+when it exists — yours in `.apache-magpie-local/` or the project's in
+`.apache-magpie-overrides/` — and fall back to a documented default when
+it does not.
+
+**Optional.** Each has a documented fallback; absent, the skill still runs.
+
+| File | What it carries | Read by |
+|---|---|---|
+| [`magpie-setup.md`](../../projects/_template/magpie-setup.md) | Overrides for the setup family's own checks. Every key has a default. | `setup` |
+| [`project.md`](../../projects/_template/project.md) | Project manifest. Identity, repositories, mailing lists, tools enabled, CVE tooling, GitHub project-board + issue-template field declarations. The single file every skill reads to resolve project-scoped references. | `isolated-setup-install`, `setup` |
+| [`skill-sources.md`](../../projects/_template/skill-sources.md) | The install gate for pulling skills/families from trusted external repos. Lists the source ids this project trusts and commits each pin. `/magpie-setup` fetches only what is listed here. Leave empty to run only in-tree framework skills. See [`docs/skill-sources/`](../../docs/skill-sources/README.md). | `setup` |
+
+<!-- END generated: skill-config -->
 
 ### Try these first
 
@@ -75,35 +100,26 @@ below sends, merges, or posts anything without you confirming it.*
 **Put the agent in its sandbox.**
 
 ```text
-> /magpie-setup:isolated-setup-install
-
-Proposed changes (nothing applied yet):
-  1. .claude/settings.json   sandbox.enabled: true, 14 deny rules
-  2. ~/.claude/scripts/      3 hooks + status line
-  3. ~/.zshrc                source agent-iso.sh
-Apply 1-3? [y/N]
+/magpie-setup:isolated-setup-install
 ```
+
+![An isolated-setup-install run listing three proposed changes — settings.json, the user scripts directory, and the shell rc — and waiting for confirmation before any of them](../../assets/quickstart/families/setup/isolated-setup-install.svg)
 
 **Check it landed.**
 
 ```text
-> /magpie-setup:isolated-setup-verify
-
-  OK   sandbox.enabled           true
-  OK   permissions.deny          14 rules
-  WARN pinned tools              bubblewrap 0.11.1 (want 0.11.2)
-  OK   status line               wired
+/magpie-setup:isolated-setup-verify
 ```
+
+![An isolated-setup-verify run: four green checks across the settings wiring and pinned tools, and one warning that the docker socket is not exposed inside the sandbox](../../assets/quickstart/families/setup/isolated-setup-verify.svg)
 
 **See what is wired up.**
 
 ```text
-> /magpie-setup:status
-
-  install method   marketplace (magpie-setup, magpie-pr-management)
-  agent targets    .agents/skills, .claude/skills
-  drift            none
+/magpie-setup:status
 ```
+
+![A status run: the install method, the installed plugins, the project's committed floor, and two green checks saying this machine is at or above it](../../assets/quickstart/families/setup/status.svg)
 
 ## Security mailing-list configuration
 
@@ -141,13 +157,23 @@ for the complete rule.
 
 ## Deep documentation
 
+- [**The Apache Magpie Marketplace**](marketplace.md) — the one marketplace
+  the project publishes, and the recommended way to install. Every agent that
+  can add it, which families to pick, pinning, updates, and verification
+  status.
+- [**Your first run with a family**](../quick-start/first-run.md) — the
+  configuration walkthrough in terminal steps: what stops, what the wizard
+  scaffolds, and which files a family needs before it will run.
+- [**Companion skill packages**](companion-skills.md) — third-party skill
+  packages that pair with a Magpie family, and the install command for each
+  agent that has one. None is a dependency.
 - [**`secure-agent-setup.md`**](secure-agent-setup.md) — full
   install walkthrough. The authoritative reference the
   `setup-isolated-setup-install` skill steps through.
 - [**`secure-agent-internals.md`**](secure-agent-internals.md) —
   how the layered defence works (sandbox + permission rules +
   clean-env wrapper) and why each layer exists.
-- [**`install-recipes.md`**](install-recipes.md) — copy-pasteable
+- [**`install-recipes.md`**](../quick-start/other-install-methods.md) — copy-pasteable
   shell recipes (svn-zip / git-tag / git-branch) for bootstrapping
   `setup` into a new adopter repo.
 - [**`uninstall.md`**](uninstall.md) — counterpart to `install-recipes.md`:
@@ -159,12 +185,13 @@ for the complete rule.
   socket denied) with symptom → root cause → settings.json fix
   for each. The page to grep when a normal-looking operation
   fails in the sandbox in an unexpected way.
-- [**`personal-use-unadopted-repo.md`**](personal-use-unadopted-repo.md) —
-  recipe for using Magpie against a repo that has not adopted the
-  framework: whole-user skill install, one `.gitignore` line,
-  `.apache-magpie-local/` personal config, then run skills as if
-  adopted. No changes to the target repo's committed files (beyond the
-  optional `.gitignore` line) and no opt-in from teammates required.
+- [**Individual use**](individual-use.md) — using Magpie on any repo, adopted
+  or not, with nothing committed and nothing asked of teammates. The default,
+  and the half that asks no one's permission.
+- [**Team adoption**](team-adoption.md) — what a repo commits so every
+  contributor arrives with a recommended set: the floor lock, the default
+  plugin set, the shared overrides, and keeping them current. The maintainer
+  half of the pair.
 - [**`per-role-mcp-access.md`**](per-role-mcp-access.md) — how to
   enable an MCP server for yourself only (e.g. a release manager
   enabling a Policy MCP, a security triage member enabling a
@@ -194,5 +221,5 @@ file under `~/.claude-config/`).
 ## Cross-references
 
 - [Top-level README — Install](../../README.md#install) — 3-step bootstrap.
-- [`docs/prerequisites.md`](../prerequisites.md) — what each framework
+- [`docs/prerequisites.md`](../quick-start/prerequisites.md) — what each framework
   skill needs (Claude Code, Gmail MCP, GitHub auth, browser, etc.).
