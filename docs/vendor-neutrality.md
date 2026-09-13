@@ -320,11 +320,12 @@ contribution, not a re-architecture.
 Gemini CLI reads Magpie's canonical `.agents/skills/` tree and has a native
 shell-hook adapter and a spec-loop profile; see the
 [Gemini runtime guide](adapters/gemini.md).
+Cursor reads Magpie's canonical `.agents/skills/` tree and supports per-action
+confirmation in Composer and the `cursor-agent` CLI; see the
+[Cursor runtime guide](adapters/cursor.md).
 The remaining extension points are
 already open, labelled `good first issue`:
-[Gemini CLI](https://github.com/apache/magpie/issues/314),
 [local LLM (Ollama / llama.cpp / vLLM)](https://github.com/apache/magpie/issues/315),
-[Cursor](https://github.com/apache/magpie/issues/316),
 [Aider](https://github.com/apache/magpie/issues/317),
 [GitHub Copilot](https://github.com/apache/magpie/issues/318),
 [Goose](https://github.com/apache/magpie/issues/319),
