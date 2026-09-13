@@ -120,6 +120,16 @@ Each of these settled a fork, and each shapes what follows.
    installs another family.** No per-install hook is needed — which is
    fortunate, since on most harnesses no code runs on plugin install at all.
 
+   **The same three are the install baseline**, pre-ticked in the picker and
+   recommended on every page that shows an install command. A set worth
+   committing for every contributor is a set worth having yourself, and one
+   recommendation is easier to hold than two. `magpie-setup` alone is
+   unremovable — it is the skill doing the installing; the other two are
+   strongly recommended and can be un-ticked, with what is given up said once.
+   Agent isolation belongs to this baseline as a *run* rather than a plugin:
+   it ships inside `magpie-setup`, and the install is not described as finished
+   until it has been offered.
+
 3. **One committed file for every install method.** `.apache-magpie.lock` gains
    `method: marketplace` alongside `svn-zip` / `git-tag` / `git-branch`, rather
    than a second adoption file with overlapping meaning. Every adopted project
@@ -131,23 +141,60 @@ Each of these settled a fork, and each shapes what follows.
    is what lets a Codex or Gemini adopter have a meaningful adoption record at
    all.
 
+   On Claude Code that file is also the store behind `--scope project`, which
+   settles who writes it: the install step names all three scopes rather than
+   defaulting past them — `user` (this machine, every repo), `local`
+   (`.claude/settings.local.json`, this repo, gitignored) and `project` (this
+   file, committed, everyone) — installs at `user` or `local`, and **never
+   passes `project`**. A request for the whole project to get Magpie is a
+   request to adopt, and hands off to `adopt`, which runs those same commands
+   at `--scope project` and writes the floor the flag alone would leave
+   missing. Adoption is a maintainer's act with a record, not a flag on one
+   person's install.
+
 5. **Adopting is optional and never a prerequisite.** Plugins work in a
    repository with or without the committed record. A maintainer who declines
    has a supported end state, not a partial install, and setup must not
    describe the result as incomplete.
 
-6. **The pre-flight installs, then reports, on Claude Code; elsewhere it prints
-   the command.** `claude plugin list --json`, `claude plugin install` and
-   `claude plugin update` are CLI commands the agent can run. Where no such CLI
-   exists the same check runs and the same message prints, minus the action.
+6. **The agent runs the install; it does not dictate commands to type.**
+   `claude plugin list --json`, `claude plugin install`, `claude plugin update`
+   and `claude plugin marketplace add` are CLI commands the agent can run —
+   the `/plugin …` slash form is not, and conflating the two is what kept the
+   install a transcription exercise for the user. Both surfaces that install
+   use the CLI: the pre-flight bringing a machine up to a project's floor, and
+   the install skill installing the families the user just picked. Where no
+   such CLI exists the same decision is made and the same commands print,
+   minus the action.
 
-7. **Auto-install is restricted to the framework's own marketplace.** The
-   pre-flight acts without asking *only* when the lock's `url` is
-   `apache/magpie`. Any other value is reported and requires explicit
-   confirmation — see [Risks](#risks).
+   Three other conditions send it back to printing, and each is reported with
+   the reason rather than silently swallowed: a **plugin store the process
+   cannot write to** — a sandboxed agent is the common case, and Claude Code's
+   own default sandbox denies `~/.claude/plugins/` — a **marketplace other
+   than `apache/magpie`** (decision 7), and an **install that stops for a
+   marketplace-declared command**. That last one is why `--yes` is never
+   passed: the flag exists to accept such a command sight unseen, Magpie's
+   catalogue declares none, so an install that demands the flag is not the
+   catalogue this step assumed it was talking to.
+
+7. **Auto-install is restricted to the framework's own marketplace.** Both
+   surfaces act without asking *only* when the source is `apache/magpie` —
+   the lock's `url` for the pre-flight, the `from:` argument for the install
+   skill. Any other value is reported and requires explicit confirmation — see
+   [Risks](#risks). The third-party companion packages the install offers sit
+   on the far side of the same line: their commands are always printed, never
+   run.
 
 8. **The install is a prerequisite with one page**, not a step repeated in
    every flow that assumes it.
+
+   Every step that page documents carries **both** forms: the slash command and
+   the plain-language sentence. Skills are model-invoked, so the sentence is the
+   general case and the slash command the shortcut — and harnesses without slash
+   commands have only the sentence. The one exception is the first install
+   itself, which must be a client command because nothing is installed yet to
+   hear the request; every later install can be asked for in words, now that the
+   install step runs the CLI (decision 6).
 
 9. **Configuration has a gitignored home and a committed one, and the same
    lookup chain as overrides.** `<project-config>` resolves per file, local

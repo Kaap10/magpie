@@ -147,9 +147,10 @@ stacked on a working one:
   `gemini extensions list`.
 
 If it is installed: report which plugins are active and their
-version, offer to **add** any family the user now wants (same
-`plugin install` command, different family), and give the update
-commands from [Step M5](#step-m5--recap-and-what-comes-next).
+version, offer to **add** any family the user now wants — the same
+install [Step M4](#step-m4--install-what-the-user-picked) runs,
+with a different family — and give the update commands from
+[Step M5](#step-m5--recap-and-what-comes-next).
 Do not re-run the install.
 
 Also check for the *other* path already being live in this repo: a
@@ -191,12 +192,24 @@ family, each described by the problem it solves — the table in
 [`docs/quick-start.md`](../../../../docs/quick-start/families.md)
 is the source text.
 
-Two rules for the recommendation:
+Three rules for the recommendation:
 
-- **`magpie-setup` is always in the pick** — it carries the
+- **The baseline is pre-ticked: `magpie-setup`,
+  `magpie-agent-guard`, `magpie-utilities`.** That is the same
+  set a project commits as its floor when it adopts
+  ([`adopt.md`](adopt.md)), and the reason is the same on one
+  machine as on a project: `magpie-setup` installs, upgrades,
+  configures and adopts everything else and carries the
   secure-isolation skills of
-  [Step M5](#step-m5--recap-and-what-comes-next) and this skill
-  itself.
+  [Step M5](#step-m5--recap-and-what-comes-next);
+  `magpie-agent-guard` denies dangerous shell shapes before they
+  run; `magpie-utilities` is how anyone finds out what is
+  actually installed. Say why each is ticked.
+
+  **`magpie-setup` is not optional** — it is this skill, and
+  nothing else installs or upgrades without it. The other two
+  are *strongly* recommended and can be unticked; say what is
+  given up rather than arguing, and move on.
 - **Install a family at a time; there is no everything plugin.**
   Each installed skill advertises its name and description to
   the model on *every* turn, so all ten families at once would
@@ -207,29 +220,94 @@ Two rules for the recommendation:
   a symlink.
 
 If the user passed `skill-families:<list>`, use it verbatim and
-skip the prompt.
+skip the prompt — with `magpie-setup` added if it is absent,
+because the list names families to install and this skill is
+what installs them. Do not add the other two baseline plugins to
+an explicit list; naming families is a choice, and quietly
+enlarging it is not. Say in one line that the baseline exists
+and what is missing from it.
 
-### Step M4 — Emit the commands
+### Step M4 — Install what the user picked
 
-**The user runs these, not the agent.** A `/plugin …` command is
-a client command typed in the session — no tool can invoke it —
-so print the exact block and let the user fire it. Shell-based
-clients (Codex, Gemini) *can* be run for the user, with
-confirmation, but printing them is equally fine.
+**Run the installs. Do not hand the user a list to type.** The
+`/plugin …` form is a client command typed into a session and no
+tool can invoke it — but every marketplace harness ships a *CLI*
+beside it (`claude plugin`, `codex plugin`, `gemini extensions`),
+and those are ordinary binaries. Every skill's adoption-floor
+pre-flight already calls them to bring a machine up to a
+project's floor ([`locks.md`](locks.md)); this step calls them
+for the same reason, at the same boundary.
 
-Claude Code, one line per family the user picked:
+Four conditions gate running rather than printing. Take them in
+order; the first that fails turns the rest of the step into a
+printed block.
 
-```text
-/plugin marketplace add apache/magpie
-/plugin install magpie-setup@apache-magpie
-/plugin install magpie-<family>@apache-magpie
+1. **The marketplace is `apache/magpie`.** Same boundary the
+   lock's `url` draws
+   ([`locks.md`](locks.md#url-is-a-security-boundary)): Magpie
+   installs Magpie unasked and installs nothing else unasked. A
+   `from:<owner>/<repo>` naming anything else is printed, never
+   run — as are the third-party companion packages further down,
+   under that same rule.
+2. **The CLI is there.** The binary is absent, or
+   `claude plugin --help` (or the harness's equivalent) exits
+   non-zero → print.
+3. **The plugin store is writable.** Do not probe for it — run
+   the marketplace add and read the failure. `EPERM` /
+   `operation not permitted` on a path under the agent's own
+   config directory means a sandbox denies the plugin store.
+   That is common, and it is not a fault in the install: stop
+   running, print the remaining commands, and give the reason in
+   one line — the commands are right, this session cannot write
+   there.
+4. **Nothing asks for `-y`.** `--yes` accepts a
+   *marketplace-declared command* — a plugin that installs by
+   running something the catalogue supplies — without showing it
+   first. Magpie's catalogue declares none, so its installs never
+   need the flag. **Never pass it.** If an install stops for that
+   confirmation anyway, the catalogue is not the one this step
+   assumed: stop, show the command it wants to run, and let the
+   user decide.
+
+Claude Code — the marketplace once, then one install per family
+the user picked, `magpie-setup` among them:
+
+```bash
+claude plugin marketplace add apache/magpie
+claude plugin install magpie-setup@apache-magpie --scope user
+claude plugin install magpie-<family>@apache-magpie --scope user
 ```
+
+**Claude Code has three scopes; say which one and why rather
+than defaulting past it.** `--scope` decides who gets the
+plugins, not which plugins arrive:
+
+| `--scope` | Recorded in | Who gets it |
+|---|---|---|
+| `user` (default here) | `~/.claude/` | you, in every repository on this machine |
+| `local` | `.claude/settings.local.json`, gitignored | you, in this repository only |
+| `project` | `.claude/settings.json`, committed | everyone who clones this repository |
+
+`user` is the default because installing for yourself is what
+almost everyone running this step means, and it writes nothing
+to the repository at all. Offer `local` to someone who wants
+Magpie in *this* repo and not in the others they work on — it is
+still their own machine only, and still gitignored.
+
+**`--scope project` is adoption, so do not pass it here.** A
+committed file recommending these plugins to every contributor
+is the thing [`/magpie-setup adopt`](adopt.md) exists to write,
+and adopt writes more than the plugin list: a version floor
+beside it, staged rather than committed, so the recommendation
+lands through the project's normal review. A user who asks for
+the whole project to get Magpie is asking to adopt — say so, and
+hand off to that command instead of setting the flag.
 
 Codex CLI:
 
 ```bash
 codex plugin marketplace add apache/magpie
-codex plugin add magpie-setup@apache-magpie   # plus each family the user picked
+codex plugin add magpie-setup@apache-magpie   # plus each family picked
 ```
 
 Gemini CLI:
@@ -238,12 +316,20 @@ Gemini CLI:
 gemini extensions install https://github.com/apache/magpie
 ```
 
-VS Code / Copilot: point the plugin install at
-`https://github.com/apache/magpie`.
+VS Code / Copilot has no CLI on this path: point the plugin
+install at `https://github.com/apache/magpie`, and say that is
+why this one is a manual step.
 
 To pin a version instead of tracking `main`, add the marketplace
-from the tag — `/plugin marketplace add apache/magpie@<version>`
+from the tag — `claude plugin marketplace add apache/magpie@<version>`
 — which is what `from:<version>` means on this path.
+
+**Then report it, briefly.** Name what was installed, and say
+that plugins load at session start, so the new skills are live in
+the **next** session rather than this one. Where a condition
+above sent the step to printing, name which one and print the
+exact block: a bare list of commands with no reason attached
+reads as the agent declining to help.
 
 Skills are then invoked under the plugin namespace —
 `/magpie-<family>:<skill>`, **not** the `/magpie-<skill>` form
@@ -255,12 +341,23 @@ the snapshot install produces
 Tell the user, in this order:
 
 1. **What landed** — which plugins, which agent, tracking `main`
-   or pinned to `<version>`.
-2. **Run the secure-agent setup next** — `setup-isolated-setup-install`.
+   or pinned to `<version>`, at which scope, and whether
+   [Step M4](#step-m4--install-what-the-user-picked) installed
+   them or printed them for the user to run.
+2. **Run the secure-agent setup next** —
+   `/magpie-setup:isolated-setup-install`, or in plain language
+   *lock my agent down with Magpie's secure setup*. Offer both
+   forms: the skill is model-invoked, so the sentence works on
+   every harness and the slash form only on the ones that have
+   slash commands.
+
    The marketplace install delivers skills; it does not sandbox
    the agent, and the framework's other skills run against
    pre-disclosure security content. This is the one follow-up
-   that is not optional.
+   that is not optional — treat it as the last step of the
+   install rather than a later hardening pass, and say so.
+   `magpie-agent-guard` from the baseline guards each command;
+   this is what sandboxes the process around it.
 3. **How it updates** — Claude Code:
    `/plugin marketplace update apache-magpie` then
    `/plugin update <plugin>@apache-magpie`; Codex:
