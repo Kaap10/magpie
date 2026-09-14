@@ -412,9 +412,10 @@ fully-supported Claude Code row, with nothing extra to install. See
 MCP servers used by the reference runtimes today: Slack, Gmail,
 Google Calendar, Google Drive, plus framework-internal ones for
 the ponymail / incubator-mail / incubator-reports surfaces. MCP-
-compatible harnesses (Goose, Copilot CLI) should pick
-these up directly once the skill-format adapter lands for that
-harness.
+compatible harnesses (Copilot CLI) should pick these up directly
+once the skill-format adapter lands for that harness. Goose, Cursor,
+and Gemini CLI discover MCP servers natively through their respective
+configuration formats alongside their native skill discovery.
 
 ## Code in this repo
 
