@@ -1459,7 +1459,22 @@ unnoticed for hours.
 
 The framework ships
 [`tools/agent-isolation/sandbox-status-line.sh`](../../tools/agent-isolation/sandbox-status-line.sh)
-to render exactly that, leading with the sandbox tag:
+to render exactly that, leading with the sandbox tag.
+
+**Claude Code only**, unlike the harness-agnostic helpers beside it:
+the script is wired through Claude Code's `statusLine` setting, is fed
+Claude Code's statusLine payload on stdin, and reads Claude Code's
+`sandbox.enabled` schema. No other harness the framework supports has a
+status-line hook of that shape — Codex, Gemini, OpenCode and Kiro carry
+their sandbox posture in their own config and surface it, where they
+surface it at all, through their own UI. A harness that grows one gets
+its own helper; see
+[`docs/adapters/add-a-harness.md`](../adapters/add-a-harness.md). The
+harness-agnostic half of sandbox visibility is the
+[bypass-warning hook](#sandbox-bypass-visibility-hook), which fires on
+the tool call rather than in the footer.
+
+The tag and the segments that follow it:
 
 - `[sandbox]` in green when the active settings set
   `"sandbox": { "enabled": true }`;
@@ -1477,9 +1492,12 @@ another when several are open across worktrees and repos:
 ```
 
 - **the project folder**, colour-coded by a stable hash of its name, so
-  a repo keeps the same colour across sessions — and a Claude Code
+  a repo keeps the same colour across sessions — and a linked git
   worktree renders as `<source>/<worktree>` with each half hashed
-  independently;
+  independently, whatever the layout: worktrunk's sibling
+  `<repo>.<branch>/` directories (the repeated `<repo>.` prefix is
+  stripped, so `cpython.gh-156021` reads `cpython/gh-156021`), Claude
+  Code's own `.claude/worktrees/<name>`, or a plain `git worktree add`;
 - **the git branch**, with a dirty marker and ahead/behind against the
   upstream — read from local refs only, no network;
 - **the PR**, number and title, from one cached `gh pr view` per
@@ -1499,6 +1517,55 @@ that sets the key (to `true` *or* `false`). The `/sandbox`
 slash-command toggle persists to project `settings.local.json`,
 so flipping it mid-session is reflected in the prefix on the
 next render.
+
+**Linked worktrees.** Claude Code scopes the project of a linked
+git worktree to the **main checkout**: that is where `/sandbox`
+writes `enabled` and where `.claude/.cc-writes` lands, while
+`<cwd>` is the worktree's own directory. A worktree's
+`.claude/settings.local.json` normally carries only the
+per-worktree filesystem allowlist that
+[`sandbox-add-project-root.sh`](#sandbox-add-project-rootsh)
+writes — no `enabled` key at all. Walking `<cwd>` alone therefore
+falls straight through to user scope, and a session the operator
+deliberately switched *out* of the sandbox keeps rendering a green
+`[sandbox]` — the exact silent drift this line exists to prevent.
+So the walk leads with the main checkout and keeps the working-tree
+root ahead of user scope:
+
+```text
+<main-checkout>/.claude/settings.local.json   (linked worktree only)
+<main-checkout>/.claude/settings.json         (linked worktree only)
+<cwd>/.claude/settings.local.json
+<cwd>/.claude/settings.json
+<worktree-root>/.claude/settings.local.json
+<worktree-root>/.claude/settings.json
+~/.claude/settings.local.json
+~/.claude/settings.json
+```
+
+The main checkout leads rather than follows because it is the file the
+harness itself reads, so it is the only one that can describe the
+session. An `enabled` written by hand into a worktree's own settings is
+not read by Claude Code at all; preferring it for being "more specific"
+would let the line paint a green `[sandbox]` over a session that has
+none — the one thing it exists to prevent. This helper may say nothing;
+it may not say the wrong thing.
+
+The main checkout is found by comparing `git rev-parse --git-dir`
+with `--git-common-dir` — they differ in a linked worktree and
+nowhere else. That is a property of git, not of a directory
+naming scheme, so it holds for every worktree manager without the
+script having to enumerate them: worktrunk's sibling
+`<repo>.<branch>/` directories, Claude Code's own
+`<source>/.claude/worktrees/<name>`, and a plain `git worktree
+add` anywhere on disk.
+
+One layout has no main checkout to find: `git clone --bare` plus
+`git worktree add`, where the common dir is `<repo>.git` rather than
+`<main>/.git`. Its parent is simply whatever directory happens to
+contain the bare repo, so it is not read as project scope — the walk
+falls through to user scope, which is the honest answer. The folder
+segment still names the repository, taken from the bare directory.
 
 Like the [Sandbox-bypass visibility hook](#sandbox-bypass-visibility-hook),
 this is **complementary**, not authoritative — see Trade-offs

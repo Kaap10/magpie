@@ -30,11 +30,24 @@
 #                         | #<PR> <title>
 #                         | <model>
 #
+# Claude-Code-only, unlike the harness-agnostic helpers alongside it:
+# it is wired through Claude Code's `statusLine` setting, is fed Claude
+# Code's statusLine payload on stdin, and reads Claude Code's
+# `sandbox.enabled` settings schema. No other harness the framework
+# supports has a status-line hook of that shape — Codex, Gemini,
+# OpenCode and Kiro carry their sandbox posture in their own config and
+# surface it, where they surface it at all, through their own UI. A
+# harness that grows one gets its own helper; see
+# `docs/adapters/add-a-harness.md`.
+#
 # - Folder name is colour-coded by a stable hash of its basename, so
 #   each repo / worktree keeps the same colour across sessions.
-# - Inside a Claude Code worktree (`<source>/.claude/worktrees/<name>`)
-#   renders `<source>/<worktree>` with each segment hash-coloured
-#   independently — the source colour stays stable across worktrees.
+# - Inside a linked git worktree renders `<source>/<worktree>` with
+#   each segment hash-coloured independently — the source colour stays
+#   stable across worktrees. Covers every layout: worktrunk's sibling
+#   `<repo>.<branch>/` directories (the repeated `<repo>.` prefix is
+#   stripped from the second segment), Claude Code's own
+#   `<source>/.claude/worktrees/<name>`, and plain `git worktree add`.
 # - Git segment is local-only (no network): branch, dirty marker
 #   (`-uno` skips untracked-file scan), ahead/behind vs upstream from
 #   cached refs.
@@ -52,16 +65,46 @@
 # Sandbox tag reads `.sandbox.enabled` from the active settings,
 # walked in Claude Code's standard precedence order (most-specific
 # first):
-#   1. <cwd>/.claude/settings.local.json
-#   2. <cwd>/.claude/settings.json
-#   3. ~/.claude/settings.local.json
-#   4. ~/.claude/settings.json
+#   1. <main-checkout>/.claude/settings.local.json   (linked worktree only)
+#   2. <main-checkout>/.claude/settings.json          (linked worktree only)
+#   3. <cwd>/.claude/settings.local.json
+#   4. <cwd>/.claude/settings.json
+#   5. <worktree-root>/.claude/settings.local.json
+#   6. <worktree-root>/.claude/settings.json
+#   7. ~/.claude/settings.local.json
+#   8. ~/.claude/settings.json
 # First file with `.sandbox.enabled` set (true *or* false) wins. The
 # `/sandbox` slash-command toggle persists to project-scope
 # `settings.local.json`, so reading that file is what makes the prefix
 # update after an in-session toggle. CLI flags like
 # `--bypass-permissions` are still not visible here — pair with
 # `sandbox-bypass-warn.sh` for per-call signal.
+#
+# Steps 1-2 and 5-6 are what make the tag correct inside a linked git
+# worktree. Claude Code scopes the project of a linked worktree to
+# the *main* checkout — that is where `/sandbox` writes the toggle and
+# where `.claude/.cc-writes` lands — while `<cwd>` is the worktree's
+# own directory, whose `.claude/settings.local.json` typically carries
+# only the per-worktree filesystem allowlist and no `enabled` key.
+# Walking `<cwd>` alone there falls straight through to user scope, so
+# a session the operator switched *out* of the sandbox still renders
+# green `[sandbox]` — precisely the silent drift this line exists to
+# prevent.
+#
+# The main checkout is read *first* for the same reason, and it is the
+# whole point: it is the file the harness itself reads, so it is the
+# only one that can describe the session. A worktree-local `enabled`
+# set by hand is not read by Claude Code at all, and preferring it
+# because it is "more specific" would let this line paint a green
+# `[sandbox]` over a session that has none. This helper is allowed to
+# say nothing; it is not allowed to say the wrong thing.
+#
+# Layout-agnostic: worktrunk's `<repo>.<branch>/` siblings,
+# `.claude/worktrees/<name>`, and plain `git worktree add` all resolve
+# through the same `--git-dir` / `--git-common-dir` comparison. A bare
+# common dir (`clone --bare` + worktrees) has no main checkout at all,
+# so there is no project scope to read — its parent directory is not
+# one, and is not treated as one.
 #
 # Wiring (user-scope):
 #
@@ -101,16 +144,77 @@ model=${parsed#*$'\t'}
 [ -z "$cwd" ] && cwd="$PWD"
 
 # ---------------------------------------------------------------------------
-# 1. Folder (colour-coded by hash)
-#    Inside a Claude worktree (<source>/.claude/worktrees/<name>) we render
-#    "<source>/<worktree>" with each segment hash-coloured independently —
-#    the source colour stays stable across all worktrees of the same repo.
+# 1. Worktree roots
+#    `wt_root` is the working tree containing <cwd>; `main_root` is the main
+#    checkout, set only when <cwd> sits in a *linked* worktree. Both feed the
+#    folder segment below and the settings walk in section 5.
+#
+#    `--git-dir` != `--git-common-dir` is the exact test for "linked
+#    worktree" and is layout-agnostic — it holds for worktrunk's sibling
+#    `<repo>.<branch>/` directories, for Claude Code's own
+#    `<source>/.claude/worktrees/<name>`, and for a plain `git worktree add`
+#    anywhere else. Matching on the directory name instead would only ever
+#    know the layouts someone thought to enumerate.
+# ---------------------------------------------------------------------------
+wt_root=""
+main_root=""
+source_name=""
+if wt_root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null); then
+    gdir=$(git -C "$cwd" rev-parse --git-dir 2>/dev/null || true)
+    gcommon=$(git -C "$cwd" rev-parse --git-common-dir 2>/dev/null || true)
+    # Both come back relative to <cwd> when <cwd> *is* the working-tree
+    # root and absolute from a subdirectory below it, so resolve each to
+    # a real path before comparing — a raw string compare reports every
+    # subdirectory of a plain checkout as a linked worktree.
+    [ -n "$gdir" ] && [[ "$gdir" != /* ]] && gdir="$cwd/$gdir"
+    [ -n "$gcommon" ] && [[ "$gcommon" != /* ]] && gcommon="$cwd/$gcommon"
+    gdir=$(cd "$gdir" 2>/dev/null && pwd -P) || gdir=""
+    gcommon=$(cd "$gcommon" 2>/dev/null && pwd -P) || gcommon=""
+    if [ -n "$gdir" ] && [ -n "$gcommon" ] && [ "$gdir" != "$gcommon" ]; then
+        # <main>/.git -> <main>, but only when the common dir *is* a `.git`.
+        # `git clone --bare` + `git worktree add` is a linked worktree with no
+        # main checkout at all: the common dir is `<repo>.git` and its parent
+        # is whatever directory happens to contain it. Reading that parent as
+        # project scope is worse than reading nothing — it is an unrelated
+        # directory whose `.claude/settings.json`, if any, belongs to someone
+        # else's project and can send the tag either way.
+        case "$gcommon" in
+            */.git)
+                main_root=$(cd "$gcommon/.." 2>/dev/null && pwd -P) || main_root=""
+                [ "$main_root" = "$wt_root" ] && main_root=""
+                source_name=${main_root:+$(basename "$main_root")}
+                ;;
+            *)
+                # Bare: no settings scope to read, but the repository still has
+                # a name worth rendering — `<repo>.git` -> `<repo>`.
+                main_root=""
+                source_name=$(basename "$gcommon")
+                source_name=${source_name%.git}
+                ;;
+        esac
+    fi
+else
+    wt_root=""
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Folder (colour-coded by hash)
+#    In a linked worktree we render "<source>/<worktree>" with each segment
+#    hash-coloured independently — the source colour stays stable across all
+#    worktrees of the same repo.
 # ---------------------------------------------------------------------------
 folder=$(basename "$cwd")
 worktree_name=""
-if [[ "$cwd" == *"/.claude/worktrees/"* ]]; then
-    worktree_name="$folder"
-    folder=$(basename "${cwd%%/.claude/worktrees/*}")
+if [ -n "$source_name" ]; then
+    worktree_name=$(basename "$wt_root")
+    folder=$source_name
+    # worktrunk names worktrees "<repo>.<branch>" as siblings of the main
+    # checkout, so the repo name would otherwise appear twice. Strip the
+    # repeated prefix and its separator; layouts that do not repeat it
+    # (".claude/worktrees/<name>") fall through untouched.
+    case "$worktree_name" in
+        "$folder"[._-]*) worktree_name=${worktree_name#"$folder"?} ;;
+    esac
 fi
 
 palette=(33 39 45 51 75 81 87 105 111 117 123 141 147 153 159 165 171 177 183 189 195 201 207 213 219 220 226 214 208 202 196 199 203 209 215 221 227 154 118 82 46 47 48 49 50 84 120 156 190 228)
@@ -127,7 +231,7 @@ if [ -n "$worktree_name" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 2. Git status
+# 3. Git status
 # ---------------------------------------------------------------------------
 git_info=""
 branch=""
@@ -166,7 +270,7 @@ if git_dir=$(git -C "$cwd" rev-parse --git-dir 2>/dev/null); then
 fi
 
 # ---------------------------------------------------------------------------
-# 3. PR title (cached per repo+branch)
+# 4. PR title (cached per repo+branch)
 # ---------------------------------------------------------------------------
 pr_info=""
 if [ -n "$branch" ] && [[ "$branch" != *"(detached)" ]] && command -v gh >/dev/null 2>&1; then
@@ -216,21 +320,33 @@ if [ -n "$branch" ] && [[ "$branch" != *"(detached)" ]] && command -v gh >/dev/n
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Sandbox state — green [sandbox] / yellow [sandbox-auto] / bold-red
+# 5. Sandbox state — green [sandbox] / yellow [sandbox-auto] / bold-red
 #    [NO SANDBOX] suffix. Walks settings.local.json + settings.json in
 #    project then user scope. First file with `.sandbox.enabled` set
 #    (true *or* false) wins — `/sandbox` writes to project
 #    `settings.local.json`, so that is the file that flips when the user
-#    toggles in-session. The yellow `[sandbox-auto]` variant lights up
-#    when `.sandbox.autoAllowBashIfSandboxed` is true in the same file —
+#    toggles in-session. In a linked worktree that project scope is the
+#    *main* checkout, not the worktree directory, so `main_root` leads the
+#    walk: without it a worktree session whose sandbox is off reads user
+#    scope instead and renders a green `[sandbox]` it has not earned, and
+#    behind `<cwd>` it would lose to a hand-written worktree file the
+#    harness never reads. `wt_root` covers the other half — a <cwd> below
+#    the working-tree root, where `<cwd>/.claude/` does not exist at all.
+#
+#    The yellow `[sandbox-auto]` variant lights up when
+#    `.sandbox.autoAllowBashIfSandboxed` is true in the same file —
 #    it signals that bash commands inside the sandbox skip the per-call
 #    allow prompt, which is a wider blast radius than vanilla sandbox.
 # ---------------------------------------------------------------------------
 sandbox=""
 sandbox_auto=""
 for f in \
+    "${main_root:+$main_root/.claude/settings.local.json}" \
+    "${main_root:+$main_root/.claude/settings.json}" \
     "${cwd:+$cwd/.claude/settings.local.json}" \
     "${cwd:+$cwd/.claude/settings.json}" \
+    "${wt_root:+$wt_root/.claude/settings.local.json}" \
+    "${wt_root:+$wt_root/.claude/settings.json}" \
     "$HOME/.claude/settings.local.json" \
     "$HOME/.claude/settings.json"; do
     [ -n "$f" ] && [ -f "$f" ] || continue
@@ -273,6 +389,6 @@ model_info=""
 [ -n "$model" ] && model_info=" | $model"
 
 # ---------------------------------------------------------------------------
-# 5. Emit — sandbox tag leads, then folder / git / PR / model.
+# 6. Emit — sandbox tag leads, then folder / git / PR / model.
 # ---------------------------------------------------------------------------
 printf '%s %s%s%s%s' "$sandbox_tag" "$folder_out" "$git_info" "$pr_info" "$model_info"
