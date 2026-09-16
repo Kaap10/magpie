@@ -32,6 +32,17 @@
 
 # Manual release process — the 0.1.0 hybrid path (SVN-dist + ATR-vote)
 
+> [!NOTE]
+> **Historical record — this path is retired.** It documents what the
+> `0.1.0` release actually did, hybrid and all, and is kept because the
+> rc1/rc2 detail is the evidence behind several decisions. It is **not**
+> the current procedure: Magpie now runs the full ATR flow
+> (`release_dist_backend = atr`), with one staging location and no
+> `dist/dev`. Start from the
+> [ATR release runbook](atr-release-runbook.md). The reasoning that
+> retired the hybrid is in
+> [#1182](https://github.com/apache/magpie/issues/1182).
+
 A concrete, **as-executed** record of how Apache Magpie `0.1.0` was cut
 by hand, kept as a practical runbook for the next Release Manager (RM).
 
@@ -60,15 +71,25 @@ currently pins a **hybrid**:
   canonical download, hosted on `dist.apache.org` over SVN.
 - `release_vote_backend = atr` — the mandatory `dev@` `[VOTE]` is composed
   and tabulated by the [Apache Trusted Releases](atr-release-runbook.md)
-  platform (alpha, at `https://release-test.apache.org/`).
+  platform (beta, at `https://releases.apache.org/`).
 
 So the artefacts live in **two** places during a vote: the SVN `dist/dev`
 staging dir (the canonical download the `[VOTE]` points at) **and** the ATR
 candidate, which runs the policy checks and drives the vote. Promotion
-(**Finish**) is done over SVN, *not* through ATR — ATR does not host or
-publish Magpie releases while it is alpha. This flips to full ATR
-(`release_dist_backend = atr`) only after the PMC ratifies ATR and it
-leaves alpha.
+(**Finish**) is done over SVN by the RM, *not* through ATR.
+
+Note that ATR's Finish would also publish to SVN — it commits the
+approved artefacts to `dist/release` in the same distribution
+repository, rather than hosting them itself. The hybrid's difference is
+therefore who performs the commit, not where the artefacts end up. ATR's
+documentation also now states that `dist/dev` is unnecessary when using
+ATR, and discourages pointing a `[VOTE]` at a second copy of the
+artefacts; see the warning in the
+[ATR runbook](atr-release-runbook.md#status-beta) and
+[#1182](https://github.com/apache/magpie/issues/1182). This flips to full ATR
+(`release_dist_backend = atr`) only after the PMC ratifies ATR. ATR has
+since reached beta, so that maturity precondition is met and the
+ratification vote is what remains.
 
 The two non-negotiable boundaries still hold: **the RM signs every
 artefact on their own machine**, and **the RM/PMC — never the agent —
@@ -159,7 +180,8 @@ atr upload magpie "${VERSION}" "${ARTIFACT}.sha512" "${ARTIFACT}.sha512"
 atr check status magpie "${VERSION}" --verbose
 ```
 
-ATR is alpha — treat client verbs as the *shape* of the operation and
+ATR is beta and its client is not yet stable — treat client verbs as
+the *shape* of the operation and
 confirm with `atr --help`; the web UI is the stable path. Run
 [`release-verify-rc`](../../skills/release-verify-rc/SKILL.md) locally too,
 as an independent second read.
@@ -173,7 +195,7 @@ downloads (the canonical location in hybrid mode). For `0.1.0-rc2` the
 
 | Field | Value |
 |---|---|
-| Candidate page (ATR) | `https://release-test.apache.org/vote/magpie/0.1.0` |
+| Candidate page (ATR) | `https://release-test.apache.org/vote/magpie/0.1.0` (host now redirects to `releases.apache.org`) |
 | Artefacts / downloads (SVN) | `https://dist.apache.org/repos/dist/dev/magpie/0.1.0-rc2/` |
 | Tag | `https://github.com/apache/magpie/releases/tag/0.1.0-rc2` |
 | Changelog | `https://github.com/apache/magpie/blob/0.1.0-rc2/CHANGELOG.md` |
@@ -351,7 +373,7 @@ exact command and output.
 ## Caveats hit during rc1 / rc2
 
 Real friction from the `0.1.0` iterations, recorded so the next RM expects
-it. Most trace to ATR being **alpha**; none blocked the release.
+it. Most trace to ATR being **alpha at the time**; none blocked the release.
 
 - **The `[VOTE]` email was part-template, part-manual.** ATR's generated
   template was incomplete for the hybrid case, so the `rc2` body was
