@@ -43,7 +43,7 @@ Goose provides an open-source execution stack with:
 
 | Magpie requirement | Goose implementation |
 |---|---|
-| Skill discovery | Goose reads canonical `.agents/skills/magpie-*/SKILL.md` symlinks natively (with `.goose/skills/` supported for backward compatibility). Declarative recipes wrap and drive Magpie skills without duplicating skill files. |
+| Skill discovery | Goose reads canonical `.agents/skills/magpie-*/SKILL.md` symlinks natively. The `universal` row in `skills/setup/agents.md` covers this path. |
 | Repository instructions | Goose ingests repository instructions from `.goosehints` (referencing `AGENTS.md` and adopter instructions from `<project-config>/`). |
 | Tool execution | Goose's built-in `developer` extension executes shell commands via `developer__bash` to invoke Magpie's language-agnostic `tools/*` CLI bridges. |
 | Model Context Protocol (MCP) | Goose connects to framework MCP servers (such as Apache Projects and PonyMail MCPs) via `~/.config/goose/config.yaml`. |
