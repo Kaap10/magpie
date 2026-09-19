@@ -217,4 +217,3 @@ uv run prek run doctoc --all-files
 - [`docs/adapters/add-a-harness.md`](add-a-harness.md) — step-by-step guide for integrating agent harnesses.
 - [`tools/agent-isolation/README.md`](../../tools/agent-isolation/README.md) — clean-environment launcher.
 - [GitHub Copilot Documentation](https://docs.github.com/copilot) — official GitHub Copilot reference.
-
