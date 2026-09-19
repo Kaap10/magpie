@@ -331,9 +331,11 @@ recipe workflows and developer tool execution; see the
 Aider is an open-source terminal pair programming CLI with per-action confirmation,
 multi-model routing, and local LLM support; see the
 [Aider harness guide](adapters/aider.md).
+GitHub Copilot operates across a standalone terminal agent (`copilot`) and server-side Coding Agents with
+Draft PR review gating; see the
+[GitHub Copilot harness guide](adapters/copilot.md).
 The remaining extension points are
 already open, labelled `good first issue`:
-[GitHub Copilot](https://github.com/apache/magpie/issues/318),
 [Amazon Q](https://github.com/apache/magpie/issues/320),
 [JetBrains Junie](https://github.com/apache/magpie/issues/321),
 [OpenHands](https://github.com/apache/magpie/issues/322).
