@@ -47,7 +47,7 @@ Aider provides an open-source execution stack with:
 
 | Magpie requirement | Aider implementation |
 |---|---|
-| Skill discovery | Aider ingests canonical `.agents/skills/magpie-*/SKILL.md` workflows on demand via `/read` or `--read` (Progressive Disclosure). |
+| Skill discovery | Aider ingests canonical `.agents/skills/magpie-*/SKILL.md` workflows on demand via `/read-only` or `--read` (Progressive Disclosure). |
 | Repository instructions | Aider ingests repository instructions from `.aider.conf.yml` or `CONVENTIONS.md` (referencing `AGENTS.md` and adopter instructions from `<project-config>/`). |
 | Tool execution | Aider executes Magpie's language-agnostic `tools/*` CLI bridges via in-session `/run <cmd>` or subshell execution with operator confirmation. |
 | Model Context Protocol (MCP) | Aider does not include a Model Context Protocol (MCP) client; deterministic operations execute through local CLI scripts under `tools/`. |
@@ -57,7 +57,7 @@ Aider provides an open-source execution stack with:
 ## Invoke a Magpie skill
 
 After running `/magpie-setup` to adopt the repository, the canonical `.agents/skills/` links are active in your working tree.
-Aider does not discover skills on its own; load the one you need with `/read` or `--read` (see below).
+Aider does not discover skills on its own; load the one you need with `/read-only` or `--read` (see below).
 
 ### Interactive terminal session
 
@@ -74,7 +74,7 @@ agent-iso aider --model <model> --no-auto-commits --no-dirty-commits
 To prevent context-window exhaustion across Magpie's 70+ workflows, load only the specific skill required for the current task:
 
 ```text
-/read .agents/skills/magpie-security-issue-triage/SKILL.md
+/read-only .agents/skills/magpie-security-issue-triage/SKILL.md
 ```
 
 Inside the session, prompt Aider to execute the workflow:
