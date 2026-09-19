@@ -56,7 +56,7 @@ of nine.
 | **Cursor** | `agent-iso cursor` | Cursor's own policy | ❌ **none** |
 | **Goose (Block)** | `agent-iso goose` | Goose developer mode / approval prompts | ❌ **none** |
 | **Aider** | `agent-iso aider` | Aider's own policy / git repository map | ❌ **none** |
-| **Copilot CLI** | `agent-iso copilot` | from the OS-level sandbox | ❌ **none** |
+| **Copilot CLI** | `agent-iso copilot` | Copilot's own approval prompts | ❌ **none** |
 
 **What the last column costs.** The action guard is what deterministically
 refuses a command that would break a hard framework rule — pinging maintainers,
