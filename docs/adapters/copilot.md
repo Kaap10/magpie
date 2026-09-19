@@ -151,14 +151,16 @@ GitHub Copilot supports Model Context Protocol (MCP) servers across its operatio
   {
     "mcpServers": {
       "apache_projects": {
-        "type": "command",
+        "type": "local",
         "command": "node",
-        "args": ["/path/to/comdev/mcp/apache-projects-mcp/index.js"]
+        "args": ["/path/to/comdev/mcp/apache-projects-mcp/index.js"],
+        "tools": ["*"]
       },
       "ponymail": {
-        "type": "command",
+        "type": "local",
         "command": "node",
-        "args": ["/path/to/comdev/mcp/ponymail-mcp/index.js"]
+        "args": ["/path/to/comdev/mcp/ponymail-mcp/index.js"],
+        "tools": ["*"]
       }
     }
   }
