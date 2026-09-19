@@ -28,10 +28,12 @@ section is the map of what exists and how to add what does not.
 One page per supported agentic harness, each declaring
 `capability:platform`:
 
+- [**Aider**](aider.md) — terminal pair programming agent harness.
 - [**Codex**](codex.md) — first-class harness.
 - [**Cursor**](cursor.md) — Composer and the Agent CLI.
 - [**Gemini CLI**](gemini.md) — extension install, `BeforeTool` guard, tool
   sandboxing and policies. Experimental.
+- [**Goose**](goose.md) — Block's open-source agent CLI and desktop environment.
 - [**Kiro CLI**](kiro.md) — per-skill installs, no marketplace; guard on
   `preToolUse`.
 - [**Local LLM**](local-llm.md) — Ollama, llama.cpp, vLLM.
@@ -41,7 +43,7 @@ One page per supported agentic harness, each declaring
 
 Not the same thing, and the differences matter more than the similarities.
 Every harness gets the clean-environment layer; the action guard reaches four
-of six.
+of eight.
 
 | Harness | Clean environment | Filesystem sandbox | Action guard |
 |---|---|---|---|
@@ -51,13 +53,15 @@ of six.
 | **Kiro CLI** | `kiro-iso` | from the OS-level sandbox | ✅ `preToolUse` |
 | **OpenAI Codex CLI** | `agent-iso codex` | Codex's own sandbox and exec policy, statically validated by [sandbox-lint](../../tools/sandbox-lint/README.md) | ❌ **none** |
 | **Cursor** | `agent-iso cursor` | Cursor's own policy | ❌ **none** |
+| **Goose (Block)** | `agent-iso goose` | Goose developer mode / approval prompts | ❌ **none** |
+| **Aider** | `agent-iso aider` | Aider's own policy / git repository map | ❌ **none** |
 
 **What the last column costs.** The action guard is what deterministically
 refuses a command that would break a hard framework rule — pinging maintainers,
 a `Co-Authored-By` trailer, `--no-verify`, marking a PR ready prematurely,
-emptying a PR by force-push. On Codex and Cursor those rules are instructions
-the model is asked to follow, not a gate that stops it. Both harnesses have
-their own approval prompts, and neither knows Magpie's rules.
+emptying a PR by force-push. On Codex, Cursor, Goose, and Aider those rules are instructions
+the model is asked to follow, not a gate that stops it. These harnesses have
+their own approval prompts, and none of them know Magpie's rules out of the box.
 
 That is a gap in the framework, not in those tools: `agent-guard`'s core is
 harness-neutral and each supported harness needed only a thin adapter. See

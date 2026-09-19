@@ -328,9 +328,11 @@ OpenAI-compatible endpoints with calibrated capability floors; see the
 Goose is an open-source agent CLI that reads `.agents/skills/` natively and supports
 recipe workflows and developer tool execution; see the
 [Goose harness guide](adapters/goose.md).
+Aider is an open-source terminal pair programming CLI with per-action confirmation,
+multi-model routing, and local LLM support; see the
+[Aider harness guide](adapters/aider.md).
 The remaining extension points are
 already open, labelled `good first issue`:
-[Aider](https://github.com/apache/magpie/issues/317),
 [GitHub Copilot](https://github.com/apache/magpie/issues/318),
 [Amazon Q](https://github.com/apache/magpie/issues/320),
 [JetBrains Junie](https://github.com/apache/magpie/issues/321),

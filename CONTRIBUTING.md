@@ -395,7 +395,7 @@ authoritative agent harness matrix. The current state per harness:
 | Gemini CLI | Experimental agent harness: native skills, action guard, runner, tool sandboxing and approval policies; sandbox parity gaps remain — see the [harness guide](docs/adapters/gemini.md) | [#314](https://github.com/apache/magpie/issues/314) |
 | Local LLM (Ollama / llama.cpp / vLLM) | OpenAI-compatible endpoints with calibrated model floors (70B+ / 8B–14B) — see the [harness guide](docs/adapters/local-llm.md) | [#315](https://github.com/apache/magpie/issues/315) |
 | Cursor (Composer + Agent CLI) | Reads `.agents/skills/` natively; per-action confirmation and Composer/Agent CLI — see the [harness guide](docs/adapters/cursor.md) | [#316](https://github.com/apache/magpie/issues/316) |
-| Aider | Not yet ported | [#317](https://github.com/apache/magpie/issues/317) |
+| Aider | Multi-model terminal pair programming CLI; per-action confirmation and on-demand skill ingestion — see the [harness guide](docs/adapters/aider.md) | [#317](https://github.com/apache/magpie/issues/317) |
 | GitHub Copilot CLI + Coding Agent | Not yet ported | [#318](https://github.com/apache/magpie/issues/318) |
 | Goose (Block) | Open-source agent CLI; reads `.agents/skills/` natively, developer tool execution, and recipe workflows — see the [harness guide](docs/adapters/goose.md) | [#319](https://github.com/apache/magpie/issues/319) |
 | Amazon Q Developer CLI | Not yet ported | [#320](https://github.com/apache/magpie/issues/320) |

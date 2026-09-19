@@ -79,6 +79,9 @@ on any single vendor for either — any agent that reads the shared
 - **[Goose](https://github.com/block/goose)** is an open-source agent CLI that reads
   Magpie's canonical `.agents/skills/` tree natively and supports recipe workflows;
   see [the Goose harness guide](../adapters/goose.md).
+- **[Aider](https://aider.chat/)** is an open-source, multi-model terminal pair programming CLI
+  with per-action confirmation and native local/cloud model support;
+  see [the Aider harness guide](../adapters/aider.md).
 
 Support for more runtimes (Copilot, …) is tracked in
 the
