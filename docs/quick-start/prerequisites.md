@@ -82,8 +82,11 @@ on any single vendor for either — any agent that reads the shared
 - **[Aider](https://aider.chat/)** is an open-source, multi-model terminal pair programming CLI
   with per-action confirmation and native local/cloud model support;
   see [the Aider harness guide](../adapters/aider.md).
+- **[GitHub Copilot](https://github.com/features/copilot)** provides a standalone terminal agent (`copilot`)
+  and server-side Coding Agent PR authoring;
+  see [the GitHub Copilot harness guide](../adapters/copilot.md).
 
-Support for more runtimes (Copilot, …) is tracked in
+Support for more runtimes (Amazon Q, …) is tracked in
 the
 [open adapter issues](https://github.com/apache/magpie/issues?q=is%3Aissue%20is%3Aopen%20adapter).
 
