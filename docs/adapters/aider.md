@@ -50,14 +50,14 @@ Aider provides an open-source execution stack with:
 | Skill discovery | Aider ingests canonical `.agents/skills/magpie-*/SKILL.md` workflows on demand via `/read` or `--read` (Progressive Disclosure). |
 | Repository instructions | Aider ingests repository instructions from `.aider.conf.yml` or `CONVENTIONS.md` (referencing `AGENTS.md` and adopter instructions from `<project-config>/`). |
 | Tool execution | Aider executes Magpie's language-agnostic `tools/*` CLI bridges via in-session `/run <cmd>` or subshell execution with operator confirmation. |
-| Model Context Protocol (MCP) | Aider does not natively host MCP client servers; deterministic tools execute as language-agnostic CLI scripts under `tools/`. |
+| Model Context Protocol (MCP) | Aider does not include a Model Context Protocol (MCP) client; deterministic operations execute through local CLI scripts under `tools/`. |
 | Human-in-the-loop (HITL) | Prescribed `--no-auto-commits` and `--no-dirty-commits` enforces strict proposal-then-confirm discipline before mutating git state. |
 | Credential & environment isolation | `agent-iso aider` launches the agent through the clean-environment wrapper (Layer 0 isolation, stripping ambient tokens while passing `SSH_AUTH_SOCK`). |
 
 ## Invoke a Magpie skill
 
 After running `/magpie-setup` to adopt the repository, the canonical `.agents/skills/` links are active in your working tree.
-Aider discovers and loads these skills directly from the workspace.
+Aider does not discover skills on its own; load the one you need with `/read` or `--read` (see below).
 
 ### Interactive terminal session
 
@@ -95,8 +95,7 @@ For non-interactive triage passes, automated sweeps, or headless scripting:
 aider --model <model> \
   --read .agents/skills/magpie-list-skills/SKILL.md \
   --message "Execute the loaded list-skills procedure and summarize available workflows." \
-  --no-auto-commits \
-  --exit
+  --no-auto-commits
 ```
 
 ## Configuration and repository instructions
@@ -116,7 +115,7 @@ read:
   - AGENTS.md
 
 # 3. Model parameters (optional adopter defaults)
-# model: anthropic/claude-3-7-sonnet-20250219
+# model: <model>
 # edit-format: diff
 ```
 
@@ -127,12 +126,10 @@ To prevent Aider from reading private adopter tokens, test fixtures, or local ov
 
 ```text
 # .aiderignore
-.apache-magpie-local/
 .env*
 *.key
 *.pem
-.git/
-tools/agent-isolation/tmp/
+*.token
 ```
 
 ## Tool bridges and subshell execution
@@ -140,7 +137,7 @@ tools/agent-isolation/tmp/
 Magpie skills execute deterministic operations via language-agnostic scripts under `tools/` (e.g. `tools/cve-tool-vulnogram/`, `tools/github/`, `tools/privacy-llm/`).
 
 When a skill requires running a tool command:
-- The operator or model proposes the subshell command (e.g. `uv run --project tools/github gh-issue-view ...`).
+- The operator or model proposes the subshell command (e.g. `gh issue view <issue-number> --repo <tracker>`).
 - In an interactive session, execute the command directly via `/run <cmd>` or `!<cmd>`.
 - Actions execute in the local project environment following standard subshell semantics.
 
@@ -177,8 +174,8 @@ For complex triage and vulnerability assessment, use Aider's `--architect` mode 
 ```bash
 # Reasoning model handles analysis; fast editor applies diffs
 aider --architect \
-  --model anthropic/claude-3-7-sonnet-20250219 \
-  --editor-model anthropic/claude-3-5-haiku-20241022 \
+  --model <reasoning-model> \
+  --editor-model <editor-model> \
   --no-auto-commits
 ```
 
@@ -188,8 +185,8 @@ For sovereign or air-gapped deployments where data cannot leave the local host (
 
 ```bash
 # Connect Aider to a local Ollama instance
-aider --model ollama/deepseek-r1:70b \
-  --openai-api-base http://localhost:11434/v1 \
+export OLLAMA_API_BASE=http://127.0.0.1:11434
+aider --model ollama_chat/<model> \
   --no-auto-commits
 ```
 
