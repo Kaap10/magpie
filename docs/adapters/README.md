@@ -30,6 +30,7 @@ One page per supported agentic harness, each declaring
 
 - [**Aider**](aider.md) — terminal pair programming agent harness.
 - [**Codex**](codex.md) — first-class harness.
+- [**Copilot CLI**](copilot.md) — standalone CLI and Coding Agent.
 - [**Cursor**](cursor.md) — Composer and the Agent CLI.
 - [**Gemini CLI**](gemini.md) — extension install, `BeforeTool` guard, tool
   sandboxing and policies. Experimental.
@@ -43,7 +44,7 @@ One page per supported agentic harness, each declaring
 
 Not the same thing, and the differences matter more than the similarities.
 Every harness gets the clean-environment layer; the action guard reaches four
-of eight.
+of nine.
 
 | Harness | Clean environment | Filesystem sandbox | Action guard |
 |---|---|---|---|
@@ -55,11 +56,12 @@ of eight.
 | **Cursor** | `agent-iso cursor` | Cursor's own policy | ❌ **none** |
 | **Goose (Block)** | `agent-iso goose` | Goose developer mode / approval prompts | ❌ **none** |
 | **Aider** | `agent-iso aider` | Aider's own policy / git repository map | ❌ **none** |
+| **Copilot CLI** | `agent-iso copilot` | from the OS-level sandbox | ❌ **none** |
 
 **What the last column costs.** The action guard is what deterministically
 refuses a command that would break a hard framework rule — pinging maintainers,
 a `Co-Authored-By` trailer, `--no-verify`, marking a PR ready prematurely,
-emptying a PR by force-push. On Codex, Cursor, Goose, and Aider those rules are instructions
+emptying a PR by force-push. On Codex, Cursor, Goose, Aider, and Copilot CLI those rules are instructions
 the model is asked to follow, not a gate that stops it. These harnesses have
 their own approval prompts, and none of them know Magpie's rules out of the box.
 
