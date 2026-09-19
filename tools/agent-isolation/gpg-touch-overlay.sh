@@ -27,12 +27,21 @@
 # key is touched or gpg gives up with "signing failed: Timeout". There is
 # nothing to distinguish it from a hung command.
 #
+# Two commands reach that key and both are watched: gpg itself, and the
+# `ssh-keygen -Y sign` git runs when it is configured with
+# `gpg.format=ssh` — that one signs over gpg-agent's ssh socket and
+# starts no gpg at all.
+#
 # This is the other half of the hardware-key rule in AGENTS.md
 # ("Commit and PR conventions"). That rule has the agent probe the PIN
 # cache and warn *before* committing; gpg-agent's `keyinfo` reports the
 # PIN cache only, so a key with a warm PIN and a cold touch still blocks
 # with no prompt at all. This covers that case from the other side, at
 # the moment gpg is actually waiting.
+#
+# The window itself is GTK on Linux (zenity where PyGObject is missing)
+# and Tk on macOS, which has neither — see the two window scripts next to
+# this one.
 #
 #   arm     PreToolUse  — a git command that might sign is about to run;
 #                         start a watcher that shows the window if and
@@ -52,7 +61,12 @@
 #     than that, so ordinary commits stay silent.
 #
 # So arming is cheap and deliberately over-broad: it costs one background
-# process that exits on its own when no signature materialises.
+# process that disarm tears down when the command ends. The watcher lives
+# for the whole command, not for one signature: a rebase signs every
+# commit it replays, and a hook may run a look-alike before git signs at
+# all — a test suite that starts a process named ssh-keygen, say. A
+# watcher that left with the first one would be gone when the real
+# signature blocked.
 #
 # Dismissing the window with its button is honoured — it is a prompt, not
 # a trap, and gpg keeps waiting either way. It is not re-shown for the
@@ -63,6 +77,10 @@ set -uo pipefail
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 readonly SELF
 readonly OVERLAY_WINDOW="${SELF%/*}/gpg-touch-overlay-window.py"
+readonly OVERLAY_WINDOW_MACOS="${SELF%/*}/gpg-touch-overlay-window-macos.py"
+
+PLATFORM="$(uname -s)"
+readonly PLATFORM
 
 readonly TITLE="Touch your security key"
 readonly BODY="<b>gpg is waiting for a touch to sign.</b>
@@ -71,15 +89,24 @@ Touch the key's contact now — the commit is blocked until you do.
 This window closes by itself once the touch registers."
 
 readonly SHOW_DELAY=8     # polls a signature must block before showing (0.2s each)
-readonly APPEAR_GRACE=45  # seconds to wait for gpg to appear at all
 readonly MAX_WAIT=600     # seconds the watcher may live, whatever happens
 readonly POLL=0.2
 
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/magpie-gpg-touch"
 readonly WATCHER_PID_FILE="$RUNTIME_DIR/watcher.pid"
 
-# A signing gpg is running. Exact-name match only — see the header.
-signing_in_flight() { pgrep -x 'gpg|gpg2' >/dev/null 2>&1; }
+# Logging is switched on by the environment or by a marker file. The
+# file is for the case that matters most: a hook runs with the
+# harness's environment, which nobody can set a variable in from a
+# terminal, but anyone can `touch` the marker there.
+_debugging() { [[ -n ${MAGPIE_GPG_TOUCH_DEBUG:-} || -e $RUNTIME_DIR/debug ]]; }
+
+# A signature is in flight: gpg itself, or the `ssh-keygen -Y sign` git
+# runs under `gpg.format=ssh`. That one signs through gpg-agent's ssh
+# socket without ever starting gpg, so watching for gpg alone is blind to
+# an ssh-signed commit — the same key, the same touch, no window.
+# Exact-name match only — see the header.
+signing_in_flight() { pgrep -x 'gpg|gpg2|ssh-keygen' >/dev/null 2>&1; }
 
 # pinentry is asking for the PIN and owns the screen.
 pinentry_up() { pgrep -x 'pinentry.*' >/dev/null 2>&1; }
@@ -88,13 +115,49 @@ pinentry_up() { pgrep -x 'pinentry.*' >/dev/null 2>&1; }
 
 # Subcommands that can produce a signature under this config. Broad on
 # purpose: a false positive costs one short-lived watcher, a false
-# negative costs a silent block with no window.
+# negative costs a silent block with no window. The subcommand may be
+# followed by whitespace, the end of the command, or whatever ends a
+# shell word — `git commit;`, `git commit)` and `git commit | tee` sign
+# just as much as `git commit -m`.
 readonly SIGNING_SUBCOMMANDS='commit|tag|merge|rebase|revert|cherry-pick|am|push'
+
+# A screen to draw on, and something to draw the window with.
+#
+# On macOS both questions collapse into one: a logged-in user always has
+# the window server — there is no DISPLAY to test — and the fallbacks the
+# Linux side leans on do not exist there, so the only thing left to ask is
+# whether a python that can import tkinter is around.
+_gui_available() {
+    if [[ $PLATFORM == Darwin ]]; then
+        _tk_python >/dev/null
+    else
+        [[ -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] || return 1
+        command -v zenity >/dev/null 2>&1 || _gi_python >/dev/null
+    fi
+}
+
+# The prefix that makes a command the leader of its own session, so the
+# single group kill in disarm takes down the watcher and any window it
+# spawned. macOS ships no setsid(1); perl's POSIX::setsid does the same
+# job.
+#
+# A prefix rather than a wrapper function on purpose: the caller records
+# `$!` as the group to kill, so whatever it backgrounds has to *become*
+# the watcher. A function would put a subshell in between, and the pid
+# written to the file would lead no group at all — disarm would then kill
+# nothing and leave the window up.
+SESSION_LAUNCHER=()
+_set_session_launcher() {
+    if command -v setsid >/dev/null 2>&1; then
+        SESSION_LAUNCHER=(setsid)
+    else
+        SESSION_LAUNCHER=(perl -e 'use POSIX qw(setsid); setsid() or die "setsid: $!"; exec @ARGV or die "exec: $!"' --)
+    fi
+}
 
 arm() {
     if [[ -z ${MAGPIE_GPG_TOUCH_DRY_RUN:-} ]]; then
-        [[ -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] || return 0
-        command -v zenity >/dev/null 2>&1 || _gi_python >/dev/null || return 0
+        _gui_available || return 0
     fi
 
     local payload command_text
@@ -103,7 +166,7 @@ arm() {
     [[ -n $command_text ]] || return 0
 
     printf '%s' "$command_text" |
-        grep -Eq "(^|[;&|(]|[[:space:]])git([[:space:]]+-[A-Za-z-]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+($SIGNING_SUBCOMMANDS)([[:space:]]|$)" ||
+        grep -Eq "(^|[;&|(]|[[:space:]])git([[:space:]]+-[A-Za-z-]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+($SIGNING_SUBCOMMANDS)([[:space:];&|)]|$)" ||
         return 0
 
     # Test seam: report the decision instead of spawning a watcher, so
@@ -122,11 +185,19 @@ arm() {
         return 0
     fi
 
-    # setsid: the watcher leads its own process group, so disarm can take
-    # down the window it spawned with a single group kill.
+    # The watcher leads its own process group, so disarm can take down the
+    # window it spawned with a single group kill.
+    # Every writer to the log appends — the watcher's trace, the window's
+    # output, the environment line — because a single non-append writer
+    # would overwrite the others' lines at its own offset. The truncation
+    # is separate, once, here.
     local log=/dev/null
-    [[ -n ${MAGPIE_GPG_TOUCH_DEBUG:-} ]] && log="$RUNTIME_DIR/watcher.log"
-    setsid "$SELF" _watch >"$log" 2>&1 &
+    if _debugging; then
+        log="$RUNTIME_DIR/watcher.log"
+        : >"$log"
+    fi
+    _set_session_launcher
+    "${SESSION_LAUNCHER[@]}" "$SELF" _watch >>"$log" 2>&1 &
     printf '%s\n' "$!" >"$WATCHER_PID_FILE"
 }
 
@@ -148,6 +219,9 @@ overlay_dismissed=0
 # Raise the window and keep it above the others. Backgrounded: it polls
 # for the window to map, which must not hold up the watcher's own loop.
 raise_overlay() {
+    # EWMH hints and wmctrl are an X11 affair; the Tk window raises itself.
+    [[ $PLATFORM == Darwin ]] && return 0
+
     local i
     for (( i = 0; i < 15; i++ )); do
         if wmctrl -l 2>/dev/null | grep -Fq -- "$TITLE"; then
@@ -183,26 +257,28 @@ hide_overlay() {
 }
 
 _watch() {
-    trap 'hide_overlay' EXIT INT TERM
+    # A trapped signal alone does not end a bash loop — the handler runs
+    # and the loop goes on — so disarm's kill has to be turned into an
+    # exit here, or the watcher would live out MAX_WAIT after the command
+    # it was armed for is long done.
+    trap 'hide_overlay' EXIT
+    trap 'hide_overlay; exit 0' INT TERM
+
+    # The loop itself is silent, so a log is only worth having as a trace.
+    _debugging && set -x
 
     local i blocked=0
 
-    # Nothing signs instantly; git may run hooks first. Wait for gpg to
-    # show up, and stop caring if it never does.
-    for (( i = 0; i < APPEAR_GRACE * 5; i++ )); do
-        signing_in_flight && break
-        sleep "$POLL"
-    done
-    signing_in_flight || return 0
-
+    # Live until disarm, or MAX_WAIT if that never comes. A signature
+    # ending is not the end of the watch — see the header. Between
+    # signatures the window comes down and the block count starts over.
     for (( i = 0; i < MAX_WAIT * 5; i++ )); do
-        signing_in_flight || break
-        if pinentry_up; then
-            blocked=0
-            hide_overlay
-        else
+        if signing_in_flight && ! pinentry_up; then
             blocked=$(( blocked + 1 ))
             (( blocked >= SHOW_DELAY )) && show_overlay
+        else
+            blocked=0
+            hide_overlay
         fi
         sleep "$POLL"
     done
@@ -227,6 +303,44 @@ _gi_python() {
     return 1
 }
 
+# The same probe for the macOS window's toolkit, and it has to go two
+# steps further than importing. A uv, pyenv or Homebrew python commonly
+# ships the tkinter module while the Tcl/Tk behind it is missing or
+# unfindable, so the import succeeds and the first Tk() call dies with
+# "Tcl wasn't installed properly"; only starting a Tk instance tells the
+# two apart — withdrawn and destroyed at once, so the probe never puts
+# anything on screen. And Tk 8.5, which is what the python in Apple's
+# Command Line Tools carries, starts fine and then does not reliably
+# show a borderless translucent window at all — or hangs setting it
+# up — so the probe also insists on 8.6.
+#
+# Each candidate is probed and reported by its resolved path. Tcl looks
+# for init.tcl relative to the executable it was started as and does not
+# follow symlinks, so the `python3` symlink uv or pyenv puts on PATH fails
+# the probe while the interpreter it points at passes it.
+#
+# The usual homes are listed by absolute path as well as `python3` on
+# PATH: this runs from a Claude Code hook, whose environment is the
+# harness's own and need not carry the shell's PATH — a uv python only
+# reachable through `~/.local/bin` on PATH would otherwise be invisible
+# here, and the probe would settle on the system python that cannot draw.
+_tk_python() {
+    local py real
+    for py in python3 "$HOME/.local/bin/python3" "$HOME/.pyenv/shims/python3" \
+              /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
+        real="$(readlink -f "$(command -v "$py" 2>/dev/null)" 2>/dev/null)" || continue
+        [[ -n $real ]] || continue
+        if "$real" -c 'import sys, tkinter
+t = tkinter.Tk(); t.withdraw()
+ok = tuple(int(p) for p in t.tk.call("info", "patchlevel").split(".")[:2]) >= (8, 6)
+t.destroy(); sys.exit(0 if ok else 1)' >/dev/null 2>&1; then
+            printf '%s\n' "$real"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # The window is exec'd so this pid *is* the window: one kill closes it,
 # with no orphaned child left drawing on the screen.
 #
@@ -234,22 +348,47 @@ _gi_python() {
 # does. zenity is the fallback for a machine without PyGObject — a small
 # dialog, but better than a silent block.
 _overlay() {
-    local py
-    if py="$(_gi_python)"; then
-        exec "$py" "$OVERLAY_WINDOW" >/dev/null 2>&1
+    local py out=/dev/null
+    # The window's own complaints — a toolkit that cannot reach the
+    # display, say — are the one thing a log is for.
+    if _debugging; then
+        out="$RUNTIME_DIR/watcher.log"
+        # The environment the window is drawn from — a hook's, not the
+        # terminal's — is usually the whole question. A safe subset only:
+        # no tokens or keys land in a world-readable log.
+        {
+            printf 'overlay env: '
+            env | grep -E '^(PATH|HOME|USER|SHELL|TERM|LANG|TMPDIR|DISPLAY|WAYLAND_DISPLAY|SSH_AUTH_SOCK|XPC_SERVICE_NAME|__CFBundleIdentifier|CLAUDE[A-Z_]*)=' | sort | tr '\n' ' '
+            printf '\n'
+        } >>"$out" 2>&1
     fi
-    exec zenity --warning --title="$TITLE" --width=560 --text="$BODY" >/dev/null 2>&1
+    if [[ $PLATFORM == Darwin ]]; then
+        py="$(_tk_python)" || return 0
+        exec "$py" "$OVERLAY_WINDOW_MACOS" >>"$out" 2>&1
+    fi
+    if py="$(_gi_python)"; then
+        exec "$py" "$OVERLAY_WINDOW" >>"$out" 2>&1
+    fi
+    exec zenity --warning --title="$TITLE" --width=560 --text="$BODY" >>"$out" 2>&1
 }
 
+# A PreToolUse hook's exit status is a verdict on the command about to
+# run, so arm and disarm end 0 whatever their own plumbing did — a missing
+# python or an unwritable runtime dir must never block a commit. The
+# probes below are internal and report their real status, which is what
+# the callers above and the tests read them for.
 case "${1:-}" in
-    arm)      arm ;;
-    disarm)   disarm ;;
-    _watch)   _watch ;;
+    arm)      arm; exit 0 ;;
+    disarm)   disarm; exit 0 ;;
+    _watch)   _watch; exit 0 ;;
     _overlay) _overlay ;;
     _gi_python) _gi_python ;;
+    _tk_python) _tk_python ;;
+    _gui_available) _gui_available ;;
+    _signing_in_flight) signing_in_flight ;;
+    _spawn_session) shift; _set_session_launcher; exec "${SESSION_LAUNCHER[@]}" "$@" ;;
     *)
         printf '%s: expected arm|disarm, got "%s"\n' "${0##*/}" "${1:-}" >&2
         exit 2
         ;;
 esac
-exit 0

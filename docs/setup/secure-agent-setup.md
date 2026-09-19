@@ -483,7 +483,8 @@ below, annotated.
         "~/.local/bin/",              // uv-installed tool entry points
         "~/.config/apache-magpie/",  // Gmail OAuth refresh token (oauth-draft tool)
         "~/.gnupg/",                  // gpg keyring reads (needed for signing, not sufficient on Linux — see sandbox-troubleshooting.md)
-        "/run/user/*/gnupg/"          // gpg-agent socket dir (see "agent appears unreachable" in sandbox-troubleshooting.md)
+        "/run/user/*/gnupg/",         // gpg-agent socket dir (see "agent appears unreachable" in sandbox-troubleshooting.md)
+        "~/.ssh/id_ed25519_sk.pub"    // ONLY with `gpg.format=ssh`: the public half git hands to `ssh-keygen -Y sign`. Use the file `git config user.signingkey` names (see sandbox-troubleshooting.md)
       ],
       "allowWrite": [
         "~/.cache/",                  // uv lock files, prek log + state, ruff/mypy caches, prek's rustup toolchains + cargo registry
@@ -491,6 +492,9 @@ below, annotated.
       ]
     },
     "network": {
+      "allowUnixSockets": [        // macOS only (ignored on Linux): sockets a sandboxed Bash may connect(2) to. A read entry alone lets it stat the file, not talk to it.
+        "/Users/<you>/.gnupg/S.gpg-agent.ssh"   // gpg-agent's ssh socket — needed for signed commits and pushes over ssh; absolute path (see "SSH agent / Yubikey appears unreachable" in sandbox-troubleshooting.md)
+      ],
       "allowedDomains": [          // every host the framework legitimately reaches
         "github.com", "api.github.com", "api.bitbucket.org",
         "raw.githubusercontent.com",
@@ -1840,6 +1844,15 @@ ykman openpgp info | grep -A2 'Touch policies'
 #   Signature key:      Off         <- never waits for a touch; skip this
 ```
 
+It applies just as much with `git config gpg.format ssh`, where the
+signature is made by `ssh-keygen -Y sign` over gpg-agent's ssh socket
+rather than by gpg. The same key waits for the same touch, so the
+watcher looks for either command. Under the sandbox that setup needs
+one more `allowRead` entry — the public key file git hands to
+`ssh-keygen` — or the commit fails before the key is ever asked for a
+touch; see
+[`sandbox-troubleshooting.md` → Signed commit fails before any touch when git signs with ssh](sandbox-troubleshooting.md#signed-commit-fails-before-any-touch-when-git-signs-with-ssh).
+
 This is the operator-facing half of the hardware-key rule in
 [`AGENTS.md`](../../AGENTS.md) → *Commit and PR conventions*. That rule
 has the agent probe gpg-agent's cache and warn **before** committing.
@@ -1859,8 +1872,9 @@ says which key is waiting. It closes itself the moment the touch lands.
 mkdir -p ~/.claude/scripts
 cp tools/agent-isolation/gpg-touch-overlay.sh \
    tools/agent-isolation/gpg-touch-overlay-window.py \
+   tools/agent-isolation/gpg-touch-overlay-window-macos.py \
    ~/.claude/scripts/
-chmod +x ~/.claude/scripts/gpg-touch-overlay*.sh ~/.claude/scripts/gpg-touch-overlay-window.py
+chmod +x ~/.claude/scripts/gpg-touch-overlay*
 ```
 
 Both files go in the same directory — the shell script finds the window
@@ -1886,9 +1900,18 @@ in the `Bash` matcher groups you already have:
 }
 ```
 
-Needs `python3` with PyGObject for the dimmed overlay; where that is
-missing it falls back to a `zenity` dialog. `pgrep`, from `procps`, is
-the only other requirement.
+On Linux this needs `python3` with PyGObject for the dimmed overlay;
+where that is missing it falls back to a `zenity` dialog. On macOS it
+needs a `python3` with Tk 8.6 or newer — a uv-managed python or
+Homebrew's `python-tk` has one, while the python in the Command Line
+Tools carries Apple's Tk 8.5, which starts and then draws nothing for
+the overlay. The hook probes each candidate by its resolved path and
+settles on the first that actually starts a current Tk before it
+promises a window; the resolved path matters because Tcl finds its own
+library relative to the executable and does not follow the `python3`
+symlink uv or pyenv puts on PATH. `pgrep` is
+the only other requirement, and `perl` on macOS, which has no
+`setsid(1)`; both are part of the base system there.
 
 ### Verify
 
@@ -1902,14 +1925,35 @@ sleep 3 && pgrep -x zenity >/dev/null || pgrep -f gpg-touch-overlay-window >/dev
 pkill -x gpg
 ```
 
+With `gpg.format=ssh`, sign with the key git would use instead:
+
+```sh
+ssh-keygen -Y sign -f "$(git config --get user.signingkey)" -n git /etc/hostname &
+```
+
 The window should appear about a second and a half in, and disappear
-when the gpg process ends. `MAGPIE_GPG_TOUCH_DEBUG=1` makes the watcher
-log to `$XDG_RUNTIME_DIR/magpie-gpg-touch/watcher.log`.
+when the signing process ends. The watcher itself stays until the
+hook's `disarm`, so a second signature in the same command — a rebase
+replaying several commits, a real signature after a hook ran something
+that merely looked like one — raises the window again. `MAGPIE_GPG_TOUCH_DEBUG=1` makes the
+watcher log to `$XDG_RUNTIME_DIR/magpie-gpg-touch/watcher.log`
+(`/tmp/magpie-gpg-touch/` on macOS, which sets no `XDG_RUNTIME_DIR`).
+So does a marker file, `touch $XDG_RUNTIME_DIR/magpie-gpg-touch/debug`
+— the way to get a log out of the watcher the *hook* spawns, whose
+environment is the harness's own and takes no variable from your
+terminal. Export `SHELLOPTS=xtrace` alongside the variable (terminal
+runs only) for a full trace.
 
 ### Trade-offs
 
-- **X11 only.** Placement and stacking use EWMH hints. Under Wayland the
-  overlay still draws, but the compositor decides where it lands.
+- **Placement is X11's to give.** On Linux the overlay places and stacks
+  itself with EWMH hints. Under Wayland it still draws, but the
+  compositor decides where it lands.
+- **One display on macOS.** Aqua Tk reports a single screen geometry, so
+  the overlay covers the main display rather than every monitor the way
+  the GTK version does. It is a borderless window rather than a native
+  fullscreen one on purpose: fullscreen would move macOS to a new Space
+  and pull the terminal you are watching off screen.
 - **Nothing is shown while pinentry is up.** Two dialogs competing for
   focus would make the PIN impossible to type, so the overlay waits for
   pinentry to go away.
@@ -1919,6 +1963,11 @@ log to `$XDG_RUNTIME_DIR/magpie-gpg-touch/watcher.log`.
 - **The window is dismissible.** Esc or a click closes it. The key still
   has to be touched for the commit to go through, so trapping the screen
   would buy nothing.
+- **It takes the keyboard on macOS.** A touch that lands before the key
+  is asking for one fires the key's OTP slot, which types a burst of
+  characters and a Return into whatever has focus. While the overlay is
+  up that is the overlay, which ignores them, rather than the browser or
+  editor that happened to be in front.
 - **It watches the whole host, not just the agent.** The watcher keys off
   any signing `gpg` process, so a commit you make yourself in another
   terminal raises the window too.
@@ -2424,6 +2473,16 @@ below and report ✓ done / ✗ missing / ⚠ partial, with the evidence
      (the catalogue) and
      `.apache-magpie-overrides/tools/vetted-ops/**` (the policy).
    If the repo has no vetted-ops policy at all, report n/a.
+9. If my commits are signed with a hardware key: the touch overlay
+   is wired (`PreToolUse` / `PostToolUse` `Bash` →
+   `~/.claude/scripts/gpg-touch-overlay.sh arm` / `disarm`), its
+   scripts match the framework's `tools/agent-isolation/` copies,
+   and — with `gpg.format=ssh` — the file `git config
+   user.signingkey` names is readable from a sandboxed Bash (it
+   needs its own `sandbox.filesystem.allowRead` entry). For the
+   toolkit probe (`gpg-touch-overlay.sh _gui_available`) hand me
+   the command to run myself: it cannot see the display from
+   inside the sandbox.
 ```
 
 Re-run either form after every Claude Code upgrade — the sandbox
