@@ -24,6 +24,7 @@
     - [Mail provider](#mail-provider)
     - [Archive system](#archive-system)
     - [Project metadata](#project-metadata)
+    - [Security cross-reference](#security-cross-reference)
     - [Tracker](#tracker)
     - [Scope detection](#scope-detection)
     - [Release process](#release-process)
@@ -121,6 +122,7 @@ for ASF projects) is org-level — inherited from your organization's
 | Source control (VCS) | `github` (Git) — replaceable with a non-Git VCS | [`../../tools/github/source-control.md`](../../tools/github/source-control.md) | `upstream_repo`, `default_branch`; for a non-Git VCS declare the sibling tool + its working-copy URL |
 | Inbound email / drafts | `<one or more mail-source backends>` | [`../../tools/mail-source/contract.md`](../../tools/mail-source/contract.md) (abstract) + per-backend adapter dirs (`tools/gmail/`, `tools/ponymail/`, `tools/mail-source/imap/`, `tools/mail-source/mbox/`, ...) | See [Mail sources](#mail-sources) below — declare each backend's role (primary / preferred-for-`<op>` / fallback / optional) and `mandatory` flag |
 | CVE allocation + record mgmt | *org-level* — inherited from `organizations/<org>/organization.md → cve_authority.tool`; for ASF: `vulnogram` ([`tools/cve-tool-vulnogram/`](../../tools/cve-tool-vulnogram/)), for independent: `mitre-form` | — | override in [CVE authority](#cve-authority) only if this project differs from its org |
+| Security cross-ref | `osv` | [`../../tools/osv/`](../../tools/osv/) | `security_cross_ref.tool`, `security_cross_ref.ecosystem` |
 | Project metadata (rosters / people / releases) | *org-level* — inherited from `organizations/<org>/organization.md → project_metadata.kind`; for ASF: `apache-projects` ([`tools/apache-projects/`](../../tools/apache-projects/)), for independent: `none` | — | override in [Project metadata](#project-metadata) only if this project differs from its org |
 | Release comms | TODO: the backend that carries release announcements — for ASF: `dev_list` / `announce_list` / `users_list`; for GitHub Releases leave blank | — | whichever release-comms keys the org default or per-project override declares |
 
@@ -360,6 +362,19 @@ project's advisories surface on a different archive than its organization.
 Org-level — inherited from your organization's `project_metadata` block
 (roster / people / releases backend + whether it is mandatory). Override
 here only if this project uses a different metadata source.
+
+### Security cross-reference
+
+Vulnerability cross-referencing and alias lookup configuration (OSV.dev / NVD).
+Declare this project's default package ecosystem and tool adapter:
+
+```yaml
+security_cross_ref:
+  # Tool adapter: osv (tools/osv/) | none
+  tool: osv
+  # Default package ecosystem for vulnerability queries (e.g. PyPI, Maven, npm, Go, crates.io)
+  ecosystem: PyPI
+```
 
 ### Tracker
 

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0
+     https://www.apache.org/licenses/LICENSE-2.0 -->
+
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
@@ -8,9 +11,6 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-<!-- SPDX-License-Identifier: Apache-2.0
-     https://www.apache.org/licenses/LICENSE-2.0 -->
-
 # `tools/osv/`
 
 **Capability:** contract:security-cross-ref
@@ -19,7 +19,7 @@
 
 **Vendor:** OSV.dev
 
-OSV.dev vulnerability cross-reference client. Queries the [OSV.dev REST API v1](https://api.osv.dev/v1/) for vulnerability records, aliases (CVE ↔ GHSA ↔ OSV IDs), affected package versions, and commit fix references. Complements [`tools/cve-org/`](../cve-org/) and [`tools/cve-tool-vulnogram/`](../cve-tool-vulnogram/) by providing cross-ecosystem vulnerability records during security triage (`security-issue-triage`), deduplication (`security-issue-deduplicate`), CVE allocation sanity checks (`security-cve-allocate`), and dependency audits (`dependency-audit`). See [`tool.md`](tool.md) for endpoint recipes, payload structures, and confidentiality boundaries.
+OSV.dev vulnerability cross-reference client. Queries the [OSV.dev REST API v1](https://api.osv.dev/v1/) for vulnerability records, aliases (CVE ↔ GHSA ↔ OSV IDs), affected package versions, and commit fix references. Complements [`tools/cve-org/`](../cve-org/) and [`tools/cve-tool-vulnogram/`](../cve-tool-vulnogram/) by providing cross-ecosystem vulnerability records for intended triage consumers (`security-issue-triage`, `security-issue-deduplicate`, `security-cve-allocate`, and `dependency-audit` — not yet wired). See [`tool.md`](tool.md) for endpoint recipes, payload structures, and confidentiality boundaries.
 
 ## Prerequisites
 
@@ -32,5 +32,7 @@ OSV.dev vulnerability cross-reference client. Queries the [OSV.dev REST API v1](
 
 Adopters select this backend with `<project-config>/project.md` →
 `security_cross_ref.tool: osv` when performing automated vulnerability
-cross-referencing. The default ecosystem (e.g. `PyPI`, `Maven`, `npm`)
-can be configured via `security_cross_ref.ecosystem`.
+cross-referencing. The default ecosystem (e.g. `PyPI`, `Maven`, `npm`, `Go`, `crates.io`, `NuGet`, `RubyGems`, `Packagist`)
+can be configured via `security_cross_ref.ecosystem`. The adopter-facing
+configuration block is declared in
+[`projects/_template/project.md`](../../projects/_template/project.md#security-cross-reference).

@@ -7,7 +7,7 @@
 
 - [Tool: OSV.dev](#tool-osvdev)
   - [What this tool provides](#what-this-tool-provides)
-    - [Consuming skills](#consuming-skills)
+    - [Consuming skills (intended roadmap — not yet wired)](#consuming-skills-intended-roadmap--not-yet-wired)
   - [URLs and Endpoints](#urls-and-endpoints)
   - [Operations](#operations)
     - [1. Retrieve record and aliases by Vulnerability ID — `get-vuln`](#1-retrieve-record-and-aliases-by-vulnerability-id--get-vuln)
@@ -52,7 +52,9 @@ Four primary operations:
 4. **Batch Query (`query-batch`)**: Query multiple package versions or commit hashes in a
    single HTTP request.
 
-### Consuming skills
+### Consuming skills (intended roadmap — not yet wired)
+
+These skills represent intended consumers for this cross-reference adapter once wired into their triage passes:
 
 - [`security-issue-triage`](../../skills/security-issue-triage/SKILL.md) — early deduplication against the known-vulnerability set.
 - [`security-issue-deduplicate`](../../skills/security-issue-deduplicate/SKILL.md) — alias resolution (CVE ↔ GHSA) before merging duplicate trackers.
@@ -169,10 +171,11 @@ The following strict confidentiality rules apply per [`AGENTS.md`](../../AGENTS.
 
 ## Per-project configuration
 
-Adopters configure cross-referencing in `<project-config>/project.md`:
+Adopters configure cross-referencing in `<project-config>/project.md`
+(see [`projects/_template/project.md#security-cross-reference`](../../projects/_template/project.md#security-cross-reference)):
 
 ```yaml
 security_cross_ref:
   tool: osv
-  ecosystem: PyPI  # Default ecosystem for package queries (e.g. Maven, PyPI, npm)
+  ecosystem: PyPI  # Default ecosystem for package queries (e.g. Maven, PyPI, npm, Go, crates.io)
 ```
