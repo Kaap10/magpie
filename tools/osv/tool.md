@@ -7,6 +7,7 @@
 
 - [Tool: OSV.dev](#tool-osvdev)
   - [What this tool provides](#what-this-tool-provides)
+    - [Consuming skills](#consuming-skills)
   - [URLs and Endpoints](#urls-and-endpoints)
   - [Operations](#operations)
     - [1. Retrieve record and aliases by Vulnerability ID — `get-vuln`](#1-retrieve-record-and-aliases-by-vulnerability-id--get-vuln)
@@ -149,7 +150,7 @@ curl -sSf -X POST https://api.osv.dev/v1/querybatch \
 
 OSV.dev is a **public, external third-party service**. Queries sent to `api.osv.dev` are received by external infrastructure and can be logged.
 
-The following strict confidentiality rules apply per [`AGENTS.md`](../../AGENTS.md) and [`PRINCIPLES.md §3`](../../PRINCIPLES.md#3-confidentiality-is-architectural-not-best-effort):
+The following strict confidentiality rules apply per [`AGENTS.md`](../../AGENTS.md) and [`PRINCIPLES.md §15`](../../PRINCIPLES.md#15-tracker-identifiers-are-public-safe-tracker-contents-are-not):
 
 - **Safe to query:**
   - Public upstream release package names and version numbers (e.g. released dependencies).
