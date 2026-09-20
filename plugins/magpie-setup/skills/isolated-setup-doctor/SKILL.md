@@ -9,8 +9,8 @@ description: |
   restrictions that block legitimate workflows in Claude Code,
   Codex, or Gemini CLI. Runtime-specific diagnostics; Claude has six live
   probes — SSH agent / Yubikey reachability, localhost port
-  binding, docker / podman runtime socket, per-project scratch
-  directory, the ssh signing key's readability, and `gh` running
+  binding, podman / docker through the container gateway,
+  per-project scratch directory, the ssh signing key's readability, and `gh` running
   outside the sandbox — each pointing the
   user at the matching numbered troubleshooting entry and its
   settings.json remediation (see body). Read-only — never
@@ -69,9 +69,9 @@ the existing setup skills:
   surfaces drift against the framework's latest.
 - **`setup-isolated-setup-doctor` (this skill)** answers *"are
   common workflows **functionally** blocked by the current
-  sandbox?"* — live probes of SSH agent, port binding, docker /
-  podman socket, per-project scratch dir. Catches
-  over-restrictive allowlists.
+  sandbox?"* — live probes of SSH agent, port binding, podman /
+  docker through the container gateway, per-project scratch dir.
+  Catches over-restrictive allowlists.
 
 Run `verify` first when the install is in question (fresh
 machine, recent framework upgrade, sandbox-state surprise). Run
@@ -217,42 +217,150 @@ PY
 **On ✗ → remediation:**
 [`docs/setup/sandbox-troubleshooting.md` — Test cannot bind to a localhost port](../../../../docs/setup/sandbox-troubleshooting.md#test-cannot-bind-to-a-localhost-port).
 
-### Probe 3 — Docker / Podman runtime socket
+### Probe 3 — Podman / Docker through the container gateway
 
-Tests whether the runtime CLI can talk to its daemon. Run for
-each of `docker` / `podman` that is on `PATH`; ⊘ each that is
-not installed (this is not a sandbox failure, just an absent
-prerequisite).
+Tests whether the runtime CLI can talk to the [container
+gateway](../../../../tools/container-gateway/README.md), not the
+real daemon socket — the sandbox never gets a route to the daemon
+itself. Run for each of `podman` / `docker` that is on `PATH`; ⊘
+each that is not installed (this is not a sandbox failure, just an
+absent prerequisite). Each remaining check narrows down which of
+the three wiring pieces (env var, running gateway, allowed socket)
+is missing, in the order a fresh install would hit them.
 
 **Command:**
 
 ```bash
-for rt in docker podman; do
+# Two candidates, not the hook's three-way order (which also checks
+# $MAGPIE_CONTAINER_GATEWAY_SRC and $HOME/.claude/scripts/container-gateway/src
+# for an operator install): this probe only ever needs to run the read-only
+# `status` subcommand against a source already reachable from this doctor
+# session, so it deliberately omits the operator-install path rather than
+# widen what the probe depends on being readable.
+gw_src=".apache-magpie/tools/container-gateway/src"
+[ -d "$gw_src/container_gateway" ] || gw_src="tools/container-gateway/src"
+status_json=$(PYTHONPATH="$gw_src" python3 -m container_gateway status --project "$PWD" 2>/dev/null)
+
+gw_state() {  # $1=backend -> serving | not-serving | not-running
+  printf '%s' "$status_json" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('not-running'); sys.exit()
+if not d.get('running'):
+    print('not-running')
+elif '$1' in d.get('serving', []):
+    print('serving')
+else:
+    print('not-serving')
+" 2>/dev/null
+}
+
+_probe_timeout() {  # seconds cmd...; portable across GNU timeout, macOS Homebrew's gtimeout, or neither
+  local secs="$1"
+  shift
+  if command -v timeout > /dev/null 2>&1; then
+    timeout "$secs" "$@"
+  elif command -v gtimeout > /dev/null 2>&1; then
+    gtimeout "$secs" "$@"
+  else
+    "$@" &
+    local cmd_pid=$!
+    (sleep "$secs" && kill "$cmd_pid" 2> /dev/null) &
+    local watchdog_pid=$!
+    wait "$cmd_pid" 2> /dev/null
+    local rc=$?
+    kill "$watchdog_pid" 2> /dev/null
+    wait "$watchdog_pid" 2> /dev/null
+    return "$rc"
+  fi
+}
+
+for rt in podman docker; do
   if ! command -v "$rt" > /dev/null 2>&1; then
     echo "PROBE: ${rt}-runtime → ⊘ ($rt not on PATH)"
     continue
   fi
-  out=$("$rt" info > /dev/null 2>&1 && echo ok || echo "fail:$?")
-  case "$out" in
-    ok)
-      echo "PROBE: ${rt}-runtime → ✓ (${rt} info returned)" ;;
-    fail:*)
-      err=$("$rt" info 2>&1 >/dev/null | head -2 | tr '\n' ' ')
-      echo "PROBE: ${rt}-runtime → ✗ ($out: $err)"
-      ;;
+  case "$rt" in podman) url="${CONTAINER_HOST:-}";; docker) url="${DOCKER_HOST:-}";; esac
+  if [ -z "$url" ]; then
+    echo "PROBE: ${rt}-runtime → ✗ ($( [ "$rt" = podman ] && echo CONTAINER_HOST || echo DOCKER_HOST ) unset — gateway not wired into settings)"
+    continue
+  fi
+  sock="${url#unix://}"
+  case "$(gw_state "$rt")" in
+    not-running)
+      echo "PROBE: ${rt}-runtime → ✗ (gateway socket missing at $sock — container gateway not running)"
+      continue ;;
+    not-serving)
+      case "$rt" in
+        podman) hint="is the Podman machine started" ;;
+        docker) hint="is Docker Desktop (or the docker daemon) started" ;;
+      esac
+      echo "PROBE: ${rt}-runtime → ✗ (gateway running without a $rt backend — $hint? start it, then restart the gateway)"
+      continue ;;
   esac
+  if [ ! -S "$sock" ]; then
+    echo "PROBE: ${rt}-runtime → ✗ (gateway socket missing at $sock — container gateway not running)"
+    continue
+  fi
+  if _probe_timeout 15 "$rt" info > /dev/null 2>"${TMPDIR:-/tmp}/$rt-probe.err"; then
+    echo "PROBE: ${rt}-runtime → ✓ ($rt reaches the container gateway at $sock)"
+  else
+    rc=$?
+    err=$(head -1 "${TMPDIR:-/tmp}/$rt-probe.err")
+    case "$rc" in
+      137|143)
+        # The shell-fallback branch of _probe_timeout kills the child with
+        # SIGTERM (rc 143) or, if it does not respond, SIGKILL (rc 137);
+        # `$err` is typically empty in this case, so name the hang instead
+        # of falling through to an uninformative "rc=143: ".
+        echo "PROBE: ${rt}-runtime → ✗ (no response in 15s — $rt info hung; is the backend daemon stuck?)" ;;
+      *)
+        case "$err" in
+          *"operation not permitted"*|*"Operation not permitted"*)
+            echo "PROBE: ${rt}-runtime → ✗ (connect to $sock denied — add it to sandbox.network.allowUnixSockets)" ;;
+          *"502"*|*"unreachable"*)
+            echo "PROBE: ${rt}-runtime → ✗ (gateway up, backend down: $err)" ;;
+          *) echo "PROBE: ${rt}-runtime → ✗ (rc=$rc: $err)" ;;
+        esac ;;
+    esac
+  fi
 done
 ```
+
+`status_json` comes from the gateway's own read-only `status`
+subcommand — the doctor may call it from inside the sandbox,
+since it neither binds a socket nor touches the daemon. `gw_src`
+picks the adopter's pinned snapshot
+(`.apache-magpie/tools/container-gateway/src`) when present, else
+the framework repo's own tree (`tools/container-gateway/src`), so
+the same probe runs in both an adopter checkout and this
+framework's own worktree. The `gw_state` check runs **before** the
+raw socket-file test: a backend `status` does not list under
+`serving` never gets a socket file in the first place, so testing
+`-S "$sock"` first would misreport "gateway not running" for the
+"running, but this backend's machine/daemon is down" case — the
+`-S` test below is a defensive fallback for an already-serving
+backend whose socket vanished mid-probe, not the primary check.
 
 **Interpretation:**
 
 | Result | Status | Meaning |
 |---|---|---|
-| `✓ <rt> info returned` | Pass | The CLI reached the daemon successfully. |
-| `✗ fail:1: Cannot connect to the Docker daemon …` | Fail | Daemon socket not readable from inside the sandbox. |
-| `✗ fail:1: connect: permission denied` | Fail | Same root cause, different stderr (Linux variant). |
-| `✗ fail:125: … podman.sock: connect: no such file or directory` | Warn | Podman on macOS with no machine created (`podman machine list` is empty). Not a sandbox restriction — report it as ⚠, and check `podman system connection list` for the separate `~/.config/containers/podman-connections.json` read denial the catalog's Podman note covers. |
+| `✓ <rt> reaches the container gateway at <sock>` | Pass | CLI → gateway → daemon all answer. |
+| `✗ … unset — gateway not wired into settings` | Fail | The reference `env` block is missing from project settings. |
+| `✗ gateway socket missing` | Fail | The `SessionStart` hook did not start the gateway, or it exited; check `<project>/.apache-magpie-local/run/container-gateway.log`. |
+| `✗ gateway running without a <rt> backend` | Fail | `status` reports the gateway up but `serving` does not list this CLI's backend — the Podman machine or Docker daemon behind it is not running. Start it from outside the sandbox, then restart the gateway. |
+| `✗ connect … denied` | Fail | The gateway socket is not in `sandbox.network.allowUnixSockets`. |
+| `✗ gateway up, backend down` | Fail | Podman machine / Docker not running on the host; start it from your own terminal. |
+| `✗ no response in 15s — <rt> info hung` | Fail | `_probe_timeout` killed a stalled `<rt> info` call; the backend daemon behind the gateway is likely wedged — restart it from outside the sandbox. |
 | `⊘ <rt> not on PATH` | Skip | Runtime not installed; not a sandbox restriction. |
+
+An empty `podman machine list` from inside the sandbox is a read
+denial on the machine's directory, not proof that no machine
+exists — decide the machine's real state from outside the sandbox,
+per the catalog entry below.
 
 **On ✗ → remediation:**
 [`docs/setup/sandbox-troubleshooting.md` — Docker / Podman command fails with a socket error](../../../../docs/setup/sandbox-troubleshooting.md#docker--podman-command-fails-with-a-socket-error).
