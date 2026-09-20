@@ -90,6 +90,10 @@ CONTRACT_POLICY: dict[str, tuple[str, str]] = {
     "contract:report-relay": (AGNOSTIC, "Inbound security-report relay detection"),
     "contract:scan-format": (AGNOSTIC, "Security-scanner report parsing"),
     "contract:project-metadata": (SINGLE_ORG, "Governance rosters / people / releases"),
+    "contract:security-cross-ref": (
+        VENDOR_BACKED,
+        "Vulnerability database / cross-reference alias lookup (OSV.dev / NVD)",
+    ),
 }
 
 # Which capability *contract* a skill actually invokes, keyed by

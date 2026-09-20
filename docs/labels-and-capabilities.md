@@ -139,6 +139,7 @@ framework substrate:
 | `contract:report-relay` | contract | Inbound security-report relay detection. |
 | `contract:scan-format` | contract | Security-scanner report parsing. |
 | `contract:project-metadata` | contract | Governance rosters / people / releases. |
+| `contract:security-cross-ref` | contract | Vulnerability database / cross-reference alias lookup (OSV.dev / NVD). |
 | `substrate:analytics` | substrate | Read-only metrics / dashboards / renderers. |
 | `substrate:sandbox` | substrate | Agent isolation, egress control, settings audit. |
 | `substrate:action-guard` | substrate | Deterministic pre-tool-use command guards. |
@@ -321,6 +322,7 @@ or a contract-free mix of substrates (e.g. `tools/spec-inventory` is
 | [`tools/mail-patch`](../tools/mail-patch/) | `contract:change-request` | `[PATCH]`-mail change-request backend: a `[PATCH]` thread on `dev@` as the proposal, reviewed via drafted replies (`contract:mail-create`), read via `contract:mail-archive`, landed via `contract:source-control` (`svn patch` + `svn commit`). Implements the `tools/change-request/` contract |
 | [`tools/mail-source`](../tools/mail-source/) | `contract:mail-source` | Mail-source backend abstraction (mbox / IMAP / Mailman 3) feeding a uniform inbound thread/message view to the intake pipeline |
 | [`tools/maildir`](../tools/maildir/) | `contract:mail-source` + `contract:mail-create` | Local **Maildir** backend (Vendor: Maildir) — the offline, credential-free counterpart of `tools/gmail`. Implements `mail-create` by filing editable outbound drafts into a local Maildir for any mail client to send (never sends itself); its `mail-source` side is the local mbox/Maildir archive reader (`tools/mail-source/mbox`). The second, non-Google `mail-create` backend — closes the outbound-mail vendor-neutrality gap |
+| [`tools/osv`](../tools/osv/) | `contract:security-cross-ref` | OSV.dev vulnerability cross-reference client (Vendor: OSV.dev): queries vulnerability records, alias cross-references (CVE ↔ GHSA ↔ OSV IDs), affected package versions, and commit fix references via OSV.dev REST API v1 |
 | [`tools/ponymail`](../tools/ponymail/) | `contract:mail-archive` + `contract:mail-source` | PonyMail public mail-archive substrate (ASF `lists.apache.org`); implements the `tools/mail-archive/` contract for archive reads and the `tools/mail-source/` contract for inbound list-traffic ingestion |
 | [`tools/scan-format`](../tools/scan-format/) | `contract:scan-format` | Adapter contract for security-scanner report formats (ASVS reference); reads a scan's finding index + per-finding evidence for the `security-issue-import-from-scan` pipeline. |
 | [`tools/permission-audit`](../tools/permission-audit/) | `substrate:sandbox` | Audit + atomically edit Claude Code `permissions.allow[]` entries; backs `/magpie-setup verify --apply-permission-audit` (check 8d) |
