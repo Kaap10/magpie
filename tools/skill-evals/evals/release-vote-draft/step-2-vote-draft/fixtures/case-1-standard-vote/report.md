@@ -15,3 +15,10 @@ subject_template: "[VOTE] Release Apache Airflow <version> from <version>-<rcN>"
 canned_body: none
 expedited: false
 skip_verify_logged: false
+repro_record: commit 1890a13d2c4e6f8a0b1c2d3e4f5a6b7c8d9e0f12, SOURCE_DATE_EPOCH 1758326400, sha512 3f2a9c…e1 (apache_airflow-2.11.0.tar.gz)
+verification_doc_url: https://github.com/apache/airflow/blob/2.11.0-rc1/docs/verifying-a-release-candidate.md
+reproducibility_doc_url: https://github.com/apache/magpie/blob/main/docs/release-management/reproducibility.md
+verification_skill: magpie-release-management:verify-rc
+vote_backend: manual
+signing_mode: rm-key
+repro_record (cont.): repository https://github.com/apache/airflow; swhid_dir swh:1:dir:3b9f0c2e7a1d4f6b8e0a2c4d6f8a0b2c4e6f8a1b;origin=https://github.com/apache/airflow;anchor=swh:1:rev:1890a13d2c4e6f8a0b1c2d3e4f5a6b7c8d9e0f12

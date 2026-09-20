@@ -111,9 +111,53 @@ code lands.
   vs non-binding against the PMC roster and refuses to count ambiguous
   votes, flagging `AMBIGUOUS, needs RM call` rather than guessing.
 - **Read-only verification.** `release-verify-rc` (signatures, checksums,
-  RAT license headers, NOTICE/LICENSE, prohibited binaries, version
-  consistency) and `release-audit-report` make no state change; voters can
-  run verification in their own dev loop before posting `+1`.
+  RAT license headers, NOTICE/LICENSE, prohibited binaries, source-tree
+  integrity, version consistency, and the optional reproducibility step)
+  and `release-audit-report` make no state change; voters can run
+  verification in their own dev loop before posting `+1`.
+- **The source artefact is a reproducible export of the tag.** With
+  `release-build.md § Source archive` at its default
+  (`source_archive_method: git-archive`), `release-rc-cut` emits
+  `repro-archive build` (`tools/reproducible-archive`): `git archive` at the
+  tag, honouring `.gitattributes` `export-ignore`, with every
+  reproducible-builds.org archive rule applied (single `SOURCE_DATE_EPOCH`
+  mtime, sorted members, uid/gid 0, `a=rX,u+w`, no PAX `atime`/`ctime`,
+  `gzip -n`, `zip -X`), so the bytes are a function of the tag alone.
+  Never an archive of a working tree.
+- **First-release `.gitattributes` review is an education step.**
+  `release-prepare prep` Step 2e classifies every top-level path, checks
+  references before proposing an exclusion, confirms each entry with the
+  RM, lands `.gitattributes` in the prep PR and records
+  `export_ignore_reviewed`; `release-rc-cut` blocks while the review is
+  outstanding (`--allow-unreviewed-archive` is the logged override).
+- **Reproducibility checks are optional, and mandatory under automated
+  signing.** `release-build.md § Reproducibility checks` enables the
+  source rebuild-and-compare (`identical` / `content-identical` /
+  `differs`) and the per-artefact convenience rebuild (`byte-identical` or
+  `documented-divergence`) in `release-rc-cut` Step 2b and
+  `release-verify-rc` Step 9.
+- **Convenience artefacts are project-specific and config-declared.** The
+  framework assumes none; `release-build.md § Convenience artefacts` lists
+  each one with its own `build_command`, `staging` / `stage_command`,
+  `reproducibility` mode, `vote_included` flag and `publish_channel` /
+  `publish_command`. `release-rc-cut` builds and stages them under the
+  tag's `SOURCE_DATE_EPOCH`, `release-verify-rc` rebuilds and compares
+  them (the check that decides whether a binary is good, since it cannot
+  be reviewed), `release-vote-draft` lists them, `release-promote`
+  publishes only those that reproduced and emits a HOLD for the rest, and
+  `release-announce-draft` names their channels. `release-verify-rc` Step 7
+  runs the project's own `source_tree_validators`, none assumed.
+- **🪶 ASF-specific automated release signing.** Offered only under
+  `organization: ASF` (`release_process.automated_signing` in the ASF
+  organization manifest; `null` elsewhere). `release-prepare
+  automated-signing` drafts — never files or sends — the Infra key-request
+  ticket, the Security Team notification and the workflow PR
+  (`projects/_template/workflows/release-candidate.yml`, no key material).
+  With `automated_release_signing: enabled`, `release-rc-cut` emits the
+  RM-signed tag push instead of local sign/stage, `release-verify-rc` Step 9
+  is mandatory at a byte-identical bar and carries the committer's
+  `--trusted-hardware` attestation, and `release-promote` blocks without
+  that attestation on the planning issue. The agent still holds no key.
 - **Promotion gated on health evidence, not throughput.** Moving any
   release-* skill from `experimental` to default-on, or from Agentic Drafting to a
   state-changing lane, requires evidence from Release Managers and binding

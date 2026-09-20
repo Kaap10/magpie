@@ -84,7 +84,7 @@ history separately provides its publication revision and date.
 
 <!-- BEGIN GENERATED SKILL TOKEN COUNTS -->
 
-Measured on (UTC): 2026-09-19.
+Measured on (UTC): 2026-09-20.
 
 Tokenizer: **tiktoken 0.14.0, `cl100k_base`**. Method: full UTF-8 file,
 including frontmatter and comments; line endings normalized to LF;
@@ -92,7 +92,7 @@ special-token spellings counted as ordinary text.
 Coverage: **75 of 75 local `skills/*/SKILL.md` files**.
 External `source.md` redirects and harness symlinks are excluded.
 
-Measurement manifest SHA-256: `316bec2ddc04557527ec9ab4010987220709ccced9df8acc2f3e7a27dcaf439d`.
+Measurement manifest SHA-256: `0ef06f4874382739a4738d35ec92e689f0483db6e99292c4accc72836d0619ad`.
 
 | Skill file | Measured tokens | Source SHA-256 (first 16 characters) |
 |---|---:|---|
@@ -131,15 +131,15 @@ Measurement manifest SHA-256: `316bec2ddc04557527ec9ab4010987220709ccced9df8acc2
 | [pr-management-triage](../skills/pr-management-triage/SKILL.md) | 12,685 | `bdd0cae06e589165` |
 | [pr-stale-sweep](../skills/pr-stale-sweep/SKILL.md) | 7,804 | `c63539a5c0662d52` |
 | [pre-first-pr-check](../skills/pre-first-pr-check/SKILL.md) | 4,525 | `1a901a80838e83b0` |
-| [release-announce-draft](../skills/release-announce-draft/SKILL.md) | 6,991 | `7fd2b0720eaae5ca` |
+| [release-announce-draft](../skills/release-announce-draft/SKILL.md) | 7,053 | `dfd3058bc1b8034f` |
 | [release-archive-sweep](../skills/release-archive-sweep/SKILL.md) | 5,604 | `6e30100ea5a633dd` |
 | [release-audit-report](../skills/release-audit-report/SKILL.md) | 6,774 | `ce849ac8e2a217d1` |
 | [release-keys-sync](../skills/release-keys-sync/SKILL.md) | 5,945 | `3c11551de0e1e5f9` |
-| [release-prepare](../skills/release-prepare/SKILL.md) | 7,960 | `5b76de4222c13166` |
-| [release-promote](../skills/release-promote/SKILL.md) | 7,174 | `6f6bff9d291fab91` |
-| [release-rc-cut](../skills/release-rc-cut/SKILL.md) | 7,614 | `e557be43124d9c5b` |
-| [release-verify-rc](../skills/release-verify-rc/SKILL.md) | 8,777 | `1561f8f82f15a5eb` |
-| [release-vote-draft](../skills/release-vote-draft/SKILL.md) | 6,327 | `73c6490d4351da9e` |
+| [release-prepare](../skills/release-prepare/SKILL.md) | 11,986 | `78f302ca28e1aa40` |
+| [release-promote](../skills/release-promote/SKILL.md) | 8,044 | `c17053e63005b55b` |
+| [release-rc-cut](../skills/release-rc-cut/SKILL.md) | 12,942 | `25d4f5d7b6d5a1ab` |
+| [release-verify-rc](../skills/release-verify-rc/SKILL.md) | 11,881 | `07eb370e2462f1b5` |
+| [release-vote-draft](../skills/release-vote-draft/SKILL.md) | 7,821 | `d0bc0fd3c11914a9` |
 | [release-vote-tally](../skills/release-vote-tally/SKILL.md) | 6,696 | `c848e809e2d877cd` |
 | [report-framework-issue](../skills/report-framework-issue/SKILL.md) | 5,703 | `30b2ce8b774ea68c` |
 | [reviewer-routing](../skills/reviewer-routing/SKILL.md) | 6,272 | `dcd75b720d42af34` |
