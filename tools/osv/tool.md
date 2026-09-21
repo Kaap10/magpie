@@ -131,7 +131,7 @@ curl -sSf -X POST https://api.osv.dev/v1/querybatch \
       {"package": {"name": "urllib3", "ecosystem": "PyPI"}, "version": "1.26.4"}
     ]
   }' \
-  | jq -r '.results[] | {vuln_count: (.vulns | length // 0)}'
+  | jq -r '.results | to_entries[] | {query: .key, vuln_count: ((.value.vulns // []) | length)}'
 ```
 
 ## Confidentiality and Embargo Boundaries
