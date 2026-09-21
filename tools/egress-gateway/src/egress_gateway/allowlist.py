@@ -46,6 +46,9 @@ ALLOW_EXACT: frozenset[str] = frozenset(
         "cve.org",
         "www.cve.org",
         "cveawg.mitre.org",
+        # OSV.dev REST API (tools/osv). The osv.dev web UI is a browser
+        # destination, not a tool egress, so it is deliberately not listed.
+        "api.osv.dev",
         "issues.apache.org",
     }
 )

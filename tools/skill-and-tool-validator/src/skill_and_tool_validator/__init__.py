@@ -380,6 +380,7 @@ TOOL_CAPABILITIES = {
     "contract:report-relay",
     "contract:scan-format",
     "contract:project-metadata",
+    "contract:security-cross-ref",
     "substrate:analytics",
     "substrate:sandbox",
     "substrate:action-guard",

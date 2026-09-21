@@ -138,6 +138,7 @@ The declared egress surfaces as of this writing:
 | `gmail` | `contract:mail-source + contract:mail-create + contract:mail-archive` | Gmail API |
 | `jira`, `jira-patch` | `contract:tracker` / `contract:change-request` | Jira REST API |
 | `maildir`, `mail-source`, `mail-archive`, `mail-patch` | `contract:mail-*` | local maildir / IMAP |
+| `osv` | `contract:security-cross-ref` | OSV.dev REST API |
 | `ponymail` | `contract:mail-archive + contract:mail-source` | PonyMail REST API |
 | `sourcehut` | `contract:tracker + contract:source-control + contract:mail-archive` | sourcehut API |
 | `vcs` | `contract:source-control` | generic VCS host |

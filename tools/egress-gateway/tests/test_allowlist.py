@@ -41,6 +41,7 @@ from egress_gateway.allowlist import _parse_extra, host_allowed
         "files.pythonhosted.org",
         "nvd.nist.gov",
         "cveawg.mitre.org",
+        "api.osv.dev",
     ],
 )
 def test_allowed_hosts(host: str) -> None:
