@@ -20,37 +20,22 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-<!-- SPDX-License-Identifier: Apache-2.0
-     https://www.apache.org/licenses/LICENSE-2.0 -->
-
 # Tool: OSV.dev
 
 This directory documents the **OSV.dev** tool adapter (`contract:security-cross-ref`).
-[OSV.dev](https://osv.dev) is an open, distributed vulnerability database aggregator
-maintained by the Open Source Security Foundation (OpenSSF) and Google. It provides an
-Open Source Vulnerability (OSV) format schema mapping cross-ecosystem vulnerability
-identifiers across CVE, GitHub Security Advisories (GHSA), PyPI (PYSEC), RustSec,
-Go vulnerability database (GO), Debian, and Linux kernel advisories.
+[OSV.dev](https://osv.dev) is an open, distributed vulnerability database aggregator maintained by the Open Source Security Foundation (OpenSSF) and Google.
+It provides an Open Source Vulnerability (OSV) format schema mapping cross-ecosystem vulnerability identifiers across CVE, GitHub Security Advisories (GHSA), PyPI (PYSEC), RustSec, Go vulnerability database (GO), Debian, and Linux kernel advisories.
 
-This tool complements the existing [`tools/cve-org/`](../cve-org/) and
-[`tools/cve-tool-vulnogram/`](../cve-tool-vulnogram/) adapters by providing OSV's
-per-ecosystem vulnerability records and machine-readable alias graph.
+This tool complements the existing [`tools/cve-org/`](../cve-org/) and [`tools/cve-tool-vulnogram/`](../cve-tool-vulnogram/) adapters by providing OSV's per-ecosystem vulnerability records and machine-readable alias graph.
 
 ## What this tool provides
 
 Four primary operations:
 
-1. **Vulnerability ID & Alias Cross-Walk (`get-vuln` / `aliases`)**: Given an advisory identifier
-   (`GHSA-...`, `CVE-...`, `PYSEC-...`, `RUSTSEC-...`), fetch the complete OSV record,
-   summary, CVSS severity, affected package version ranges, and alias cross-references
-   (mapping CVE ↔ GHSA ↔ OSV IDs).
-2. **Package Version Query (`query-package`)**: Given a package name and ecosystem
-   (e.g., `PyPI`, `Maven`, `npm`, `Go`, `crates.io`, `NuGet`, `RubyGems`, `Packagist`),
-   retrieve all published advisories affecting that specific version.
-3. **Commit Query (`query-commit`)**: Given a public upstream Git commit hash, find any
-   published vulnerabilities associated with or resolved by that commit.
-4. **Batch Query (`query-batch`)**: Query multiple package versions or commit hashes in a
-   single HTTP request.
+1. **Vulnerability ID & Alias Cross-Walk (`get-vuln` / `aliases`)**: Given an advisory identifier (`GHSA-...`, `CVE-...`, `PYSEC-...`, `RUSTSEC-...`), fetch the complete OSV record, summary, CVSS severity, affected package version ranges, and alias cross-references (mapping CVE ↔ GHSA ↔ OSV IDs).
+2. **Package Version Query (`query-package`)**: Given a package name and ecosystem (e.g., `PyPI`, `Maven`, `npm`, `Go`, `crates.io`, `NuGet`, `RubyGems`, `Packagist`), retrieve all published advisories affecting that specific version.
+3. **Commit Query (`query-commit`)**: Given a public upstream Git commit hash, find any published vulnerabilities associated with or resolved by that commit.
+4. **Batch Query (`query-batch`)**: Query multiple package versions or commit hashes in a single HTTP request.
 
 ### Consuming skills (intended roadmap — not yet wired)
 
@@ -72,7 +57,8 @@ These skills represent intended consumers for this cross-reference adapter once 
 
 ## Operations
 
-All operations are read-only HTTP REST requests. No authentication headers or API keys are required.
+All operations are read-only HTTP REST requests.
+No authentication headers or API keys are required.
 
 ### 1. Retrieve record and aliases by Vulnerability ID — `get-vuln`
 
@@ -150,7 +136,8 @@ curl -sSf -X POST https://api.osv.dev/v1/querybatch \
 
 ## Confidentiality and Embargo Boundaries
 
-OSV.dev is a **public, external third-party service**. Queries sent to `api.osv.dev` are received by external infrastructure and can be logged.
+OSV.dev is a **public, external third-party service**.
+Queries sent to `api.osv.dev` are received by external infrastructure and can be logged.
 
 The following strict confidentiality rules apply per [`AGENTS.md`](../../AGENTS.md) and [`PRINCIPLES.md §15`](../../PRINCIPLES.md#15-tracker-identifiers-are-public-safe-tracker-contents-are-not):
 
@@ -165,9 +152,9 @@ The following strict confidentiality rules apply per [`AGENTS.md`](../../AGENTS.
 
 ## When to replace this tool with another
 
-- **`tools/cve-org/`**: Use `cve-org` for verifying authoritative CVE publication status against MITRE/CVE Services. OSV aggregates CVE data, but `cve-org` remains the primary source of truth for CVE Services container states (`RESERVED`, `PUBLISHED`, `REJECTED`).
+- **`tools/cve-org/`**: Use `cve-org` for verifying authoritative CVE publication status against MITRE/CVE Services.
+  OSV aggregates CVE data, but `cve-org` remains the primary source of truth for CVE Services container states (`RESERVED`, `PUBLISHED`, `REJECTED`).
 - **`tools/cve-tool-vulnogram/`**: Use `cve-tool-vulnogram` for allocating CVE IDs and editing draft records within the ASF CNA infrastructure.
-- **NVD Direct**: If CVSS severity enrichment from NIST NVD is required directly without ecosystem mapping, an NVD direct adapter can be used.
 
 ## Per-project configuration
 

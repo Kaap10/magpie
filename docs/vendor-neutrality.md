@@ -168,7 +168,8 @@ with pluggable backends already include:
 The security-team surface follows the same pattern: CNA backends live
 behind [`tools/cve-tool`](../tools/cve-tool/) (the ASF Vulnogram adapter
 [`tools/cve-tool-vulnogram`](../tools/cve-tool-vulnogram/) is the landed
-reference), inbound report relays behind [`tools/forwarder-relay`](../tools/forwarder-relay/), scanner formats
+reference), inbound report relays behind
+[`tools/forwarder-relay`](../tools/forwarder-relay/), scanner formats
 behind [`tools/scan-format`](../tools/scan-format/), and an OSV.dev
 vulnerability cross-reference client [`tools/osv`](../tools/osv/)
 implements the `contract:security-cross-ref` capability.
