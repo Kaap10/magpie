@@ -72,7 +72,7 @@ curl -sSf https://api.osv.dev/v1/vulns/<ID>
 Extracting alias identifiers (e.g., resolving a GHSA ID to corresponding CVE IDs):
 
 ```bash
-curl -sSf https://api.osv.dev/v1/vulns/GHSA-7rjr-3q55-vv33 \
+vetted-op-read --caller security-issue-triage osv-get-vuln GHSA-7rjr-3q55-vv33 \
   | jq -r '{id: .id, aliases: .aliases, summary: .summary}'
 ```
 
@@ -90,7 +90,7 @@ Example JSON response:
 Extracting affected version ranges and fixed versions:
 
 ```bash
-curl -sSf https://api.osv.dev/v1/vulns/<ID> \
+vetted-op-read --caller security-issue-triage osv-get-vuln <ID> \
   | jq -r '.affected[] | {package: .package.name, ecosystem: .package.ecosystem, fixed: [.ranges[].events[] | select(.fixed != null) | .fixed]}'
 ```
 
@@ -99,9 +99,7 @@ curl -sSf https://api.osv.dev/v1/vulns/<ID> \
 Check if a given package release is subject to any known advisories:
 
 ```bash
-curl -sSf -X POST https://api.osv.dev/v1/query \
-  -H "Content-Type: application/json" \
-  -d '{"package": {"name": "jinja2", "ecosystem": "PyPI"}, "version": "2.11.2"}' \
+vetted-op-read --caller security-issue-triage osv-query-package jinja2 PyPI 2.11.2 \
   | jq -r '.vulns[]? | {id: .id, aliases: .aliases, summary: .summary}'
 ```
 
@@ -112,9 +110,7 @@ Common ecosystems: `PyPI`, `Maven`, `npm`, `crates.io`, `Go`, `Packagist`, `NuGe
 Check if a public upstream commit SHA is indexed in OSV as a fix or vulnerability reference:
 
 ```bash
-curl -sSf -X POST https://api.osv.dev/v1/query \
-  -H "Content-Type: application/json" \
-  -d '{"commit": "<COMMIT_HASH>"}' \
+vetted-op-read --caller dependency-audit osv-query-commit <COMMIT_HASH> \
   | jq -r '.vulns[]? | {id: .id, aliases: .aliases, summary: .summary}'
 ```
 
@@ -123,14 +119,7 @@ curl -sSf -X POST https://api.osv.dev/v1/query \
 Evaluate multiple dependencies in a single round-trip:
 
 ```bash
-curl -sSf -X POST https://api.osv.dev/v1/querybatch \
-  -H "Content-Type: application/json" \
-  -d '{
-    "queries": [
-      {"package": {"name": "jinja2", "ecosystem": "PyPI"}, "version": "2.11.2"},
-      {"package": {"name": "urllib3", "ecosystem": "PyPI"}, "version": "1.26.4"}
-    ]
-  }' \
+vetted-op-read --caller dependency-audit osv-query-batch /tmp/agent-scratch/batch.json \
   | jq -r '.results | to_entries[] | {query: .key, vuln_count: ((.value.vulns // []) | length)}'
 ```
 
