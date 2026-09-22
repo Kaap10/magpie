@@ -17,6 +17,8 @@
 # under the License.
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 
 import pytest
@@ -38,6 +40,7 @@ issue_states = ["open", "closed", "all"]
 pr_states = ["open", "closed", "merged", "all"]
 upstream_labels = ["ready for maintainer review", "area:scheduler"]
 close_reasons = ["completed", "not planned"]
+ecosystems = ["PyPI", "Maven", "npm"]
 board_project_id = "PVT_proj"
 board_status_field_id = "PVTSSF_field"
 
@@ -45,8 +48,9 @@ board_status_field_id = "PVTSSF_field"
 "Assessed" = "opt_assessed"
 
 [callers]
-"security-issue-sync" = ["issue-view", "issue-add-label", "issue-comment", "issue-close"]
-"security-issue-triage" = ["issue-view"]
+"security-issue-sync" = ["issue-view", "issue-add-label", "issue-comment", "issue-close", "cve-check-published"]
+"security-issue-triage" = ["issue-view", "osv-get-vuln", "osv-query-package", "cve-check-published"]
+"dependency-audit" = ["osv-query-package", "osv-query-commit", "osv-query-batch"]
 """
 
 
@@ -151,6 +155,233 @@ def test_every_builder_produces_a_gh_argv(policy: config.Config) -> None:
         elif op.backend == "http-read":
             assert isinstance(result, dict)
             assert isinstance(result.get("url"), str), op.name
+
+
+def test_every_http_operation_is_read_only() -> None:
+    """HTTP operations are unprivileged reads by construction."""
+    for op in ops.OPS.values():
+        if op.backend == "http-read":
+            assert not op.writes, f"{op.name} has backend='http-read' but writes=True"
+
+
+def test_osv_get_vuln_builder(policy: config.Config) -> None:
+    op = ops.resolve("osv-get-vuln")
+    params, _ = cli._validate_params(op, ["GHSA-7rjr-3q55-vv33"], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "GET"
+    assert req["url"] == "https://api.osv.dev/v1/vulns/GHSA-7rjr-3q55-vv33"
+
+
+def test_osv_query_package_builder(policy: config.Config) -> None:
+    op = ops.resolve("osv-query-package")
+    params, _ = cli._validate_params(op, ["jinja2", "PyPI", "2.11.2"], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "POST"
+    assert req["url"] == "https://api.osv.dev/v1/query"
+    assert req["headers"] == {"Content-Type": "application/json"}
+    body_data = json.loads(str(req["body"]))
+    assert body_data == {
+        "package": {"name": "jinja2", "ecosystem": "PyPI"},
+        "version": "2.11.2",
+    }
+
+
+def test_osv_query_commit_builder(policy: config.Config) -> None:
+    op = ops.resolve("osv-query-commit")
+    params, _ = cli._validate_params(op, ["a1b2c3d4e5f67890"], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "POST"
+    assert req["url"] == "https://api.osv.dev/v1/query"
+    assert req["headers"] == {"Content-Type": "application/json"}
+    body_data = json.loads(str(req["body"]))
+    assert body_data == {"commit": "a1b2c3d4e5f67890"}
+
+
+def test_osv_query_batch_builder(policy: config.Config, monkeypatch: pytest.MonkeyPatch) -> None:
+    body = policy.workspace / "batch.json"
+    body.write_text('{"queries": []}')
+    op = ops.resolve("osv-query-batch")
+    if not hasattr(os, "getuid"):
+        monkeypatch.setattr(ops, "read_body", lambda val, workspace: b'{"queries": []}')
+    params, sent = cli._validate_params(op, [str(body)], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "POST"
+    assert req["url"] == "https://api.osv.dev/v1/querybatch"
+    assert req["headers"] == {"Content-Type": "application/json"}
+    assert sent == b'{"queries": []}'
+
+
+def test_cve_check_published_builder(policy: config.Config) -> None:
+    op = ops.resolve("cve-check-published")
+    params, _ = cli._validate_params(op, ["CVE-2023-1234"], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "GET"
+    assert req["url"] == "https://cveawg.mitre.org/api/cve/CVE-2023-1234"
+
+
+@pytest.mark.parametrize(
+    "valid_id",
+    [
+        "GHSA-7rjr-3q55-vv33",
+        "CVE-2021-45046",
+        "PYSEC-2021-123",
+        "RUSTSEC-2020-0001",
+        "GO-2022-0123",
+        "OSV-2020-111",
+    ],
+)
+def test_valid_vuln_ids_are_accepted(valid_id: str) -> None:
+    assert ops.vuln_id(valid_id) == valid_id
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "../../etc/passwd",
+        "GHSA; rm -rf /",
+        "GHSA $(whoami)",
+        "GHSA `id`",
+        "GHSA\nnewline",
+        "",
+        "x",
+    ],
+)
+def test_hostile_vuln_ids_are_refused(hostile: str) -> None:
+    with pytest.raises(ops.ParamError):
+        ops.vuln_id(hostile)
+
+
+@pytest.mark.parametrize(
+    "valid_pkg",
+    [
+        "jinja2",
+        "@scope/package",
+        "apache-airflow",
+        "github.com/gin-gonic/gin",
+        "osv.dev",
+        "pkg_name",
+    ],
+)
+def test_valid_package_names_are_accepted(valid_pkg: str) -> None:
+    assert ops.package_name(valid_pkg) == valid_pkg
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "../../etc/passwd",
+        "pkg; rm -rf /",
+        "pkg $(whoami)",
+        "pkg `id`",
+        "pkg\nnewline",
+        "",
+    ],
+)
+def test_hostile_package_names_are_refused(hostile: str) -> None:
+    with pytest.raises(ops.ParamError):
+        ops.package_name(hostile)
+
+
+@pytest.mark.parametrize(
+    "valid_commit",
+    [
+        "a1b2c3d",
+        "0123456789abcdef",
+        "a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4",
+    ],
+)
+def test_valid_commits_are_accepted(valid_commit: str) -> None:
+    assert ops.commit_hash(valid_commit) == valid_commit
+
+
+@pytest.mark.parametrize(
+    "invalid_commit",
+    [
+        "a1b2c3",  # too short (< 7)
+        "a1b2c3g",  # non-hex
+        "A1B2C3D",  # uppercase
+        "main",
+        "../../etc",
+        "",
+    ],
+)
+def test_invalid_commits_are_refused(invalid_commit: str) -> None:
+    with pytest.raises(ops.ParamError):
+        ops.commit_hash(invalid_commit)
+
+
+@pytest.mark.parametrize(
+    "valid_cve",
+    [
+        "CVE-2023-1234",
+        "CVE-1999-0001",
+        "CVE-2024-1234567",
+    ],
+)
+def test_valid_cve_ids_are_accepted(valid_cve: str) -> None:
+    assert ops.cve_id(valid_cve) == valid_cve
+
+
+@pytest.mark.parametrize(
+    "invalid_cve",
+    [
+        "cve-2023-1234",  # lowercase
+        "CVE-23-1234",  # 2-digit year
+        "CVE-2023-123",  # 3-digit sequence
+        "GHSA-aaaa-bbbb-cccc",
+        "../../etc/passwd",
+        "",
+    ],
+)
+def test_invalid_cve_ids_are_refused(invalid_cve: str) -> None:
+    with pytest.raises(ops.ParamError):
+        ops.cve_id(invalid_cve)
+
+
+def test_ecosystem_must_be_one_of_the_configured_values(policy: config.Config) -> None:
+    op = ops.resolve("osv-query-package")
+    with pytest.raises(ops.ParamError, match="not one of the configured values"):
+        cli._validate_params(op, ["jinja2", "UnknownEcosystem", "1.0.0"], policy)
+
+
+def test_http_endpoints_can_be_customized(tmp_path: Path) -> None:
+    custom_toml = """
+workspace = '{workspace}'
+
+[repos]
+upstream = "acme/product"
+
+[endpoints]
+osv_api = "https://custom-osv.example.com/api"
+cve_services_api = "https://custom-cve.example.com/api"
+
+[values]
+ecosystems = ["PyPI"]
+
+[callers]
+"security-issue-triage" = ["osv-get-vuln", "cve-check-published"]
+"""
+    workspace = tmp_path / "scratch"
+    workspace.mkdir()
+    workspace.chmod(0o700)
+    cfg_path = tmp_path / "custom.toml"
+    cfg_path.write_text(custom_toml.format(workspace=workspace.as_posix()))
+    custom_cfg = config.load(cfg_path)
+
+    op_osv = ops.resolve("osv-get-vuln")
+    req_osv = op_osv.build(custom_cfg.as_mapping(), vuln_id="OSV-1")
+    assert isinstance(req_osv, dict)
+    assert req_osv["url"] == "https://custom-osv.example.com/api/vulns/OSV-1"
+
+    op_cve = ops.resolve("cve-check-published")
+    req_cve = op_cve.build(custom_cfg.as_mapping(), cve_id="CVE-2023-1234")
+    assert isinstance(req_cve, dict)
+    assert req_cve["url"] == "https://custom-cve.example.com/api/cve/CVE-2023-1234"
 
 
 # --- parameters can never become commands ------------------------------------
@@ -652,6 +883,8 @@ def test_tracker_and_upstream_operations_never_cross(policy: config.Config) -> N
     tracker, upstream = "acme/tracker", "acme/product"
 
     for name, op in ops.OPS.items():
+        if op.backend != "gh":
+            continue
         params = {}
         for p in op.params:
             if p in op.body_files:
@@ -660,7 +893,9 @@ def test_tracker_and_upstream_operations_never_cross(policy: config.Config) -> N
                 params[p] = policy.enum_values(op.enums[p])[0]
             else:
                 params[p] = sample[p]
-        argv = " ".join(op.build(policy.as_mapping(), **params))
+        res = op.build(policy.as_mapping(), **params)
+        assert isinstance(res, list)
+        argv = " ".join(res)
         if name.startswith("repo-issue-") or name.startswith("pr-") or name.startswith("gql-"):
             assert tracker not in argv, f"{name} reached the tracker"
         elif name.startswith("issue-") or name in {
@@ -722,6 +957,8 @@ def test_no_operation_interpolates_a_traversing_ref(policy: config.Config) -> No
     body = policy.workspace / "ref.md"
     body.write_text("x")
     for op in ops.OPS.values():
+        if op.backend != "gh":
+            continue
         params = {}
         for p in op.params:
             if p in op.body_files:
@@ -730,7 +967,9 @@ def test_no_operation_interpolates_a_traversing_ref(policy: config.Config) -> No
                 params[p] = policy.enum_values(op.enums[p])[0]
             else:
                 params[p] = sample[p]
-        for arg in op.build(policy.as_mapping(), **params):
+        res = op.build(policy.as_mapping(), **params)
+        assert isinstance(res, list)
+        for arg in res:
             assert "/../" not in arg and not arg.endswith("/.."), op.name
 
 
@@ -819,6 +1058,44 @@ def test_read_dispatcher_still_runs_reads(policy_path: Path, capsys: pytest.Capt
     )
     assert rc == cli.EXIT_OK
     assert "gh issue view 7" in capsys.readouterr().out
+
+
+def test_read_dispatcher_runs_http_reads(policy_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rc = cli.main(
+        [
+            "--caller",
+            "security-issue-triage",
+            "osv-get-vuln",
+            "GHSA-7rjr-3q55-vv33",
+            "--config",
+            str(policy_path),
+            "--dry-run",
+        ],
+        read_only=True,
+    )
+    assert rc == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "GET https://api.osv.dev/v1/vulns/GHSA-7rjr-3q55-vv33" in out
+
+    rc_post = cli.main(
+        [
+            "--caller",
+            "security-issue-triage",
+            "osv-query-package",
+            "jinja2",
+            "PyPI",
+            "2.11.2",
+            "--config",
+            str(policy_path),
+            "--dry-run",
+        ],
+        read_only=True,
+    )
+    assert rc_post == cli.EXIT_OK
+    out_post = capsys.readouterr().out
+    assert "POST https://api.osv.dev/v1/query" in out_post
+    assert "Body:" in out_post
+    assert '"jinja2"' in out_post
 
 
 # --------------------------------------------------------------------------
@@ -1018,10 +1295,14 @@ def test_every_tracker_operation_refuses_rather_than_retargeting(
 
     checked = 0
     for name, op in ops.OPS.items():
+        if op.backend != "gh":
+            continue
         args = args_for(op)
         if not args and op.params:
             continue
-        with_tracker = " ".join(op.build(policy.as_mapping(), **args))
+        res = op.build(policy.as_mapping(), **args)
+        assert isinstance(res, list)
+        with_tracker = " ".join(res)
         if "acme/tracker" not in with_tracker:
             continue
         checked += 1

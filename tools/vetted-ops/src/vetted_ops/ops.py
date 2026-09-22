@@ -30,6 +30,7 @@ reviewed code change rather than a runtime decision.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import stat as stat_mod
@@ -75,7 +76,7 @@ _QUERY_NAME = re.compile(r"^[a-z][a-z0-9-]{0,60}$")
 _VULN_ID = re.compile(r"^[A-Za-z0-9][-A-Za-z0-9]{2,60}$")
 
 #: An ecosystem package name. Supports scoped npm packages (@scope/name).
-_PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@/-]{0,200}$")
+_PACKAGE_NAME = re.compile(r"^[A-Za-z0-9@][A-Za-z0-9._@/-]{0,200}$")
 
 #: A package version string.
 _VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+~-]{0,100}$")
@@ -192,14 +193,20 @@ def query_name(value: str) -> str:
 
 
 def vuln_id(value: str) -> str:
+    if ".." in value:
+        raise ParamError(f"path traversal in vuln id: {value!r}")
     return _check(_VULN_ID, value, "vuln id")
 
 
 def package_name(value: str) -> str:
+    if ".." in value:
+        raise ParamError(f"path traversal in package name: {value!r}")
     return _check(_PACKAGE_NAME, value, "package name")
 
 
 def version(value: str) -> str:
+    if ".." in value:
+        raise ParamError(f"path traversal in version: {value!r}")
     return _check(_VERSION, value, "version")
 
 
@@ -208,6 +215,8 @@ def commit_hash(value: str) -> str:
 
 
 def cve_id(value: str) -> str:
+    if ".." in value:
+        raise ParamError(f"path traversal in CVE id: {value!r}")
     return _check(_CVE_ID, value, "CVE id")
 
 
@@ -1828,6 +1837,82 @@ for _query, _params in GRAPHQL_QUERIES.items():
             build=_graphql_builder(_query),
         )
     )
+
+# ---- http reads -----------------------------------------------------------
+
+_register(
+    Op(
+        name="osv-get-vuln",
+        params=("vuln_id",),
+        backend="http-read",
+        summary="Read one vulnerability record from OSV by ID.",
+        build=lambda cfg, vuln_id: {
+            "url": f"{cfg['osv_api']}/vulns/{vuln_id}",
+            "method": "GET",
+        },
+    )
+)
+
+_register(
+    Op(
+        name="osv-query-package",
+        params=("package_name", "ecosystem", "version"),
+        backend="http-read",
+        summary="Query OSV for vulnerabilities affecting a package version.",
+        enums={"ecosystem": "ecosystems"},
+        build=lambda cfg, package_name, ecosystem, version: {
+            "url": f"{cfg['osv_api']}/query",
+            "method": "POST",
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(
+                {"package": {"name": package_name, "ecosystem": ecosystem}, "version": version}
+            ),
+        },
+    )
+)
+
+_register(
+    Op(
+        name="osv-query-commit",
+        params=("commit_hash",),
+        backend="http-read",
+        summary="Query OSV for vulnerabilities affecting a commit hash.",
+        build=lambda cfg, commit_hash: {
+            "url": f"{cfg['osv_api']}/query",
+            "method": "POST",
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"commit": commit_hash}),
+        },
+    )
+)
+
+_register(
+    Op(
+        name="osv-query-batch",
+        params=("body",),
+        backend="http-read",
+        summary="Batch query OSV for vulnerabilities affecting multiple packages or commits.",
+        body_files=("body",),
+        build=lambda cfg, body: {
+            "url": f"{cfg['osv_api']}/querybatch",
+            "method": "POST",
+            "headers": {"Content-Type": "application/json"},
+        },
+    )
+)
+
+_register(
+    Op(
+        name="cve-check-published",
+        params=("cve_id",),
+        backend="http-read",
+        summary="Fetch CVE publication state and record from CVE.org services API.",
+        build=lambda cfg, cve_id: {
+            "url": f"{cfg['cve_services_api']}/cve/{cve_id}",
+            "method": "GET",
+        },
+    )
+)
 
 
 def resolve(name: str) -> Op:
