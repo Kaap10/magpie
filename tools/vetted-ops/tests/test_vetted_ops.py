@@ -17,14 +17,20 @@
 # under the License.
 from __future__ import annotations
 
+import json
+import urllib.error
+import urllib.request
+from email.message import Message
 from pathlib import Path
+from types import TracebackType
+from typing import NoReturn
 
 import pytest
 
 from vetted_ops import cli, config, ops
 
 CONFIG_TOML = """
-workspace = "{workspace}"
+workspace = '{workspace}'
 
 [repos]
 tracker = "acme/tracker"
@@ -38,6 +44,7 @@ issue_states = ["open", "closed", "all"]
 pr_states = ["open", "closed", "merged", "all"]
 upstream_labels = ["ready for maintainer review", "area:scheduler"]
 close_reasons = ["completed", "not planned"]
+ecosystems = ["PyPI", "Maven", "npm"]
 board_project_id = "PVT_proj"
 board_status_field_id = "PVTSSF_field"
 
@@ -45,8 +52,9 @@ board_status_field_id = "PVTSSF_field"
 "Assessed" = "opt_assessed"
 
 [callers]
-"security-issue-sync" = ["issue-view", "issue-add-label", "issue-comment", "issue-close"]
-"security-issue-triage" = ["issue-view"]
+"security-issue-sync" = ["issue-view", "issue-add-label", "issue-comment", "issue-close", "cve-check-published"]
+"security-issue-triage" = ["issue-view", "osv-get-vuln", "osv-query-package", "cve-check-published"]
+"dependency-audit" = ["osv-query-package", "osv-query-commit", "osv-query-batch"]
 """
 
 
@@ -95,6 +103,11 @@ def test_every_op_declares_validators_for_all_its_params() -> None:
         "item_id",
         "content_id",
         "title",
+        "vuln_id",
+        "package_name",
+        "version",
+        "commit_hash",
+        "cve_id",
     }
     for op in ops.OPS.values():
         for param in op.params:
@@ -104,7 +117,7 @@ def test_every_op_declares_validators_for_all_its_params() -> None:
 
 
 def test_every_builder_produces_a_gh_argv(policy: config.Config) -> None:
-    """No operation may invoke anything other than gh."""
+    """Every 'gh' operation must invoke nothing other than gh."""
     sample = {
         "number": "1",
         "comment_id": "1",
@@ -126,14 +139,258 @@ def test_every_builder_produces_a_gh_argv(policy: config.Config) -> None:
         "reason": "completed",
         "column": "Assessed",
         "body": "unused",
+        "vuln_id": "OSV-2020-111",
+        "package_name": "pytest",
+        "version": "1.0.0",
+        "commit_hash": "a1b2c3d",
+        "cve_id": "CVE-2023-1234",
+        "ecosystem": "PyPI",
     }
     body = policy.workspace / "body.md"
     body.write_text("x")
     for op in ops.OPS.values():
         params = {p: (str(body) if p in op.body_files else sample[p]) for p in op.params}
-        argv = op.build(policy.as_mapping(), **params)
-        assert argv[0] == "gh", op.name
-        assert all(isinstance(a, str) for a in argv), op.name
+        result = op.build(policy.as_mapping(), **params)
+
+        if op.backend == "gh":
+            assert isinstance(result, list)
+            assert result[0] == "gh", op.name
+            assert all(isinstance(a, str) for a in result), op.name
+        elif op.backend == "http-read":
+            assert isinstance(result, dict)
+            assert isinstance(result.get("url"), str), op.name
+
+
+def test_every_http_operation_is_read_only() -> None:
+    """HTTP operations are unprivileged reads by construction."""
+    for op in ops.OPS.values():
+        if op.backend == "http-read":
+            assert not op.writes, f"{op.name} has backend='http-read' but writes=True"
+
+
+def test_osv_get_vuln_builder(policy: config.Config) -> None:
+    op = ops.resolve("osv-get-vuln")
+    params, _ = cli._validate_params(op, ["GHSA-7rjr-3q55-vv33"], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "GET"
+    assert req["url"] == "https://api.osv.dev/v1/vulns/GHSA-7rjr-3q55-vv33"
+
+
+def test_osv_query_package_builder(policy: config.Config) -> None:
+    op = ops.resolve("osv-query-package")
+    params, _ = cli._validate_params(op, ["jinja2", "PyPI", "2.11.2"], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "POST"
+    assert req["url"] == "https://api.osv.dev/v1/query"
+    assert req["headers"] == {"Content-Type": "application/json"}
+    body_data = json.loads(str(req["body"]))
+    assert body_data == {
+        "package": {"name": "jinja2", "ecosystem": "PyPI"},
+        "version": "2.11.2",
+    }
+
+
+def test_osv_query_commit_builder(policy: config.Config) -> None:
+    op = ops.resolve("osv-query-commit")
+    params, _ = cli._validate_params(op, ["a1b2c3d4e5f67890"], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "POST"
+    assert req["url"] == "https://api.osv.dev/v1/query"
+    assert req["headers"] == {"Content-Type": "application/json"}
+    body_data = json.loads(str(req["body"]))
+    assert body_data == {"commit": "a1b2c3d4e5f67890"}
+
+
+def test_osv_query_batch_builder(policy: config.Config) -> None:
+    body = policy.workspace / "batch.json"
+    body.write_text('{"queries": []}')
+    op = ops.resolve("osv-query-batch")
+    params, sent = cli._validate_params(op, [str(body)], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "POST"
+    assert req["url"] == "https://api.osv.dev/v1/querybatch"
+    assert req["headers"] == {"Content-Type": "application/json"}
+    assert sent == b'{"queries": []}'
+
+
+def test_cve_check_published_builder(policy: config.Config) -> None:
+    op = ops.resolve("cve-check-published")
+    params, _ = cli._validate_params(op, ["CVE-2023-1234"], policy)
+    req = cli.build_argv(op, params, policy)
+    assert isinstance(req, dict)
+    assert req["method"] == "GET"
+    assert req["url"] == "https://cveawg.mitre.org/api/cve/CVE-2023-1234"
+
+
+@pytest.mark.parametrize(
+    "valid_id",
+    [
+        "GHSA-7rjr-3q55-vv33",
+        "RHSA-2021:4321",
+        "SUSE-SU-2021:1234-1",
+        "ALSA-2021:1234",
+        "RLSA-2021:1234",
+        "CVE-2021-45046",
+        "PYSEC-2021-123",
+        "RUSTSEC-2020-0001",
+        "GO-2022-0123",
+        "OSV-2020-111",
+    ],
+)
+def test_valid_vuln_ids_are_accepted(valid_id: str) -> None:
+    assert ops.vuln_id(valid_id) == valid_id
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "../../etc/passwd",
+        "GHSA; rm -rf /",
+        "GHSA $(whoami)",
+        "GHSA `id`",
+        "GHSA\nnewline",
+        "",
+        "x",
+    ],
+)
+def test_hostile_vuln_ids_are_refused(hostile: str) -> None:
+    with pytest.raises(ops.ParamError):
+        ops.vuln_id(hostile)
+
+
+@pytest.mark.parametrize(
+    "valid_pkg",
+    [
+        "jinja2",
+        "@scope/package",
+        "apache-airflow",
+        "org.apache.logging.log4j:log4j-core",
+        "github.com/gin-gonic/gin",
+        "osv.dev",
+        "pkg_name",
+    ],
+)
+def test_valid_package_names_are_accepted(valid_pkg: str) -> None:
+    assert ops.package_name(valid_pkg) == valid_pkg
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "../../etc/passwd",
+        "pkg; rm -rf /",
+        "pkg $(whoami)",
+        "pkg `id`",
+        "pkg\nnewline",
+        "",
+    ],
+)
+def test_hostile_package_names_are_refused(hostile: str) -> None:
+    with pytest.raises(ops.ParamError):
+        ops.package_name(hostile)
+
+
+@pytest.mark.parametrize(
+    "valid_commit",
+    [
+        "a1b2c3d",
+        "0123456789abcdef",
+        "a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4",
+        "a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef",
+    ],
+)
+def test_valid_commits_are_accepted(valid_commit: str) -> None:
+    assert ops.commit_hash(valid_commit) == valid_commit
+
+
+@pytest.mark.parametrize(
+    "invalid_commit",
+    [
+        "a1b2c3",  # too short (< 7)
+        "a" * 65,  # too long (> 64)
+        "a1b2c3g",  # non-hex
+        "A1B2C3D",  # uppercase
+        "main",
+        "../../etc",
+        "",
+    ],
+)
+def test_invalid_commits_are_refused(invalid_commit: str) -> None:
+    with pytest.raises(ops.ParamError):
+        ops.commit_hash(invalid_commit)
+
+
+@pytest.mark.parametrize(
+    "valid_cve",
+    [
+        "CVE-2023-1234",
+        "CVE-1999-0001",
+        "CVE-2024-1234567",
+    ],
+)
+def test_valid_cve_ids_are_accepted(valid_cve: str) -> None:
+    assert ops.cve_id(valid_cve) == valid_cve
+
+
+@pytest.mark.parametrize(
+    "invalid_cve",
+    [
+        "cve-2023-1234",  # lowercase
+        "CVE-23-1234",  # 2-digit year
+        "CVE-2023-123",  # 3-digit sequence
+        "GHSA-aaaa-bbbb-cccc",
+        "../../etc/passwd",
+        "",
+    ],
+)
+def test_invalid_cve_ids_are_refused(invalid_cve: str) -> None:
+    with pytest.raises(ops.ParamError):
+        ops.cve_id(invalid_cve)
+
+
+def test_ecosystem_must_be_one_of_the_configured_values(policy: config.Config) -> None:
+    op = ops.resolve("osv-query-package")
+    with pytest.raises(ops.ParamError, match="not one of the configured values"):
+        cli._validate_params(op, ["jinja2", "UnknownEcosystem", "1.0.0"], policy)
+
+
+def test_http_endpoints_can_be_customized(tmp_path: Path) -> None:
+    custom_toml = """
+workspace = '{workspace}'
+
+[repos]
+upstream = "acme/product"
+
+[endpoints]
+osv_api = "https://custom-osv.example.com/api"
+cve_services_api = "https://custom-cve.example.com/api"
+
+[values]
+ecosystems = ["PyPI"]
+
+[callers]
+"security-issue-triage" = ["osv-get-vuln", "cve-check-published"]
+"""
+    workspace = tmp_path / "scratch"
+    workspace.mkdir()
+    workspace.chmod(0o700)
+    cfg_path = tmp_path / "custom.toml"
+    cfg_path.write_text(custom_toml.format(workspace=workspace))
+    custom_cfg = config.load(cfg_path)
+
+    op_osv = ops.resolve("osv-get-vuln")
+    req_osv = op_osv.build(custom_cfg.as_mapping(), vuln_id="OSV-1")
+    assert isinstance(req_osv, dict)
+    assert req_osv["url"] == "https://custom-osv.example.com/api/vulns/OSV-1"
+
+    op_cve = ops.resolve("cve-check-published")
+    req_cve = op_cve.build(custom_cfg.as_mapping(), cve_id="CVE-2023-1234")
+    assert isinstance(req_cve, dict)
+    assert req_cve["url"] == "https://custom-cve.example.com/api/cve/CVE-2023-1234"
 
 
 # --- parameters can never become commands ------------------------------------
@@ -173,6 +430,7 @@ def test_configured_label_is_accepted(policy: config.Config) -> None:
     op = ops.resolve("issue-add-label")
     params, _body = cli._validate_params(op, ["7", "cve allocated"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv == [
         "gh",
         "issue",
@@ -203,6 +461,7 @@ def test_body_file_content_may_contain_anything(policy: config.Config) -> None:
     op = ops.resolve("issue-comment")
     params, sent = cli._validate_params(op, ["7", str(body)], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     # The body reaches `gh` on stdin, not as a path it opens for itself.
     assert argv[-2:] == ["--body-file", "-"]
     assert sent == b"`id` $(whoami) && rm -rf / ; drop table\n"
@@ -219,6 +478,7 @@ def test_issue_edit_body_sends_the_body_on_stdin(policy: config.Config) -> None:
     op = ops.resolve("issue-edit-body")
     params, sent = cli._validate_params(op, ["611", str(body)], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv[:5] == ["gh", "issue", "edit", "611", "--repo"]
     assert argv[-2:] == ["--body-file", "-"]
     assert sent == b"### Affected versions\n\napache-airflow `< NEXT VERSION`\n"
@@ -242,6 +502,7 @@ def test_issue_edit_title_passes_the_title_as_one_argv_element(policy: config.Co
     title = 'Session cookie overrides `Authorization`; enables "session fixation"'
     params, sent = cli._validate_params(op, ["555", title], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv[:5] == ["gh", "issue", "edit", "555", "--repo"]
     assert argv[-2:] == ["--title", title]
     assert sent is None
@@ -288,6 +549,7 @@ def test_milestone_create_is_gated_on_the_configured_milestones(policy: config.C
 
     params, _ = cli._validate_params(op, ["1.2.3"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv == ["gh", "api", "repos/acme/tracker/milestones", "-f", "title=1.2.3"]
 
 
@@ -303,6 +565,7 @@ def test_issue_remove_assignee_is_gated_on_the_roster(policy: config.Config) -> 
 
     params, _ = cli._validate_params(op, ["611", "alice"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv == [
         "gh",
         "issue",
@@ -352,7 +615,7 @@ def test_no_read_operation_sends_fields_without_an_explicit_get(policy: config.C
     body.write_text("x")
 
     for name, op in ops.OPS.items():
-        if op.writes:
+        if op.writes or op.backend != "gh":
             continue
         params = {}
         for p in op.params:
@@ -363,6 +626,7 @@ def test_no_read_operation_sends_fields_without_an_explicit_get(policy: config.C
             else:
                 params[p] = sample[p]
         argv = op.build(policy.as_mapping(), **params)
+        assert isinstance(argv, list)
         if "graphql" in argv:
             continue
         if any(a in ("-f", "-F") for a in argv):
@@ -387,6 +651,7 @@ def test_repo_tree_refuses_to_report_a_truncated_listing(policy: config.Config) 
     op = ops.resolve("repo-tree")
     params, _ = cli._validate_params(op, ["main"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
 
     jq = argv[argv.index("--jq") + 1]
     assert ".truncated" in jq, "repo-tree drops the API's truncation flag"
@@ -404,6 +669,7 @@ def test_board_add_item_takes_a_content_node_id(policy: config.Config) -> None:
     op = ops.resolve("board-add-item")
     params, _ = cli._validate_params(op, ["I_kwDOabc123"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv[:3] == ["gh", "api", "graphql"]
     assert "content=I_kwDOabc123" in argv
     assert "project=PVT_proj" in argv
@@ -420,6 +686,7 @@ def test_board_archive_item_targets_the_configured_project(policy: config.Config
     op = ops.resolve("board-archive-item")
     params, _ = cli._validate_params(op, ["PVTI_kwDOabc"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert "item=PVTI_kwDOabc" in argv
     assert "project=PVT_proj" in argv
     assert "archiveProjectV2Item" in argv[-1]
@@ -434,6 +701,7 @@ def test_milestone_close_is_by_number_and_hits_the_tracker(policy: config.Config
     op = ops.resolve("milestone-close")
     params, _ = cli._validate_params(op, ["64"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv == [
         "gh",
         "api",
@@ -508,6 +776,7 @@ def test_repo_cannot_be_influenced_by_a_parameter(policy: config.Config) -> None
     op = ops.resolve("issue-view")
     params, _body = cli._validate_params(op, ["7"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv[argv.index("--repo") + 1] == "acme/tracker"
 
 
@@ -623,6 +892,8 @@ def test_tracker_and_upstream_operations_never_cross(policy: config.Config) -> N
     tracker, upstream = "acme/tracker", "acme/product"
 
     for name, op in ops.OPS.items():
+        if op.backend != "gh":
+            continue
         params = {}
         for p in op.params:
             if p in op.body_files:
@@ -631,7 +902,9 @@ def test_tracker_and_upstream_operations_never_cross(policy: config.Config) -> N
                 params[p] = policy.enum_values(op.enums[p])[0]
             else:
                 params[p] = sample[p]
-        argv = " ".join(op.build(policy.as_mapping(), **params))
+        res = op.build(policy.as_mapping(), **params)
+        assert isinstance(res, list)
+        argv = " ".join(res)
         if name.startswith("repo-issue-") or name.startswith("pr-") or name.startswith("gql-"):
             assert tracker not in argv, f"{name} reached the tracker"
         elif name.startswith("issue-") or name in {
@@ -693,6 +966,8 @@ def test_no_operation_interpolates_a_traversing_ref(policy: config.Config) -> No
     body = policy.workspace / "ref.md"
     body.write_text("x")
     for op in ops.OPS.values():
+        if op.backend != "gh":
+            continue
         params = {}
         for p in op.params:
             if p in op.body_files:
@@ -701,7 +976,9 @@ def test_no_operation_interpolates_a_traversing_ref(policy: config.Config) -> No
                 params[p] = policy.enum_values(op.enums[p])[0]
             else:
                 params[p] = sample[p]
-        for arg in op.build(policy.as_mapping(), **params):
+        res = op.build(policy.as_mapping(), **params)
+        assert isinstance(res, list)
+        for arg in res:
             assert "/../" not in arg and not arg.endswith("/.."), op.name
 
 
@@ -792,6 +1069,44 @@ def test_read_dispatcher_still_runs_reads(policy_path: Path, capsys: pytest.Capt
     assert "gh issue view 7" in capsys.readouterr().out
 
 
+def test_read_dispatcher_runs_http_reads(policy_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rc = cli.main(
+        [
+            "--caller",
+            "security-issue-triage",
+            "osv-get-vuln",
+            "GHSA-7rjr-3q55-vv33",
+            "--config",
+            str(policy_path),
+            "--dry-run",
+        ],
+        read_only=True,
+    )
+    assert rc == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "GET https://api.osv.dev/v1/vulns/GHSA-7rjr-3q55-vv33" in out
+
+    rc_post = cli.main(
+        [
+            "--caller",
+            "security-issue-triage",
+            "osv-query-package",
+            "jinja2",
+            "PyPI",
+            "2.11.2",
+            "--config",
+            str(policy_path),
+            "--dry-run",
+        ],
+        read_only=True,
+    )
+    assert rc_post == cli.EXIT_OK
+    out_post = capsys.readouterr().out
+    assert "POST https://api.osv.dev/v1/query" in out_post
+    assert "Body:" in out_post
+    assert '"jinja2"' in out_post
+
+
 # --------------------------------------------------------------------------
 # Body files: single open, owned workspace, no symlinks
 # --------------------------------------------------------------------------
@@ -845,6 +1160,7 @@ def test_pr_searches_are_a_fixed_qualifier_not_a_query(policy: config.Config) ->
         ("pr-search-reviewed-by", "--reviewed-by"),
     ):
         argv = ops.OPS[name].build(policy.as_mapping(), login="alice")
+        assert isinstance(argv, list)
         assert argv[:3] == ["gh", "search", "prs"], name
         assert argv[argv.index(qualifier) + 1] == "alice", name
         # The repo is pinned by policy and the state is fixed open.
@@ -856,6 +1172,7 @@ def test_pr_searches_are_a_fixed_qualifier_not_a_query(policy: config.Config) ->
 
 def test_team_search_cannot_leave_the_upstream_org(policy: config.Config) -> None:
     argv = ops.OPS["pr-search-team-review-requested"].build(policy.as_mapping(), team="reviewers")
+    assert isinstance(argv, list)
     assert argv[argv.index("--review-requested") + 1] == "acme/reviewers"
 
 
@@ -902,7 +1219,7 @@ def test_every_code_review_operation_is_a_read() -> None:
 
 
 CONFIG_NO_TRACKER = """
-workspace = "{workspace}"
+workspace = '{workspace}'
 
 [repos]
 upstream = "acme/product"
@@ -940,6 +1257,7 @@ def test_upstream_operations_work_without_a_tracker(trackerless: config.Config) 
     """The regression: these died at load time over a value they never read."""
     assert ops.OPS["viewer"].build(trackerless.as_mapping()) == ["gh", "api", "user", "--jq", ".login"]
     argv = ops.OPS["pr-diff"].build(trackerless.as_mapping(), number="1")
+    assert isinstance(argv, list)
     assert argv[argv.index("--repo") + 1] == "acme/product"
 
 
@@ -986,10 +1304,14 @@ def test_every_tracker_operation_refuses_rather_than_retargeting(
 
     checked = 0
     for name, op in ops.OPS.items():
+        if op.backend != "gh":
+            continue
         args = args_for(op)
         if not args and op.params:
             continue
-        with_tracker = " ".join(op.build(policy.as_mapping(), **args))
+        res = op.build(policy.as_mapping(), **args)
+        assert isinstance(res, list)
+        with_tracker = " ".join(res)
         if "acme/tracker" not in with_tracker:
             continue
         checked += 1
@@ -1022,3 +1344,114 @@ def test_a_malformed_tracker_is_still_refused(tmp_path: Path) -> None:
     )
     with pytest.raises(config.ConfigError):
         config.load(cfg_path)
+
+
+def test_every_http_builder_produces_https_url_from_configured_endpoints(policy: config.Config) -> None:
+    for name, op in ops.OPS.items():
+        if op.backend != "http-read":
+            continue
+        params = {}
+        for p in op.params:
+            if p in op.body_files:
+                f = policy.workspace / "file"
+                f.write_text("x")
+                params[p] = str(f)
+            elif p in op.enums:
+                params[p] = policy.enum_values(op.enums[p])[0]
+            else:
+                params[p] = "dummy-value"
+        req = op.build(policy.as_mapping(), **params)
+        assert isinstance(req, dict)
+        url = str(req.get("url", ""))
+        assert url.startswith("https://")
+        assert any(url.startswith(base) for base in policy.endpoints.values()), (
+            f"{name} built {url} which does not start with a configured endpoint"
+        )
+
+
+def test_http_operation_with_writes_is_rejected() -> None:
+    with pytest.raises(ValueError, match="must be read-only"):
+        ops._register(ops.Op(name="test-bad", params=(), build=lambda: {}, backend="http-read", writes=True))
+
+
+def test_run_http_execution_success(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class MockResponse:
+        def read(self) -> bytes:
+            return b"hello world"
+
+        def __enter__(self) -> MockResponse:
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_val: BaseException | None,
+            exc_tb: TracebackType | None,
+        ) -> None:
+            pass
+
+    def mock_urlopen(
+        req: urllib.request.Request,
+        timeout: float | None = None,
+    ) -> MockResponse:
+        assert timeout == 30
+        assert req.get_header("User-agent") == "apache-magpie-vetted-ops/0.1.0"
+        return MockResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    rc = cli._run_http({"url": "https://example.com"}, body=None)
+    assert rc == cli.EXIT_OK
+    assert capsys.readouterr().out == "hello world"
+
+
+def test_run_http_execution_httperror(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def mock_urlopen(
+        req: urllib.request.Request,
+        timeout: float | None = None,
+    ) -> NoReturn:
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", Message(), None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    rc = cli._run_http({"url": "https://example.com"}, body=None)
+    assert rc == cli.EXIT_COMMAND
+    assert "404 Not Found" in capsys.readouterr().err
+
+
+def test_run_http_execution_urlerror(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def mock_urlopen(
+        req: urllib.request.Request,
+        timeout: float | None = None,
+    ) -> NoReturn:
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    rc = cli._run_http({"url": "https://example.com"}, body=None)
+    assert rc == cli.EXIT_COMMAND
+    assert "connection refused" in capsys.readouterr().err
+
+
+def test_run_http_execution_timeouterror(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def mock_urlopen(
+        req: urllib.request.Request,
+        timeout: float | None = None,
+    ) -> NoReturn:
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    rc = cli._run_http({"url": "https://example.com"}, body=None)
+    assert rc == cli.EXIT_COMMAND
+    assert "timed out" in capsys.readouterr().err
+
+
+def test_run_http_execution_non_https_rejected(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = cli._run_http({"url": "http://insecure.example.com"}, body=None)
+    assert rc == cli.EXIT_COMMAND
+    assert "missing valid https://" in capsys.readouterr().err

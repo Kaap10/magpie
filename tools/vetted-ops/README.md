@@ -32,14 +32,16 @@ needs *one* allowlist entry instead of a dozen wildcard `ask` rules.
 
 ## Prerequisites
 
-- **Runtime:** Python 3.11+ via `uv`. The package itself is stdlib-only.
-- **CLIs:** the `gh` CLI on `PATH`, authenticated for the repositories the policy
-  names. Every operation shells out to it; the dispatcher runs nothing else.
-- **Credentials:** whatever `gh` already uses (`~/.config/gh/`). This tool reads
-  no credential of its own and stores none.
-- **Network:** only what `gh` needs — `github.com` / `api.github.com`.
-- **Configuration:** a policy TOML (see *Configuration*). Without one, every
-  operation refuses.
+- **Runtime:** Python 3.11+ via `uv`.
+The package itself is stdlib-only.
+- **CLIs:** the `gh` CLI on `PATH`, authenticated for the repositories the policy names.
+HTTP operations do not use `gh` or `curl`; they use the `urllib.request` standard library module.
+- **Credentials:** whatever `gh` already uses (`~/.config/gh/`).
+This tool reads no credential of its own and stores none.
+- **Network:** `github.com` / `api.github.com` for `gh` operations.
+HTTP operations connect to the domains configured in the `[endpoints]` table (e.g., `api.osv.dev`, `cveawg.mitre.org`).
+- **Configuration:** a policy TOML (see *Configuration*).
+Without one, every operation refuses.
 
 ## Why
 
@@ -98,9 +100,16 @@ Being precise, because a security tool that overstates itself is worse than none
   supplies the text, and `owner`/`name` come from policy. A caller can choose
   among the allowlisted queries; it cannot write one, and cannot re-aim one at
   another repository.
-- **The catalogue is closed.** Widening the surface means editing
-  [`ops.py`](src/vetted_ops/ops.py) — a reviewed code change, not a runtime
-  decision.
+- **A parameter can never become a URL path traversal.**
+For HTTP operations, URLs are built from closed templates and injected parameters are strictly validated to refuse `..` and shell characters.
+- **HTTP operations are read-only by construction.**
+The backend `"http-read"` implies `writes=False`, enforced by the dispatcher.
+- **No `curl` or `wget` is involved.**
+The `urllib.request` implementation automatically obeys `HTTP_PROXY` and `HTTPS_PROXY` environment variables (egress gateway).
+- **HTTP responses are streamed to stdout, never to files.**
+There is no local filesystem exposure for downloaded data.
+- **The catalogue is closed.**
+Widening the surface means editing [`ops.py`](src/vetted_ops/ops.py) — a reviewed code change, not a runtime decision.
 
 ### The boundary is the entry point, not `--caller`
 
@@ -150,12 +159,18 @@ Layers 0–2 are unchanged and still carry the load.
 
 ## Configuration
 
+> **Upgrade Note:** Existing adopters upgrading to use `osv-query-package` must add `ecosystems = ["PyPI", "Maven", "npm", ...]` to the `[values]` table in their policy TOML; without it, `vetted-op-read` refuses package queries during parameter validation.
+
 Adopter-owned, at
 `.apache-magpie-overrides/tools/vetted-ops/config.toml` by default:
 
 ```toml
 # Body files must resolve inside this directory.
 workspace = "/tmp/agent-scratch"
+
+[endpoints]
+osv_api = "https://api.osv.dev/v1"
+cve_services_api = "https://cveawg.mitre.org/api"
 
 [repos]
 tracker  = "acme/tracker"   # optional — see below
@@ -169,6 +184,7 @@ assignees     = ["alice", "bob"]
 issue_states  = ["open", "closed", "all"]
 pr_states     = ["open", "closed", "merged", "all"]
 close_reasons = ["completed", "not planned"]
+ecosystems    = ["PyPI", "Maven", "npm", "Go"]
 
 board_project_id      = "PVT_kwDO…"   # ProjectV2 node id
 board_status_field_id = "PVTSSF_…"    # its Status field id
@@ -179,8 +195,12 @@ board_status_field_id = "PVTSSF_…"    # its Status field id
 
 [callers]                        # caller -> operations it may run
 "security-issue-sync"   = ["issue-view", "issue-comments", "issue-add-label",
-                           "issue-set-milestone", "issue-comment", "comment-update"]
-"security-issue-triage" = ["issue-view", "issue-comments"]
+                           "issue-set-milestone", "issue-comment", "comment-update",
+                           "cve-check-published"]
+"security-issue-triage" = ["issue-view", "issue-comments",
+                           "osv-get-vuln", "osv-query-package"]
+"security-issue-deduplicate" = ["osv-get-vuln"]
+"dependency-audit"      = ["osv-query-package", "osv-query-commit", "osv-query-batch"]
 "pr-management-triage"  = ["pr-list", "pr-view", "pr-checks", "gql-pr-liveness",
                            "pr-add-label", "pr-remove-label", "pr-draft", "pr-ready",
                            "pr-comment", "pr-update-branch", "run-rerun-failed",

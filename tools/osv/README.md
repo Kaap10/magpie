@@ -26,10 +26,10 @@ See [`tool.md`](tool.md) for endpoint recipes, payload structures, and confident
 
 ## Prerequisites
 
-- **Runtime:** None of its own — this directory documents a read-only adapter; queries are `curl` + `jq` recipes (see `tool.md`).
-- **CLIs:** `curl` and `jq`.
-- **Credentials / auth:** None — OSV.dev is a public vulnerability database with an open, unauthenticated REST API.
-- **Network:** `api.osv.dev` (OSV.dev REST API v1) and `osv.dev` (public web UI).
+- **Runtime:** Python 3.11+ via `uv` (through `tools/vetted-ops` dispatcher).
+- **CLIs:** `vetted-op-read` (from `tools/vetted-ops`) and `jq`.
+- **Credentials / auth:** None — open, unauthenticated REST API.
+- **Network:** `api.osv.dev` (REST API v1), routed through `vetted-ops` HTTP read backend.
 
 ## Configuration
 

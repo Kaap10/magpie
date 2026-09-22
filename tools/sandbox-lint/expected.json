@@ -48,6 +48,7 @@
         "cve.org",
         "www.cve.org",
         "cveawg.mitre.org",
+        "api.osv.dev",
         "oauth2.googleapis.com",
         "gmail.googleapis.com",
         "*.crates.io",
