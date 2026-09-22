@@ -79,6 +79,47 @@ acceptance:
   - docs/quick-start.md and docs/setup/marketplace.md both state that the
     committed default-set block is optional and not a prerequisite to using
     the plugins in the repo.
+  - Every skill carries a generated `surface_hash:` fingerprint of its
+    `requires_config:` list and its structural anchors (step headings,
+    golden-rule names), spanning the skill's own `SKILL.md` and every
+    sibling `*.md` detail file in its directory, each anchor tagged with
+    the file it came from; the field is written only by a prek hook and is
+    never hand-edited.
+  - The reconciliation stamp this fingerprint is checked against applies to
+    every adopted or configured project, any install method: an adopted
+    project's stamp lives in the committed lock's `reconciled:` block, a
+    configured-but-unadopted project's identical stamp lives in
+    `.apache-magpie-local/reconciled.json`, and a project that has neither
+    configured nor adopted anything carries no stamp at all.
+  - A skill whose own hash differs from its stamped entry says whether a
+    `requires_config` entry stopped resolving or a structural anchor moved,
+    and proposes `/magpie-setup config` or a re-anchor accordingly; the
+    one-time `/magpie-setup reconcile` sweep is offered only when no
+    `reconciled:` block exists in either store, never merely because a
+    stamp that does exist fails to name this skill.
+  - A declined per-skill finding or a declined whole-project sweep is
+    recorded the moment it is shown, not on a decline the always-on
+    pre-flight check never waits for, and does not return until the hash
+    (or, for the sweep, the version) moves again. `/magpie-setup
+    reconcile`, which does block for a real confirmation, records on
+    decline instead.
+  - `/magpie-setup config` never writes a `skills` entry into the committed
+    lock; on an adopted project it records only the per-machine
+    `acknowledged.skills` fact, and only for a skill whose missing
+    configuration that run actually wrote. `/magpie-setup adopt` migrates
+    an existing local stamp's `skills` map into the lock, and
+    `/magpie-setup unadopt` migrates it back before removing the lock.
+    `/magpie-setup upgrade` runs the
+    `requires_config` check before writing the stamp, so it never stamps a
+    false clean.
+  - The shared pre-flight block never reads the marketplace clone on any
+    branch; `/magpie-setup verify` is the only surface that compares
+    installed plugin versions against it, dev segment included, and reports
+    an unreadable clone as "could not check" rather than "up to date".
+  - `setup.verify_interval_days` resolves project → organization →
+    framework, defaults to 14, and 0 disables the periodic
+    `/magpie-setup verify` suggestion the shared pre-flight block's last
+    step makes.
 ---
 
 # Adoption & setup
@@ -98,7 +139,8 @@ committed version with drift detection.
 
 ## Where it lives
 
-- Skill: `setup` (install, adopt/unadopt, verify, upgrade, override).
+- Skill: `setup` (install, adopt/unadopt, verify, upgrade, override,
+  reconcile — the one-time project-wide reconciliation sweep).
 - Skills: `setup-isolated-setup-install` / `-update` / `-verify` / `-doctor`
   (the sandbox harness; `-doctor` probes live restrictions — SSH agent /
   Yubikey reachability, localhost port binding, filesystem restrictions),
@@ -112,6 +154,11 @@ committed version with drift detection.
 - Lock files: `.apache-magpie.lock` (committed — a pin on the snapshot
   methods, a floor on `method: marketplace`) and
   `.apache-magpie.local.lock` (gitignored, what this machine fetched).
+  The lock also carries a generated `reconciled:` block — version, date,
+  and a per-skill `surface_hash` map — once anything has been configured or
+  adopted; the identical shape lives in
+  `.apache-magpie-local/reconciled.json` for a configured-but-unadopted
+  project.
 
 ## Behaviour & contract
 
@@ -177,6 +224,16 @@ committed version with drift detection.
 - **`upgrade` splits on adoption:** nothing repo-side when the project
   has not adopted; `min_version` raised — never lowered — and staged
   when it has.
+- **Every skill's pre-flight also compares its own generated
+  `surface_hash` against the reconciliation stamp**, silently when they
+  match, at no extra cost inside a sandboxed session: both values are
+  already in context or in a file the pre-flight has already opened.
+  A mismatch, a missing entry, or no stamp at all each propose a specific
+  fix rather than a generic "something changed" — see the acceptance
+  bullets above for the shape of each case. This check runs on every
+  install method and does not read the marketplace plugin cache. It
+  runs unless there is nothing to reconcile or the floor check is
+  stopping the session for a restart — see acceptance criterion 17.
 
 ## Out of scope
 
@@ -219,6 +276,110 @@ committed version with drift detection.
 13. `verify` reports a missing lock and an ahead-of-floor machine as not
     faults, and a shortfall as one.
 14. `unadopt` removes the lock; `uninstall` leaves it; each says which.
+15. Every shipped skill carries a generated `surface_hash:` fingerprint
+    covering its `requires_config:` list and the structural anchors in its
+    `SKILL.md` and every sibling `*.md` detail file in its own directory
+    (never a subdirectory), each anchor tagged with its source file; the
+    field is written only by `tools/dev/skill-surface-hash.py --fix`. The
+    generated pre-flight region inside `SKILL.md` and the generated
+    `preflight-detail.md` sidecar beside it are both excluded: they are
+    identical in every skill that carries them, so hashing either would
+    move all 65 digests on any edit to the shared text and tell every
+    adopter their configuration went stale when nothing about their skill
+    changed.
+16. The reconciliation stamp applies to every adopted or configured
+    project regardless of install method: an adopted project's stamp is
+    the committed lock's `reconciled:` block; a configured-but-unadopted
+    project's identical stamp is `.apache-magpie-local/reconciled.json`; a
+    project with neither has no stamp and the pre-flight check is silent.
+    A skill named in both stores at once is an expected transitional
+    state — `config` on one machine, `adopt` on another — reported by
+    `reconcile`/`verify` with the local entry winning, and offered for
+    cleanup by `reconcile`.
+17. A skill whose current hash differs from its stamped entry names
+    whether a `requires_config` entry stopped resolving or a structural
+    anchor moved, and proposes `/magpie-setup config` or a re-anchor
+    accordingly. The one-time `/magpie-setup reconcile` sweep is
+    proposed only when **no `reconciled:` block exists in either
+    store**; a block that exists but does not name this skill is
+    silent, because the project does not configure this skill and the
+    `requires_config` step already covers the case where it does.
+    This check itself runs
+    unless there is nothing to reconcile, or the floor check (criteria
+    9–10) is stopping the session for a restart — a plugin installed or
+    updated, commands only printed for lack of a CLI, or nothing run
+    because of an untrusted marketplace `url` — in which case it is
+    skipped rather than stacking a reconciliation proposal onto a
+    restart notice; an *unreadable* plugin manager is not such a stop
+    and does not prevent this check from running.
+18. A per-skill finding the always-on pre-flight check shows is recorded
+    (`acknowledged.skills`) the moment it is shown and does not repeat
+    until that skill's hash moves again; a project-wide sweep declined
+    outright is recorded (`acknowledged.sweep`) against the version the
+    stamp itself records — the installed plugin version on a
+    marketplace install, the framework version otherwise — and does not
+    repeat until that version changes. `/magpie-setup upgrade` records
+    no decline at all.
+19. `/magpie-setup reconcile` walks every skill an override file names
+    **or** whose `requires_config:` entries resolve from the project's
+    own config directories, resolves anchors and `requires_config`
+    entries, reports sandboxed-session `unchecked` skills rather than
+    claiming them clean, offers to drop a redundant local `skills`
+    entry when both stores name the same skill, and — on confirmation —
+    writes the stamp; a project with no adoption or configuration
+    evidence at all reports nothing to reconcile and stops.
+20. `/magpie-setup upgrade` reconciles the overrides its walk covers and
+    writes the stamp only for one that passes the target-skill, anchor,
+    and `requires_config` checks — an override with an unresolved
+    `requires_config` entry is left out rather than stamped clean.
+21. `/magpie-setup config` never writes a `skills` entry into the
+    committed lock; on an adopted project it writes only
+    `acknowledged.skills`, and only for a skill whose missing
+    configuration that run actually wrote. `/magpie-setup adopt` migrates
+    an existing local stamp's `skills` map into the lock and leaves only
+    the three always-local keys (`verified_at`, `verify_suggested_at`,
+    `acknowledged`) behind in the local file; `/magpie-setup unadopt`
+    migrates `version`/`at`/`skills` back into the local file before
+    removing the lock, so the stamp is not stranded with it.
+22. `/magpie-setup verify` runs the reconciliation sweep read-only and is
+    the only surface that compares installed plugin versions against the
+    marketplace clone — dev segment included — reporting an unreadable
+    clone as "could not check", never as "up to date"; the shared
+    pre-flight block performs neither comparison. `setup.verify_interval_days`
+    (project → organization → framework, default 14, `0` disables) gates
+    how often the pre-flight block's last step suggests running it.
+23. The shared pre-flight block is propagated into every non-exempt
+    `SKILL.md` by `tools/dev/check-shared-blocks.py`, and a skill of an
+    exempt family carries none; the generator removes a stale one.
+24. The block runs `tools/setup-preflight` as a single command and acts
+    only on its verdict. `{"verdict": "ok"}` is silent. An `action`
+    verdict carries, alongside each finding, the text of the rules
+    section that finding names, and the skill acts on a finding only
+    through those rules — there is no second file to read. The block
+    decides nothing else and carries exactly one rule of its own — never
+    run `/magpie-setup adopt` unattended — because that one must bind
+    whether or not anything else was read. A command that did not run is
+    never read as a pass, and is not re-derived by hand.
+25. `tools/setup-preflight` resolves the deterministic half in two scopes:
+    **project** (lock, snapshot drift, marketplace floor), memoised
+    against the inputs it depends on so later skills in a session do not
+    recompute it, and **skill** (this skill's fingerprint against the
+    stamp, its `requires_config:` entries). It applies the already-shown
+    suppression of criterion 18 itself. It exits 0 whenever it reached a
+    verdict, findings included; a non-zero exit means the check could not
+    run. The rules prose ships with the tool as one copy and is emitted
+    per finding, so it cannot drift from the logic that selects it, and
+    a finding naming a section that does not ship is an error rather
+    than a rule-less instruction to act. Criteria 9, 10, 16, 17 and 18
+    are enforced by its tests.
+26. The checker is **copied into the adopter's gitignored
+    `.apache-magpie-local/`** by `/magpie-setup config` and refreshed
+    there by `/magpie-setup upgrade`, because Bash can neither read nor
+    execute the plugin cache under the framework's own recommended
+    sandbox. `config` states that it installed an executable, since it may
+    run unattended from a skill's pre-flight. `upgrade` skips the refresh
+    when the directory does not exist rather than creating it, because its
+    absence is what marks a project as never configured.
 
 ## Validation
 

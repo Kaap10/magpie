@@ -295,6 +295,13 @@ catches it before the overwrite would erase their work.
 
 ## Step 5 — Reconcile overrides
 
+**This reconciles overrides, not configuration.** It checks only the
+skills `.apache-magpie-overrides/` names — nothing about a skill this
+project has configured (via `.apache-magpie-local/`) but never
+overridden. [`reconcile.md`](reconcile.md) is the full, project-wide
+pass; this is the narrower slice that rides along with a snapshot
+refresh.
+
 For each file in `<repo-root>/.apache-magpie-overrides/`:
 
 1. **Target skill check** — does the named framework skill
@@ -303,17 +310,86 @@ For each file in `<repo-root>/.apache-magpie-overrides/`:
    - Surface as conflict.
    - The user updates the override's target skill name OR
      deletes the override.
-2. **Anchor check** — if the override references framework
-   structure (step numbers, golden rules, decision-table
-   rows) that has changed in the new framework version:
+2. **Anchor check** — read the target skill's `SKILL.md` **and every
+   sibling `*.md` detail file directly inside that skill's directory**
+   (a multi-file skill such as `setup` or `pr-management-triage` keeps
+   steps and golden rules in those detail files, not only in
+   `SKILL.md` — the same anchor-resolution surface
+   [`reconcile.md`](reconcile.md#the-sweep) check 2 defines). If the
+   override references framework structure (step numbers, golden
+   rules, decision-table rows) that has changed anywhere in that set
+   in the new framework version:
    - Surface as conflict, with the specific anchors that
      have moved.
    - The user re-anchors the override against the new
      structure.
+3. **`requires_config` check** — resolve every one of the target
+   skill's `requires_config:` entries through the lookup chain
+   (`.apache-magpie-local/<file>` then `.apache-magpie-overrides/<file>`).
+   An entry that resolves through neither is a finding — the same
+   [`reconcile.md`](reconcile.md#the-sweep) check 3 surfaces — propose
+   `/magpie-setup config <skill>` for it. Unlike check 2, this needs
+   only files already in the repository, so it always completes even in
+   a sandboxed session where the plugin cache is unreadable.
 
 The skill **does not** auto-rewrite overrides. Agentic
 interpretation means the right call is human judgement, not
 pattern-matching.
+
+**Write the stamp only for what all three checks just confirmed.** Every
+override whose target skill still exists, whose anchors still resolve,
+and whose `requires_config` entries all resolve — no conflict or finding
+surfaced for it above — is, at this moment, reconciled against the
+snapshot this upgrade just fetched (the `fetched_commit` / `source_ref`
+Step 4 captured). **An override with intact anchors but an unresolved
+`requires_config` entry is not stamped** — stamping it clean would make
+every later pre-flight go silent on a skill that is not actually
+reconciled, a false clean worse than not stamping at all. For every
+skill that does pass all three, write its current `surface_hash`, keyed
+by that skill's frontmatter `name:` (e.g.
+`magpie-pr-management-code-review`), alongside `version` and `at`
+(today) into the reconciliation stamp
+([`locks.md`](locks.md#the-reconciled-block--what-was-checked-not-what-to-install)),
+in whichever store [`reconcile.md`'s Step
+0.2](reconcile.md#step-0--pre-flight) would pick for this project — the
+committed lock's `reconciled.skills` map when adopted,
+`.apache-magpie-local/reconciled.json` otherwise. `git add` the lock
+alongside this upgrade's other committed-file changes when the target is
+the lock; never commit.
+
+Leave out any override this walk flagged as a conflict or a
+`requires_config` finding — it is not reconciled until the user resolves
+it, and the next `setup verify` or `reconcile` run will still name it.
+
+### Refresh the pre-flight checker
+
+`.apache-magpie-local/setup_preflight/` is a **copy** of the framework's
+`tools/setup-preflight` package, taken when
+[`config`](config.md#step-2a--install-the-pre-flight-checker) last ran.
+An upgrade moves the framework underneath it, so replace that copy with
+the one the newly-installed version ships, from the same source this
+upgrade took everything else from.
+
+Skip it when the directory does not exist: a project that never ran
+`config` has nothing to refresh, and creating the directory here would
+manufacture the "has been configured" signal its absence carries.
+
+A stale copy is the likeliest cause of a skill reporting that its
+pre-flight checker is missing or broken (*step-0* of
+`preflight-detail.md`), which is precisely the state an upgrade
+introduces and this step closes. Verify the refreshed copy answers before
+reporting the upgrade complete:
+
+```bash
+PYTHONPATH=.apache-magpie-local python3 -m setup_preflight --skill magpie-setup
+```
+
+Skip this write entirely when `.apache-magpie-overrides/` is empty or
+absent — the only surface this walk checks, so there is nothing to
+confirm and nothing to stamp. (A project with configuration but no
+overrides may still have unreconciled skills; that gap is
+`reconcile.md`'s to close, not this walk's — it has no overrides to
+iterate over in the first place.)
 
 ## Step 6 — Refresh framework-skill symlinks
 
@@ -542,10 +618,15 @@ the existing worktrees **now** is the only thing that does.
 
 Procedure:
 
+<!-- BEGIN MAGPIE BLOCK: worktree-enumeration — generated from tools/dev/blocks/worktree-enumeration.md -->
+
 1. Enumerate worktrees with `git worktree list --porcelain`.
-   Filter to the linked worktrees only — skip the main
-   checkout (already handled above) and any bare worktrees.
-2. For each linked worktree, invoke
+   Filter to linked worktrees only — skip the main checkout
+   (already handled earlier in this run) and skip any bare
+   worktrees.
+2. If the list is empty, this pass is a no-op; record "no
+   linked worktrees" in the recap and continue.
+3. For each linked worktree, invoke
    `setup worktree-init` with that worktree's
    working directory as the `cwd`. The sub-action picks up
    the family set from `<main>/.apache-magpie.lock` (the
@@ -555,7 +636,10 @@ Procedure:
    reconciles both the snapshot symlink and the canonical +
    relay framework-skill symlinks (see
    [`worktree-init.md` Step 1 + Step 1b](worktree-init.md)).
-3. Collect each invocation's recap into a per-worktree row
+
+<!-- END MAGPIE BLOCK: worktree-enumeration -->
+
+4. Collect each invocation's recap into a per-worktree row
    for the upgrade summary's `Worktrees:` section
    (Step 8 output block).
 
@@ -585,22 +669,27 @@ ensure each worktree's project root is in that worktree's
 own `.claude/settings.local.json` (defensive against
 [issue #197](https://github.com/apache/magpie/issues/197);
 see
-[`setup-isolated-setup-install/SKILL.md` → Step P](../isolated-setup-install/SKILL.md#step-p--project-root-coverage-in-the-sandbox-allowlists)):
+[`setup-isolated-setup-install/SKILL.md` → Step P](../isolated-setup-install/SKILL.md#step-p--project-root-coverage-in-the-sandbox-allowlists)).
+**Invoke with `dangerouslyDisableSandbox: true`** — the
+target settings files are in Claude Code's built-in sandbox
+`denyWithinAllow` set, so a sandboxed Bash write fails with
+`operation not permitted`.
+
+<!-- BEGIN MAGPIE BLOCK: sandbox-allowlist-helper — generated from tools/dev/blocks/sandbox-allowlist-helper.md -->
 
 ```bash
 ~/.claude/scripts/sandbox-add-project-root.sh --all-worktrees
 ```
 
-**Invoke with `dangerouslyDisableSandbox: true`** — the
-target settings files are in Claude Code's built-in sandbox
-`denyWithinAllow` set, so a sandboxed Bash write fails with
-`operation not permitted`. Surface the bypass proposal to
-the operator *before* invoking — name the helper, name the
-target files, and confirm. The reason for the bypass is
-*"writing project-local sandbox-allowlist entries (issue
-#197 fix)"*. The bypass fires `sandbox-bypass-warn.sh`'s
-bold-red banner as a backstop, but the agent must propose
-the bypass first; do not silently approve.
+Surface the bypass proposal to the operator *before*
+invoking — name the helper, name the target files, and
+confirm. The reason for the bypass is *"writing
+project-local sandbox-allowlist entries (issue #197 fix)"*.
+The bypass triggers `sandbox-bypass-warn.sh`'s bold-red
+banner as a backstop, but the agent must propose the bypass
+first; do not silently approve.
+
+<!-- END MAGPIE BLOCK: sandbox-allowlist-helper -->
 
 The helper enumerates `git worktree list --porcelain` and
 writes each worktree's path into that worktree's own
@@ -673,10 +762,17 @@ If every template scans clean, surface the section as
 
 ## Step 6e — Refresh comdev MCP checkouts (ASF projects)
 
-**Run this step only for ASF projects** — detect ASF the same way
-as [`install.md` Step 9c](install.md#step-9c--comdev-mcp-prerequisites-asf-projects):
+**Run this step only for ASF projects.**
+
+<!-- BEGIN MAGPIE BLOCK: asf-detection — generated from tools/dev/blocks/asf-detection.md -->
+
+Detect ASF the same way as
+[`install.md` Step 9c](install.md#step-9c--comdev-mcp-prerequisites-asf-projects):
 `<project-config>/project.md` declares `project_metadata.mandatory:
-true` or `ponymail` `mandatory: yes`. Skip otherwise.
+true` or `Mail sources` `ponymail` `mandatory: yes`. Skip otherwise
+(the two MCP servers are optional for non-ASF adopters).
+
+<!-- END MAGPIE BLOCK: asf-detection -->
 
 The [PonyMail](../../../../tools/ponymail/tool.md) and
 [Apache Projects](../../../../tools/apache-projects/tool.md) MCP
@@ -831,6 +927,11 @@ Overrides:
   ✓ <list of overrides whose target is unchanged>
   ⚠ <list of overrides flagged for re-anchoring> (open the
      file and update against the new framework structure)
+
+Reconciliation stamp:
+  written to <.apache-magpie.lock | .apache-magpie-local/reconciled.json>
+  skills:  <N> entries confirmed by this walk   (<K> left out — conflicts above)
+  - <none written>   (when Overrides above had nothing to confirm)
 
 Framework templates (projects/_template/):
   ✓ all templates look generic   OR

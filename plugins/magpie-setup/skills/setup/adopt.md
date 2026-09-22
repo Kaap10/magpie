@@ -341,11 +341,74 @@ is not there, and stage it. `adopt` is already writing committed
 files, so this is the sub-action that may do it — `config`
 deliberately does not, and uses `.git/info/exclude` instead.
 
+### 4d — Write the reconciliation stamp
+
+**Migrate first, if there is anything to migrate.** If
+`.apache-magpie-local/reconciled.json` exists and carries a `skills`
+map — written by an earlier
+[`config`](config.md#step-3b--record-what-this-run-reconciled) run,
+back when this project was not yet adopted — copy every one of its
+entries (skill name → `surface_hash`, unchanged) into the lock's
+`reconciled.skills` map being written here, then delete the local file's
+`version`, `at`, and `skills` keys, leaving only the three always-local
+keys (`verified_at`, `verify_suggested_at`, `acknowledged`) behind, per
+[`locks.md`](locks.md#the-reconciled-block--what-was-checked-not-what-to-install).
+The local file's old `version`/`at` are **not** carried over — the
+committed block gets this run's own `version`/`at` regardless (below),
+the same as every other entry 4d writes; only the per-skill hashes move.
+`config` cannot do this migration itself — it has no way to know a
+later `adopt` is coming — so `adopt` is the one surface that carries it
+over. Skipping this would leave the same skill named in the committed
+lock (from 4d's own scope below) **and** the local file at once — the
+both-stores collision
+[`locks.md`](locks.md#the-reconciled-block--what-was-checked-not-what-to-install)
+describes, which `adopt` is the one surface able to avoid outright
+rather than merely report. It stays an expected state on *other*
+contributors' machines, whose local stamps this run cannot see.
+
+**Then scope the rest of this run's writes.** Every skill the committed
+configuration now covers, resolved the same way
+[`reconcile.md`'s sweep](reconcile.md#the-sweep) enumerates scope — a
+skill named by a file under `.apache-magpie-overrides/` (a config file
+matching one of that skill's `requires_config:` entries, from 4a/4b, or
+an override file named `<skill>.md`, from 4c). Nothing this run did not
+just configure or override enters the stamp this way; the migration above
+is the one exception, since it carries over what `config` already
+recorded regardless of whether 4a/4b/4c touched that skill on this run.
+
+For each skill in scope, write its current `surface_hash` into the lock's
+`reconciled.skills` map, keyed by that skill's frontmatter `name:` (e.g.
+`magpie-pr-management-code-review`), alongside `at` (today) and
+`version`. **`version` is the version Step 2 actually read off this
+machine, not necessarily the `min_version` value Step 2 wrote to the
+lock** — on a re-adoption the two can differ, because Step 2 never
+lowers `min_version` below what the project already required, and the
+stamp records what this run actually ran against, not the ratcheted
+floor. See
+[`locks.md`](locks.md#the-reconciled-block--what-was-checked-not-what-to-install)
+for the block's shape.
+
+This is the **one path where the stamp enters git.** Everywhere else in
+this framework the stamp is a gitignored, per-machine record; here it
+rides along inside the same commit the maintainer is already making
+deliberately for the floor and the configuration store — not a separate
+decision, and not something this sub-action asks about again. `git add`
+the lock — Step 2 already staged it for the floor, so this updates the
+same staged file rather than opening a new one. **Never commit.**
+
+Nothing configured or overridden this run, and nothing to migrate either
+(4a, 4b, and 4c all found nothing to do, and
+`.apache-magpie-local/reconciled.json` carried no `skills` map to begin
+with) → leave the `reconciled:` block exactly as it was. A re-adoption
+run that changes only the floor, with no configuration change and no
+local stamp to migrate, stamps nothing new.
+
 ## Step 5 — Recap
 
 Tell the user, in this order:
 
-1. **What is staged** — the paths (the lock, the derived wiring, the
+1. **What is staged** — the paths (the lock — including its
+   reconciliation stamp entries from 4d, the derived wiring, the
    configuration store, and `.gitignore` if it changed), and that
    nothing is committed.
 1b. **What was promoted and what was dropped** — which local files
@@ -393,6 +456,19 @@ Tell the user, in this order:
   If that empties a key, remove the empty key rather than leaving `{}`.
 - preserve `.apache-magpie-overrides/` unless `--purge-overrides` is
   passed.
+- **migrate the reconciliation stamp back before the lock goes.** On
+  an adopted project the lock's `reconciled:` block is the project's
+  only copy of the `skills` map (step 4d moved it there), and
+  `.apache-magpie-overrides/` survives this operation — so deleting
+  the lock without moving the map leaves a configured project with no
+  baseline, and every skill's pre-flight proposes the one-time sweep
+  again. Copy `version`, `at` and `skills` into
+  `.apache-magpie-local/reconciled.json` — merging into it, never
+  replacing it, so `verified_at`, `verify_suggested_at` and
+  `acknowledged` stay — which is exactly where a
+  configured-but-unadopted project's stamp belongs. If the copy cannot
+  be made, say plainly that the stamp went with the lock and that
+  `/magpie-setup reconcile` re-establishes one.
 
 **Leave every install alone** — the user's own, and everyone else's.
 Un-adopting is the repo withdrawing a recommendation; it uninstalls

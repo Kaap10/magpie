@@ -61,7 +61,17 @@ repos:
         # Skip the PR template — GitHub pre-populates a new PR description
         # with the template verbatim, so a TOC block becomes per-PR noise the
         # contributor has to delete by hand.
-        exclude: ^(\.claude/skills/.*|\.agents/skills/.*|\.github/skills/.*|skills/.*|plugins/magpie-[^/]+/skills/.*|tools/cve-tool-vulnogram/generate-cve-json/SKILL\.md|tools/skill-evals/.*|tools/spec-loop/.*|\.github/PULL_REQUEST_TEMPLATE\.md)$
+        # Skip every shared-block source (tools/dev/blocks/*.md plus the
+        # pre-flight block source tools/dev/preflight-block.md, and the
+        # rules sections under tools/setup-preflight, which the tool emits
+        # on its own stdout): their SPDX header must be the first thing
+        # in the file too — `_strip_licence_header()` only strips it there —
+        # and a TOC block ahead of it would leak the SPDX comment (and an
+        # empty TOC wrapper) into every propagated copy, same incompatibility
+        # as the skill definitions above. The block source was not excluded
+        # before and did carry a TOC, which rode into all 65 propagated
+        # copies as a table of contents for a file none of them are.
+        exclude: ^(\.claude/skills/.*|\.agents/skills/.*|\.github/skills/.*|skills/.*|plugins/magpie-[^/]+/skills/.*|tools/cve-tool-vulnogram/generate-cve-json/SKILL\.md|tools/skill-evals/.*|tools/spec-loop/.*|\.github/PULL_REQUEST_TEMPLATE\.md|tools/dev/blocks/.*|tools/dev/preflight-block\.md|tools/setup-preflight/src/setup_preflight/sections/.*)$
         args:
           - "--maxlevel"
           - "3"
@@ -321,24 +331,65 @@ repos:
         entry: python3 tools/dev/check-family-plugins.py --fix
         files: ^(skills/.*/SKILL\.md|plugins/.*|\.claude-plugin/(marketplace|plugin)\.json|\.codex-plugin/plugin\.json|\.agents/plugins/marketplace\.json|(plugin|marketplace)\.json|gemini-extension\.json|apm\.yml|pyproject\.toml)$
         pass_filenames: false
-  # The shared setup pre-flight every skill runs before it acts. It cannot be
-  # a hook: on most harnesses *no code runs at all* when a plugin is installed
-  # or upgraded (AP1 defines no hook component; Claude Code's SessionStart hook
+  # Every shared prose block a skill carries — the auto-inserted setup
+  # pre-flight, plus any number of declared blocks. It cannot be a hook: on
+  # most harnesses *no code runs at all* when a plugin is installed or
+  # upgraded (AP1 defines no hook component; Claude Code's SessionStart hook
   # is wired only into magpie-setup), so the check has to be instructions the
   # agent reads on invocation. It cannot be an include either: a family plugin
   # must be self-contained — the packagers drop symlinks rather than follow
   # them — so a shared file outside the plugin root would be unreachable from
-  # the install shape most adopters use. That leaves one source and 65 generated
-  # copies, which is exactly the drift this hook exists to prevent — edit
-  # `tools/dev/preflight-block.md` and let `--fix` propagate it. The `setup`
-  # family is exempt: those skills perform the setup the block asks for.
+  # the install shape most adopters use. That leaves one source and many
+  # generated copies per block, which is exactly the drift this hook exists
+  # to prevent — edit `tools/dev/preflight-block.md` (the pre-flight block)
+  # or `tools/dev/blocks/<name>.md` (a declared block) and let `--fix`
+  # propagate it. The `setup` family is exempt from the pre-flight block:
+  # those skills perform the setup the block asks for.
   - repo: local
     hooks:
-      - id: check-skill-preflight
-        name: check-skill-preflight (shared pre-flight block in every SKILL.md)
+      - id: check-shared-blocks
+        name: check-shared-blocks (shared prose blocks in every SKILL.md and sibling detail file)
         language: system
-        entry: python3 tools/dev/check-skill-preflight.py --fix
-        files: ^(skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/[^/]+/SKILL\.md|tools/dev/preflight-block\.md)$
+        entry: python3 tools/dev/check-shared-blocks.py --fix
+        files: ^(skills/[^/]+/[^/]+\.md|plugins/magpie-[^/]+/skills/[^/]+/[^/]+\.md|tools/dev/preflight-block\.md|tools/dev/preflight-detail\.md|tools/dev/blocks/.*\.md)$
+        pass_filenames: false
+  # The reconciliation fingerprint. Runs after check-shared-blocks so it
+  # hashes the file an adopter actually installs, and before the token
+  # count so that measurement sees the final bytes. The hash covers only
+  # `requires_config` and the skill's structural anchors: a reworded
+  # paragraph must not tell every adopter their configuration went stale,
+  # and a renamed step must. `files:` matches every `*.md` directly inside a
+  # skill directory, not just `SKILL.md`, because the fingerprint spans the
+  # sibling detail files too — a heading renamed in `locks.md` moves the
+  # `setup` digest, and a `SKILL.md`-only pattern would let that commit pass
+  # green here and fail on `main`.
+  - repo: local
+    hooks:
+      - id: skill-surface-hash
+        name: skill-surface-hash (reconciliation fingerprint in every SKILL.md)
+        language: system
+        entry: python3 tools/dev/skill-surface-hash.py --fix
+        files: ^(skills/[^/]+/[^/]+\.md|plugins/magpie-[^/]+/skills/[^/]+/[^/]+\.md)$
+        pass_filenames: false
+  # Cross-file near-duplicate prose gate: fails on a paragraph pasted from
+  # one scoped file into another instead of being pulled into a shared
+  # block. Wired only over the setup-family surface the shared-block
+  # extraction actually touched (`WIRED_SKILLS_ROOT` in the script) — the
+  # design covers the whole `skills/` tree, but that tree carries ~3800
+  # pre-existing near-duplicate pairs this effort never touched (see the
+  # script's module docstring, "Landing scope vs. the whole duplication
+  # problem"), so wiring it there today would fail on day one. `files:`
+  # only gates *whether* the run fires; the script always scans its whole
+  # wired scope itself (`pass_filenames: false`), since a diff-scoped run
+  # cannot see that a paragraph added here duplicates one that already
+  # exists somewhere the diff never touched.
+  - repo: local
+    hooks:
+      - id: check-duplication
+        name: check-duplication (cross-file near-duplicate prose, setup-family scope)
+        language: system
+        entry: python3 tools/dev/check-duplication.py
+        files: ^(plugins/magpie-setup/skills/setup/.*\.md|tools/dev/blocks/.*\.md|tools/dev/preflight-block\.md)$
         pass_filenames: false
   # Deterministic full-file token measurements. Run after skill fixers.
   # The dedicated path-filtered CI workflow also catches deleted skills.

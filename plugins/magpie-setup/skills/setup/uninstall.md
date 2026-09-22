@@ -87,11 +87,19 @@ relevant override file rather than uninstalling.
 
 ## Step 0 — Pre-flight
 
-1. Confirm we are in a git repo
-   (`git rev-parse --show-toplevel`).
+1. Confirm we are in a git repo (`git rev-parse
+   --show-toplevel`).
 2. **Confirm we are in the main checkout, not a git worktree.**
+
+   <!-- BEGIN MAGPIE BLOCK: main-checkout-precheck — generated from tools/dev/blocks/main-checkout-precheck.md -->
+
    Compare `git rev-parse --git-dir` against
-   `git rev-parse --git-common-dir`. If different, stop with:
+   `git rev-parse --git-common-dir` — they are equal in the
+   main checkout and different in a worktree.
+
+   <!-- END MAGPIE BLOCK: main-checkout-precheck -->
+
+   If different, stop with:
 
    > *"`uninstall` runs in the main checkout, not a worktree.
    > Uninstalling removes the shared snapshot every worktree
@@ -100,7 +108,6 @@ relevant override file rather than uninstalling.
    > main: `cd <main-path> && setup uninstall`. To
    > undo just this worktree's symlink without touching the
    > main, `rm <worktree>/.apache-magpie` manually."*
-
 3. Confirm we are **not** in `apache/magpie` itself
    (`git remote get-url origin`); refuse if it resolves to the
    framework — the framework is not "adopted into" itself.
