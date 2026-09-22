@@ -122,7 +122,7 @@ special-token spellings counted as ordinary text.
 Coverage: **75 of 75 local `skills/*/SKILL.md` files**.
 External `source.md` redirects and harness symlinks are excluded.
 
-Measurement manifest SHA-256: `54fe049753b9b1cf76372d32236d677eb85c8e8e5794dc0ca60571d26e6b7dae`.
+Measurement manifest SHA-256: `7b7896bb2028f7135dd95e4961e19d7395d90faa4dfc6ec0a6fa7b6b9590ee0f`.
 
 | Skill file | Measured tokens | Source SHA-256 (first 16 characters) |
 |---|---:|---|
@@ -151,7 +151,7 @@ Measurement manifest SHA-256: `54fe049753b9b1cf76372d32236d677eb85c8e8e5794dc0ca
 | [mentoring-welcome](../skills/mentoring-welcome/SKILL.md) | 3,225 | `f161921dad9f993a` |
 | [newcomer-issue-explainer](../skills/newcomer-issue-explainer/SKILL.md) | 3,495 | `f7602d5903d35353` |
 | [onboarding-concierge](../skills/onboarding-concierge/SKILL.md) | 3,374 | `12ef0454669ab5bb` |
-| [optimize-skill](../skills/optimize-skill/SKILL.md) | 3,050 | `c02cfac5d75a5471` |
+| [optimize-skill](../skills/optimize-skill/SKILL.md) | 3,343 | `f27cbca69682b108` |
 | [pairing-multi-agent-review](../skills/pairing-multi-agent-review/SKILL.md) | 3,767 | `c174ba4705277f17` |
 | [pairing-self-review](../skills/pairing-self-review/SKILL.md) | 3,517 | `0d901c3344f6cee3` |
 | [pr-management-code-review](../skills/pr-management-code-review/SKILL.md) | 8,957 | `7ffe3135ee18b887` |
@@ -192,7 +192,7 @@ Measurement manifest SHA-256: `54fe049753b9b1cf76372d32236d677eb85c8e8e5794dc0ca
 | [setup-isolated-setup-doctor](../skills/setup-isolated-setup-doctor/SKILL.md) | 7,859 | `23d6b94d2ffcd718` |
 | [setup-isolated-setup-install](../skills/setup-isolated-setup-install/SKILL.md) | 3,879 | `9c7d49c9e7ff947d` |
 | [setup-isolated-setup-update](../skills/setup-isolated-setup-update/SKILL.md) | 5,512 | `55fe1d5e957c9128` |
-| [setup-isolated-setup-verify](../skills/setup-isolated-setup-verify/SKILL.md) | 8,428 | `a8e53bf6abd44923` |
+| [setup-isolated-setup-verify](../skills/setup-isolated-setup-verify/SKILL.md) | 4,967 | `2de9c2cd4bf4d24b` |
 | [setup-override-upstream](../skills/setup-override-upstream/SKILL.md) | 3,960 | `8ab7b08f5fe58452` |
 | [setup-privacy-llm](../skills/setup-privacy-llm/SKILL.md) | 2,055 | `b89f1f5e421df5cc` |
 | [setup-shared-config-sync](../skills/setup-shared-config-sync/SKILL.md) | 4,185 | `716c989013526bf0` |
