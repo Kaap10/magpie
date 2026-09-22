@@ -297,6 +297,7 @@ def test_hostile_package_names_are_refused(hostile: str) -> None:
         "a1b2c3d",
         "0123456789abcdef",
         "a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4",
+        "a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef",
     ],
 )
 def test_valid_commits_are_accepted(valid_commit: str) -> None:
@@ -307,6 +308,7 @@ def test_valid_commits_are_accepted(valid_commit: str) -> None:
     "invalid_commit",
     [
         "a1b2c3",  # too short (< 7)
+        "a" * 65,  # too long (> 64)
         "a1b2c3g",  # non-hex
         "A1B2C3D",  # uppercase
         "main",
