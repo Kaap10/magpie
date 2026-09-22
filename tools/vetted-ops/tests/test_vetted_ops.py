@@ -20,7 +20,10 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from email.message import Message
 from pathlib import Path
+from types import TracebackType
+from typing import NoReturn
 
 import pytest
 
@@ -1378,13 +1381,21 @@ def test_run_http_execution_success(
         def read(self) -> bytes:
             return b"hello world"
 
-        def __enter__(self):
+        def __enter__(self) -> MockResponse:
             return self
 
-        def __exit__(self, exc_type, exc_val, exc_tb):
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_val: BaseException | None,
+            exc_tb: TracebackType | None,
+        ) -> None:
             pass
 
-    def mock_urlopen(req, timeout=None):
+    def mock_urlopen(
+        req: urllib.request.Request,
+        timeout: float | None = None,
+    ) -> MockResponse:
         assert timeout == 30
         assert req.get_header("User-agent") == "apache-magpie-vetted-ops/0.1.0"
         return MockResponse()
@@ -1398,8 +1409,11 @@ def test_run_http_execution_success(
 def test_run_http_execution_httperror(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    def mock_urlopen(req, timeout=None):
-        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+    def mock_urlopen(
+        req: urllib.request.Request,
+        timeout: float | None = None,
+    ) -> NoReturn:
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", Message(), None)
 
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
     rc = cli._run_http({"url": "https://example.com"}, body=None)
@@ -1410,7 +1424,10 @@ def test_run_http_execution_httperror(
 def test_run_http_execution_urlerror(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    def mock_urlopen(req, timeout=None):
+    def mock_urlopen(
+        req: urllib.request.Request,
+        timeout: float | None = None,
+    ) -> NoReturn:
         raise urllib.error.URLError("connection refused")
 
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
@@ -1422,7 +1439,10 @@ def test_run_http_execution_urlerror(
 def test_run_http_execution_timeouterror(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    def mock_urlopen(req, timeout=None):
+    def mock_urlopen(
+        req: urllib.request.Request,
+        timeout: float | None = None,
+    ) -> NoReturn:
         raise TimeoutError("timed out")
 
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)

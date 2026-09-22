@@ -794,7 +794,7 @@ tracker — not metered against the Gmail budget. Still, keep it
 inside the skill's overall "≤ 1 extra HTTP round-trip per tracker"
 soft limit for closed-bucket scans: if multiple closed trackers
 are in scope, run the checks in parallel via the subagent fanout
-(one curl per subagent), not serially in the orchestrator.
+(one vetted-op-read check per subagent), not serially in the orchestrator.
 
 **When the tracker has no CVE ID.** Closed trackers without a
 `CVE-YYYY-NNNNN` in the *CVE tool link* body field are closing
