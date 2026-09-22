@@ -71,6 +71,21 @@ _NODE_ID = re.compile(r"^[A-Za-z0-9_-]{1,120}$")
 #: else even before the containment check below.
 _QUERY_NAME = re.compile(r"^[a-z][a-z0-9-]{0,60}$")
 
+#: An OSV vulnerability ID or similar identifier (CVE, GHSA, etc).
+_VULN_ID = re.compile(r"^[A-Za-z0-9][-A-Za-z0-9]{2,60}$")
+
+#: An ecosystem package name. Supports scoped npm packages (@scope/name).
+_PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@/-]{0,200}$")
+
+#: A package version string.
+_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+~-]{0,100}$")
+
+#: A full or short git commit hash.
+_COMMIT_HASH = re.compile(r"^[0-9a-f]{7,40}$")
+
+#: A strict CVE identifier.
+_CVE_ID = re.compile(r"^CVE-[0-9]{4}-[0-9]{4,}$")
+
 #: Where the allowlisted GraphQL documents live. Shipping them as files inside
 #: the package — rather than accepting query text as a parameter — is what keeps
 #: the GraphQL surface closed: a caller selects a query, it never supplies one.
@@ -176,6 +191,26 @@ def query_name(value: str) -> str:
     return str(path)
 
 
+def vuln_id(value: str) -> str:
+    return _check(_VULN_ID, value, "vuln id")
+
+
+def package_name(value: str) -> str:
+    return _check(_PACKAGE_NAME, value, "package name")
+
+
+def version(value: str) -> str:
+    return _check(_VERSION, value, "version")
+
+
+def commit_hash(value: str) -> str:
+    return _check(_COMMIT_HASH, value, "commit hash")
+
+
+def cve_id(value: str) -> str:
+    return _check(_CVE_ID, value, "CVE id")
+
+
 def read_body(value: str, *, workspace: Path) -> bytes:
     """
     Validate and read body text, returning its **content**.
@@ -261,8 +296,10 @@ class Op:
     name: str
     #: Parameter names, in positional order.
     params: tuple[str, ...]
-    #: Builds the argv. Receives resolved config plus validated parameters.
-    build: Callable[..., list[str]]
+    #: Builds the argv or request descriptor. Receives resolved config plus validated parameters.
+    build: Callable[..., list[str] | dict[str, object]]
+    #: Execution backend. "gh" returns an argv list; "http-read" returns a request descriptor dict.
+    backend: str = "gh"
     #: True when the operation changes state visible outside the machine.
     writes: bool = False
     #: Human-readable one-liner for `list-ops`.

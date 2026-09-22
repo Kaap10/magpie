@@ -45,8 +45,11 @@ without the write path losing its gate.
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -106,18 +109,32 @@ def _validate_params(
             resolved[name] = ops_mod.ghsa(raw)
         elif name in {"item_id", "content_id"}:
             resolved[name] = ops_mod.node_id(raw)
+        elif name == "vuln_id":
+            resolved[name] = ops_mod.vuln_id(raw)
+        elif name == "package_name":
+            resolved[name] = ops_mod.package_name(raw)
+        elif name == "version":
+            resolved[name] = ops_mod.version(raw)
+        elif name == "commit_hash":
+            resolved[name] = ops_mod.commit_hash(raw)
+        elif name == "cve_id":
+            resolved[name] = ops_mod.cve_id(raw)
         else:  # pragma: no cover - guarded by the catalogue test
             raise ops_mod.ParamError(f"operation {op.name!r} declares unknown parameter {name!r}")
     return resolved, body
 
 
-def build_argv(op: ops_mod.Op, params: dict[str, str], config: Config) -> list[str]:
-    argv = op.build(config.as_mapping(), **params)
-    if not isinstance(argv, list) or not all(isinstance(a, str) for a in argv):
-        raise ops_mod.ParamError(f"operation {op.name!r} produced a malformed argv")
-    if argv[0] != "gh":
-        raise ops_mod.ParamError(f"operation {op.name!r} tried to run {argv[0]!r}, not gh")
-    return argv
+def build_argv(op: ops_mod.Op, params: dict[str, str], config: Config) -> list[str] | dict[str, object]:
+    result = op.build(config.as_mapping(), **params)
+    if op.backend == "gh":
+        if not isinstance(result, list) or not all(isinstance(a, str) for a in result):
+            raise ops_mod.ParamError(f"operation {op.name!r} produced a malformed argv")
+        if result[0] != "gh":
+            raise ops_mod.ParamError(f"operation {op.name!r} tried to run {result[0]!r}, not gh")
+    elif op.backend == "http-read":
+        if not isinstance(result, dict):
+            raise ops_mod.ParamError(f"operation {op.name!r} produced a malformed request descriptor")
+    return result
 
 
 def _reject_repeated_caller(argv: Sequence[str]) -> None:
@@ -202,16 +219,68 @@ def main(argv: list[str] | None = None, *, read_only: bool = False) -> int:
         return EXIT_POLICY
 
     if args.dry_run:
-        print(" ".join(command))
+        if op.backend == "gh":
+            assert isinstance(command, list)
+            print(" ".join(command))
+        else:
+            assert isinstance(command, dict)
+            print(f"{command.get('method', 'GET')} {command.get('url')}")
+            if command.get("body"):
+                print("Body:", command["body"])
         return EXIT_OK
 
-    # No shell. The argv list is passed through verbatim, and any body travels
-    # on stdin as bytes we already read — `gh` opens no file of ours.
-    completed = subprocess.run(command, check=False, input=body)
-    if completed.returncode != EXIT_OK:
-        print(f"vetted-op: {op.name} failed (gh exit {completed.returncode})", file=sys.stderr)
+    if op.backend == "gh":
+        assert isinstance(command, list)
+        # No shell. The argv list is passed through verbatim, and any body travels
+        # on stdin as bytes we already read — `gh` opens no file of ours.
+        completed = subprocess.run(command, check=False, input=body)
+        if completed.returncode != EXIT_OK:
+            print(f"vetted-op: {op.name} failed (gh exit {completed.returncode})", file=sys.stderr)
+            return EXIT_COMMAND
+        return EXIT_OK
+    elif op.backend == "http-read":
+        assert isinstance(command, dict)
+        return _run_http(command, body=body)
+    else:  # pragma: no cover
+        raise ops_mod.ParamError(f"unknown backend {op.backend!r}")
+
+
+def _run_http(request_desc: dict[str, object], *, body: bytes | None) -> int:
+    """Execute an HTTP read operation."""
+    url = request_desc.get("url")
+    method = request_desc.get("method", "GET")
+    headers = request_desc.get("headers", {})
+    if not isinstance(headers, dict):
+        print("vetted-op: internal error: http headers must be a dict", file=sys.stderr)
         return EXIT_COMMAND
-    return EXIT_OK
+
+    if not isinstance(url, str):
+        print("vetted-op: internal error: http request missing url", file=sys.stderr)
+        return EXIT_COMMAND
+
+    # Optional request body from the descriptor
+    desc_body = request_desc.get("body")
+    payload: bytes | None = None
+    if desc_body is not None:
+        payload = desc_body.encode("utf-8") if isinstance(desc_body, str) else desc_body  # type: ignore[assignment]
+    elif body is not None:
+        payload = body
+
+    req = urllib.request.Request(url, data=payload, method=str(method))
+    for k, v in headers.items():
+        req.add_header(str(k), str(v))
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = response.read()
+            sys.stdout.buffer.write(result)
+            return EXIT_OK
+    except urllib.error.HTTPError as exc:
+        print(f"vetted-op: http request failed with {exc.code} {exc.reason}", file=sys.stderr)
+        return EXIT_COMMAND
+    except urllib.error.URLError as exc:
+        print(f"vetted-op: http request failed: {exc.reason}", file=sys.stderr)
+        return EXIT_COMMAND
 
 
 def main_read(argv: list[str] | None = None) -> int:

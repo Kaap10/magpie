@@ -24,11 +24,11 @@ import pytest
 from vetted_ops import cli, config, ops
 
 CONFIG_TOML = """
-workspace = "{workspace}"
+workspace = '{workspace}'
 
 [repos]
-tracker = "acme/tracker"
 upstream = "acme/product"
+tracker = "acme/tracker"
 
 [values]
 labels = ["needs triage", "cve allocated"]
@@ -57,7 +57,7 @@ def policy_path(tmp_path: Path) -> Path:
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
     return cfg_path
 
 
@@ -67,7 +67,7 @@ def policy(tmp_path: Path) -> config.Config:
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
     return config.load(cfg_path)
 
 
@@ -95,6 +95,11 @@ def test_every_op_declares_validators_for_all_its_params() -> None:
         "item_id",
         "content_id",
         "title",
+        "vuln_id",
+        "package_name",
+        "version",
+        "commit_hash",
+        "cve_id",
     }
     for op in ops.OPS.values():
         for param in op.params:
@@ -104,7 +109,7 @@ def test_every_op_declares_validators_for_all_its_params() -> None:
 
 
 def test_every_builder_produces_a_gh_argv(policy: config.Config) -> None:
-    """No operation may invoke anything other than gh."""
+    """Every 'gh' operation must invoke nothing other than gh."""
     sample = {
         "number": "1",
         "comment_id": "1",
@@ -126,14 +131,26 @@ def test_every_builder_produces_a_gh_argv(policy: config.Config) -> None:
         "reason": "completed",
         "column": "Assessed",
         "body": "unused",
+        "vuln_id": "OSV-2020-111",
+        "package_name": "pytest",
+        "version": "1.0.0",
+        "commit_hash": "a1b2c3d",
+        "cve_id": "CVE-2023-1234",
+        "ecosystem": "PyPI",
     }
     body = policy.workspace / "body.md"
     body.write_text("x")
     for op in ops.OPS.values():
         params = {p: (str(body) if p in op.body_files else sample[p]) for p in op.params}
-        argv = op.build(policy.as_mapping(), **params)
-        assert argv[0] == "gh", op.name
-        assert all(isinstance(a, str) for a in argv), op.name
+        result = op.build(policy.as_mapping(), **params)
+
+        if op.backend == "gh":
+            assert isinstance(result, list)
+            assert result[0] == "gh", op.name
+            assert all(isinstance(a, str) for a in result), op.name
+        elif op.backend == "http-read":
+            assert isinstance(result, dict)
+            assert isinstance(result.get("url"), str), op.name
 
 
 # --- parameters can never become commands ------------------------------------
@@ -173,6 +190,7 @@ def test_configured_label_is_accepted(policy: config.Config) -> None:
     op = ops.resolve("issue-add-label")
     params, _body = cli._validate_params(op, ["7", "cve allocated"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv == [
         "gh",
         "issue",
@@ -203,6 +221,7 @@ def test_body_file_content_may_contain_anything(policy: config.Config) -> None:
     op = ops.resolve("issue-comment")
     params, sent = cli._validate_params(op, ["7", str(body)], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     # The body reaches `gh` on stdin, not as a path it opens for itself.
     assert argv[-2:] == ["--body-file", "-"]
     assert sent == b"`id` $(whoami) && rm -rf / ; drop table\n"
@@ -219,6 +238,7 @@ def test_issue_edit_body_sends_the_body_on_stdin(policy: config.Config) -> None:
     op = ops.resolve("issue-edit-body")
     params, sent = cli._validate_params(op, ["611", str(body)], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv[:5] == ["gh", "issue", "edit", "611", "--repo"]
     assert argv[-2:] == ["--body-file", "-"]
     assert sent == b"### Affected versions\n\napache-airflow `< NEXT VERSION`\n"
@@ -242,6 +262,7 @@ def test_issue_edit_title_passes_the_title_as_one_argv_element(policy: config.Co
     title = 'Session cookie overrides `Authorization`; enables "session fixation"'
     params, sent = cli._validate_params(op, ["555", title], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv[:5] == ["gh", "issue", "edit", "555", "--repo"]
     assert argv[-2:] == ["--title", title]
     assert sent is None
@@ -288,6 +309,7 @@ def test_milestone_create_is_gated_on_the_configured_milestones(policy: config.C
 
     params, _ = cli._validate_params(op, ["1.2.3"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv == ["gh", "api", "repos/acme/tracker/milestones", "-f", "title=1.2.3"]
 
 
@@ -303,6 +325,7 @@ def test_issue_remove_assignee_is_gated_on_the_roster(policy: config.Config) -> 
 
     params, _ = cli._validate_params(op, ["611", "alice"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv == [
         "gh",
         "issue",
@@ -352,7 +375,7 @@ def test_no_read_operation_sends_fields_without_an_explicit_get(policy: config.C
     body.write_text("x")
 
     for name, op in ops.OPS.items():
-        if op.writes:
+        if op.writes or op.backend != "gh":
             continue
         params = {}
         for p in op.params:
@@ -363,6 +386,7 @@ def test_no_read_operation_sends_fields_without_an_explicit_get(policy: config.C
             else:
                 params[p] = sample[p]
         argv = op.build(policy.as_mapping(), **params)
+        assert isinstance(argv, list)
         if "graphql" in argv:
             continue
         if any(a in ("-f", "-F") for a in argv):
@@ -387,6 +411,7 @@ def test_repo_tree_refuses_to_report_a_truncated_listing(policy: config.Config) 
     op = ops.resolve("repo-tree")
     params, _ = cli._validate_params(op, ["main"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
 
     jq = argv[argv.index("--jq") + 1]
     assert ".truncated" in jq, "repo-tree drops the API's truncation flag"
@@ -404,6 +429,7 @@ def test_board_add_item_takes_a_content_node_id(policy: config.Config) -> None:
     op = ops.resolve("board-add-item")
     params, _ = cli._validate_params(op, ["I_kwDOabc123"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv[:3] == ["gh", "api", "graphql"]
     assert "content=I_kwDOabc123" in argv
     assert "project=PVT_proj" in argv
@@ -420,6 +446,7 @@ def test_board_archive_item_targets_the_configured_project(policy: config.Config
     op = ops.resolve("board-archive-item")
     params, _ = cli._validate_params(op, ["PVTI_kwDOabc"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert "item=PVTI_kwDOabc" in argv
     assert "project=PVT_proj" in argv
     assert "archiveProjectV2Item" in argv[-1]
@@ -434,6 +461,7 @@ def test_milestone_close_is_by_number_and_hits_the_tracker(policy: config.Config
     op = ops.resolve("milestone-close")
     params, _ = cli._validate_params(op, ["64"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv == [
         "gh",
         "api",
@@ -458,7 +486,7 @@ def test_caller_may_not_run_an_operation_outside_its_manifest(
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
 
     rc = run(["--caller", "security-issue-triage", "issue-close", "7", "completed"], cfg_path)
     assert rc == cli.EXIT_POLICY
@@ -470,7 +498,7 @@ def test_unknown_caller_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
 
     rc = run(["--caller", "not-a-skill", "issue-view", "7"], cfg_path)
     assert rc == cli.EXIT_POLICY
@@ -482,7 +510,7 @@ def test_permitted_caller_reaches_dry_run(tmp_path: Path, capsys: pytest.Capture
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
 
     rc = run(["--caller", "security-issue-sync", "issue-view", "7", "--dry-run"], cfg_path)
     assert rc == cli.EXIT_OK
@@ -494,7 +522,7 @@ def test_caller_is_required(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
 
     rc = run(["issue-view", "7"], cfg_path)
     assert rc == cli.EXIT_USAGE
@@ -508,6 +536,7 @@ def test_repo_cannot_be_influenced_by_a_parameter(policy: config.Config) -> None
     op = ops.resolve("issue-view")
     params, _body = cli._validate_params(op, ["7"], policy)
     argv = cli.build_argv(op, params, policy)
+    assert isinstance(argv, list)
     assert argv[argv.index("--repo") + 1] == "acme/tracker"
 
 
@@ -845,6 +874,7 @@ def test_pr_searches_are_a_fixed_qualifier_not_a_query(policy: config.Config) ->
         ("pr-search-reviewed-by", "--reviewed-by"),
     ):
         argv = ops.OPS[name].build(policy.as_mapping(), login="alice")
+        assert isinstance(argv, list)
         assert argv[:3] == ["gh", "search", "prs"], name
         assert argv[argv.index(qualifier) + 1] == "alice", name
         # The repo is pinned by policy and the state is fixed open.
@@ -856,6 +886,7 @@ def test_pr_searches_are_a_fixed_qualifier_not_a_query(policy: config.Config) ->
 
 def test_team_search_cannot_leave_the_upstream_org(policy: config.Config) -> None:
     argv = ops.OPS["pr-search-team-review-requested"].build(policy.as_mapping(), team="reviewers")
+    assert isinstance(argv, list)
     assert argv[argv.index("--review-requested") + 1] == "acme/reviewers"
 
 
@@ -927,7 +958,7 @@ def trackerless(tmp_path: Path) -> config.Config:
     workspace.mkdir(parents=True)
     workspace.chmod(0o700)
     cfg_path = root / "config.toml"
-    cfg_path.write_text(CONFIG_NO_TRACKER.format(workspace=workspace))
+    cfg_path.write_text(CONFIG_NO_TRACKER.format(workspace=workspace.as_posix()))
     return config.load(cfg_path)
 
 
@@ -940,6 +971,7 @@ def test_upstream_operations_work_without_a_tracker(trackerless: config.Config) 
     """The regression: these died at load time over a value they never read."""
     assert ops.OPS["viewer"].build(trackerless.as_mapping()) == ["gh", "api", "user", "--jq", ".login"]
     argv = ops.OPS["pr-diff"].build(trackerless.as_mapping(), number="1")
+    assert isinstance(argv, list)
     assert argv[argv.index("--repo") + 1] == "acme/product"
 
 
@@ -1005,7 +1037,7 @@ def test_upstream_is_still_required(tmp_path: Path) -> None:
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
-        CONFIG_NO_TRACKER.format(workspace=workspace).replace('upstream = "acme/product"', "")
+        CONFIG_NO_TRACKER.format(workspace=workspace.as_posix()).replace('upstream = "acme/product"', "")
     )
     with pytest.raises(config.ConfigError):
         config.load(cfg_path)
@@ -1018,7 +1050,9 @@ def test_a_malformed_tracker_is_still_refused(tmp_path: Path) -> None:
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
-        CONFIG_NO_TRACKER.format(workspace=workspace).replace("[repos]", '[repos]\ntracker = "not-a-repo"')
+        CONFIG_NO_TRACKER.format(workspace=workspace.as_posix()).replace(
+            "[repos]", '[repos]\ntracker = "not-a-repo"'
+        )
     )
     with pytest.raises(config.ConfigError):
         config.load(cfg_path)

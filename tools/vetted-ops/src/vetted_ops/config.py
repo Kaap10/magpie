@@ -56,12 +56,15 @@ class Config:
     workspace: Path
     #: Enum name -> permitted values. Board columns map name -> option id.
     values: dict[str, object]
+    #: Endpoint name -> URL. Defaults are provided for canonical OSV/CVE APIs.
+    endpoints: dict[str, str]
     #: Caller name -> permitted operation names.
     callers: dict[str, frozenset[str]]
 
     def as_mapping(self) -> dict[str, object]:
         """The mapping handed to an operation's ``build`` callable."""
         merged: dict[str, object] = dict(self.values)
+        merged.update(self.endpoints)
         merged["tracker_repo"] = self.tracker_repo
         merged["upstream_repo"] = self.upstream_repo
         return merged
@@ -140,11 +143,25 @@ def load(path: Path | None = None, *, cwd: Path | None = None) -> Config:
             raise ConfigError(f"callers.{name} must be a list of operation names")
         callers[name] = frozenset(ops)
 
+    endpoints_raw = raw.get("endpoints", {})
+    if not isinstance(endpoints_raw, dict):
+        raise ConfigError("[endpoints] must be a table")
+
+    endpoints = {
+        "osv_api": "https://api.osv.dev/v1",
+        "cve_services_api": "https://cveawg.mitre.org/api",
+    }
+    for name, url in endpoints_raw.items():
+        if not isinstance(url, str):
+            raise ConfigError(f"endpoints.{name} must be a URL string")
+        endpoints[name] = url.rstrip("/")
+
     return Config(
         tracker_repo=_optional_repo(repos, "tracker"),
         upstream_repo=_require_repo(repos, "upstream"),
         workspace=workspace,
         values=dict(values_raw),
+        endpoints=endpoints,
         callers=callers,
     )
 
@@ -157,6 +174,7 @@ def describe(config: Config) -> str:
             "upstream_repo": config.upstream_repo,
             "workspace": str(config.workspace),
             "values": {k: (sorted(v) if isinstance(v, dict) else v) for k, v in config.values.items()},
+            "endpoints": dict(sorted(config.endpoints.items())),
             "callers": {k: sorted(v) for k, v in sorted(config.callers.items())},
         },
         indent=2,
