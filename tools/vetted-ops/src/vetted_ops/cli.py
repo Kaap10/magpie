@@ -219,17 +219,20 @@ def main(argv: list[str] | None = None, *, read_only: bool = False) -> int:
 
     if args.dry_run:
         if op.backend == "gh":
-            assert isinstance(command, list)
+            if not isinstance(command, list):
+                raise ops_mod.ParamError(f"operation {op.name!r} produced invalid command type")
             print(" ".join(command))
         else:
-            assert isinstance(command, dict)
+            if not isinstance(command, dict):
+                raise ops_mod.ParamError(f"operation {op.name!r} produced invalid request descriptor")
             print(f"{command.get('method', 'GET')} {command.get('url')}")
             if command.get("body"):
                 print("Body:", command["body"])
         return EXIT_OK
 
     if op.backend == "gh":
-        assert isinstance(command, list)
+        if not isinstance(command, list):
+            raise ops_mod.ParamError(f"operation {op.name!r} produced invalid command type")
         # No shell. The argv list is passed through verbatim, and any body travels
         # on stdin as bytes we already read — `gh` opens no file of ours.
         completed = subprocess.run(command, check=False, input=body)
@@ -238,7 +241,8 @@ def main(argv: list[str] | None = None, *, read_only: bool = False) -> int:
             return EXIT_COMMAND
         return EXIT_OK
     elif op.backend == "http-read":
-        assert isinstance(command, dict)
+        if not isinstance(command, dict):
+            raise ops_mod.ParamError(f"operation {op.name!r} produced invalid request descriptor")
         return _run_http(command, body=body)
     else:  # pragma: no cover
         raise ops_mod.ParamError(f"unknown backend {op.backend!r}")
@@ -253,8 +257,8 @@ def _run_http(request_desc: dict[str, object], *, body: bytes | None) -> int:
         print("vetted-op: internal error: http headers must be a dict", file=sys.stderr)
         return EXIT_COMMAND
 
-    if not isinstance(url, str):
-        print("vetted-op: internal error: http request missing url", file=sys.stderr)
+    if not isinstance(url, str) or not url.startswith("https://"):
+        print("vetted-op: internal error: http request missing valid https:// url", file=sys.stderr)
         return EXIT_COMMAND
 
     # Optional request body from the descriptor
@@ -266,19 +270,25 @@ def _run_http(request_desc: dict[str, object], *, body: bytes | None) -> int:
         payload = body
 
     req = urllib.request.Request(url, data=payload, method=str(method))
+    if "User-Agent" not in headers:
+        req.add_header("User-Agent", "apache-magpie-vetted-ops/0.1.0")
     for k, v in headers.items():
         req.add_header(str(k), str(v))
 
     try:
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             result = response.read()
             sys.stdout.buffer.write(result)
+            sys.stdout.buffer.flush()
             return EXIT_OK
     except urllib.error.HTTPError as exc:
         print(f"vetted-op: http request failed with {exc.code} {exc.reason}", file=sys.stderr)
         return EXIT_COMMAND
     except urllib.error.URLError as exc:
         print(f"vetted-op: http request failed: {exc.reason}", file=sys.stderr)
+        return EXIT_COMMAND
+    except TimeoutError as exc:
+        print(f"vetted-op: http request timed out: {exc}", file=sys.stderr)
         return EXIT_COMMAND
 
 

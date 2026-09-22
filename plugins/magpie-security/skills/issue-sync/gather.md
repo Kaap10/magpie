@@ -767,7 +767,7 @@ Concretely, for each closed-`announced` tracker in this run:
    already read).
 2. Call the API:
    ```bash
-   curl -sSf https://cveawg.mitre.org/api/cve/<CVE-ID> \
+   vetted-op-read --caller security-issue-sync cve-check-published <CVE-ID> \
      | jq -r '{state: .cveMetadata.state, datePublished: .cveMetadata.datePublished}'
    ```
 3. Interpret:
@@ -779,7 +779,7 @@ Concretely, for each closed-`announced` tracker in this run:
    - `state == "REJECTED"` → **surface as a blocker**. The record
      was withdrawn post-publication. Do not draft a reporter
      email; flag to the security team.
-   - `curl` error (404 / 5xx / DNS) → record *"cve.org lookup
+   - lookup error (non-zero exit from `vetted-op-read` — exit 4) → record *"cve.org lookup
      failed — <short error> — try again next sync"*. Do not
      propose notification on an absent response.
 

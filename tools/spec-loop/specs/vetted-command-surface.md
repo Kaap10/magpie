@@ -25,8 +25,7 @@ Replace the wildcard, not the confirmation. Route forge actions through a
 dispatcher whose operations are a **closed catalogue** of fixed shapes:
 
 - parameters are typed and validated; none may start with `-`;
-- builders return `list[str]` executed without a shell, so no parameter can
-  become a command or a flag;
+- builders return `list[str]` executed without a shell for forge operations, or a request descriptor executed via Python stdlib `urllib.request` for HTTP read operations;
 - the repository is policy, never a parameter;
 - value-bearing parameters (labels, milestones, assignees, columns, close
   reasons) must appear in adopter-declared enums;
@@ -112,7 +111,8 @@ per [`docs/adapters/registry.md`](../../../docs/adapters/registry.md).
    capability the surrounding design withholds. **Widening the catalogue must
    not widen the posture**, and that constraint binds every family added next.
 
-3. **Adapter parity.** Operations are `gh`-shaped today. The forge is already an
+3. **Adapter parity.** Forge operations are `gh`-shaped today (HTTP read operations
+   now ship alongside them via a stdlib backend). The forge is already an
    adapter axis (`github`, `jira`, `bitbucket`, `sourcehut`, `fossil`), so the
    catalogue should eventually resolve its builder per configured forge rather
    than assuming one.

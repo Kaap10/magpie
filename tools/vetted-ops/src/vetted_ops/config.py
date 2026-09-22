@@ -154,6 +154,8 @@ def load(path: Path | None = None, *, cwd: Path | None = None) -> Config:
     for name, url in endpoints_raw.items():
         if not isinstance(url, str):
             raise ConfigError(f"endpoints.{name} must be a URL string")
+        if not url.startswith("https://"):
+            raise ConfigError(f"endpoints.{name} must use the https:// scheme (got {url!r})")
         endpoints[name] = url.rstrip("/")
 
     return Config(

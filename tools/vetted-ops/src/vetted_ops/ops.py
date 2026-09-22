@@ -73,16 +73,16 @@ _NODE_ID = re.compile(r"^[A-Za-z0-9_-]{1,120}$")
 _QUERY_NAME = re.compile(r"^[a-z][a-z0-9-]{0,60}$")
 
 #: An OSV vulnerability ID or similar identifier (CVE, GHSA, etc).
-_VULN_ID = re.compile(r"^[A-Za-z0-9][-A-Za-z0-9]{2,60}$")
+_VULN_ID = re.compile(r"^[A-Za-z0-9][-A-Za-z0-9:]{2,60}$")
 
 #: An ecosystem package name. Supports scoped npm packages (@scope/name).
-_PACKAGE_NAME = re.compile(r"^[A-Za-z0-9@][A-Za-z0-9._@/-]{0,200}$")
+_PACKAGE_NAME = re.compile(r"^[A-Za-z0-9@][A-Za-z0-9._@/:-]{0,200}$")
 
 #: A package version string.
 _VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+~-]{0,100}$")
 
 #: A full or short git commit hash.
-_COMMIT_HASH = re.compile(r"^[0-9a-f]{7,40}$")
+_COMMIT_HASH = re.compile(r"^[0-9a-f]{7,64}$")
 
 #: A strict CVE identifier.
 _CVE_ID = re.compile(r"^CVE-[0-9]{4}-[0-9]{4,}$")
@@ -193,8 +193,6 @@ def query_name(value: str) -> str:
 
 
 def vuln_id(value: str) -> str:
-    if ".." in value:
-        raise ParamError(f"path traversal in vuln id: {value!r}")
     return _check(_VULN_ID, value, "vuln id")
 
 
@@ -215,8 +213,6 @@ def commit_hash(value: str) -> str:
 
 
 def cve_id(value: str) -> str:
-    if ".." in value:
-        raise ParamError(f"path traversal in CVE id: {value!r}")
     return _check(_CVE_ID, value, "CVE id")
 
 
@@ -357,6 +353,10 @@ OPS: dict[str, Op] = {}
 
 
 def _register(op: Op) -> None:
+    if op.backend == "http-read" and op.writes:
+        raise ValueError(
+            f"operation {op.name!r} has backend='http-read' but writes=True; HTTP operations must be read-only"
+        )
     OPS[op.name] = op
 
 

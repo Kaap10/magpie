@@ -159,6 +159,8 @@ Layers 0–2 are unchanged and still carry the load.
 
 ## Configuration
 
+> **Upgrade Note:** Existing adopters upgrading to use `osv-query-package` must add `ecosystems = ["PyPI", "Maven", "npm", ...]` to the `[values]` table in their policy TOML; without it, `vetted-op-read` refuses package queries during parameter validation.
+
 Adopter-owned, at
 `.apache-magpie-overrides/tools/vetted-ops/config.toml` by default:
 

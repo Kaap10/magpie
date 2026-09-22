@@ -18,7 +18,8 @@
 from __future__ import annotations
 
 import json
-import os
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -29,8 +30,8 @@ CONFIG_TOML = """
 workspace = '{workspace}'
 
 [repos]
-upstream = "acme/product"
 tracker = "acme/tracker"
+upstream = "acme/product"
 
 [values]
 labels = ["needs triage", "cve allocated"]
@@ -61,7 +62,7 @@ def policy_path(tmp_path: Path) -> Path:
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
     return cfg_path
 
 
@@ -71,7 +72,7 @@ def policy(tmp_path: Path) -> config.Config:
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
     return config.load(cfg_path)
 
 
@@ -200,12 +201,10 @@ def test_osv_query_commit_builder(policy: config.Config) -> None:
     assert body_data == {"commit": "a1b2c3d4e5f67890"}
 
 
-def test_osv_query_batch_builder(policy: config.Config, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_osv_query_batch_builder(policy: config.Config) -> None:
     body = policy.workspace / "batch.json"
     body.write_text('{"queries": []}')
     op = ops.resolve("osv-query-batch")
-    if not hasattr(os, "getuid"):
-        monkeypatch.setattr(ops, "read_body", lambda val, workspace: b'{"queries": []}')
     params, sent = cli._validate_params(op, [str(body)], policy)
     req = cli.build_argv(op, params, policy)
     assert isinstance(req, dict)
@@ -228,6 +227,10 @@ def test_cve_check_published_builder(policy: config.Config) -> None:
     "valid_id",
     [
         "GHSA-7rjr-3q55-vv33",
+        "RHSA-2021:4321",
+        "SUSE-SU-2021:1234-1",
+        "ALSA-2021:1234",
+        "RLSA-2021:1234",
         "CVE-2021-45046",
         "PYSEC-2021-123",
         "RUSTSEC-2020-0001",
@@ -262,6 +265,7 @@ def test_hostile_vuln_ids_are_refused(hostile: str) -> None:
         "jinja2",
         "@scope/package",
         "apache-airflow",
+        "org.apache.logging.log4j:log4j-core",
         "github.com/gin-gonic/gin",
         "osv.dev",
         "pkg_name",
@@ -370,7 +374,7 @@ ecosystems = ["PyPI"]
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "custom.toml"
-    cfg_path.write_text(custom_toml.format(workspace=workspace.as_posix()))
+    cfg_path.write_text(custom_toml.format(workspace=workspace))
     custom_cfg = config.load(cfg_path)
 
     op_osv = ops.resolve("osv-get-vuln")
@@ -717,7 +721,7 @@ def test_caller_may_not_run_an_operation_outside_its_manifest(
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
 
     rc = run(["--caller", "security-issue-triage", "issue-close", "7", "completed"], cfg_path)
     assert rc == cli.EXIT_POLICY
@@ -729,7 +733,7 @@ def test_unknown_caller_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
 
     rc = run(["--caller", "not-a-skill", "issue-view", "7"], cfg_path)
     assert rc == cli.EXIT_POLICY
@@ -741,7 +745,7 @@ def test_permitted_caller_reaches_dry_run(tmp_path: Path, capsys: pytest.Capture
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
 
     rc = run(["--caller", "security-issue-sync", "issue-view", "7", "--dry-run"], cfg_path)
     assert rc == cli.EXIT_OK
@@ -753,7 +757,7 @@ def test_caller_is_required(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     workspace.mkdir()
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace.as_posix()))
+    cfg_path.write_text(CONFIG_TOML.format(workspace=workspace))
 
     rc = run(["issue-view", "7"], cfg_path)
     assert rc == cli.EXIT_USAGE
@@ -1210,7 +1214,7 @@ def test_every_code_review_operation_is_a_read() -> None:
 
 
 CONFIG_NO_TRACKER = """
-workspace = "{workspace}"
+workspace = '{workspace}'
 
 [repos]
 upstream = "acme/product"
@@ -1235,7 +1239,7 @@ def trackerless(tmp_path: Path) -> config.Config:
     workspace.mkdir(parents=True)
     workspace.chmod(0o700)
     cfg_path = root / "config.toml"
-    cfg_path.write_text(CONFIG_NO_TRACKER.format(workspace=workspace.as_posix()))
+    cfg_path.write_text(CONFIG_NO_TRACKER.format(workspace=workspace))
     return config.load(cfg_path)
 
 
@@ -1318,7 +1322,7 @@ def test_upstream_is_still_required(tmp_path: Path) -> None:
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
-        CONFIG_NO_TRACKER.format(workspace=workspace.as_posix()).replace('upstream = "acme/product"', "")
+        CONFIG_NO_TRACKER.format(workspace=workspace).replace('upstream = "acme/product"', "")
     )
     with pytest.raises(config.ConfigError):
         config.load(cfg_path)
@@ -1331,9 +1335,101 @@ def test_a_malformed_tracker_is_still_refused(tmp_path: Path) -> None:
     workspace.chmod(0o700)
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
-        CONFIG_NO_TRACKER.format(workspace=workspace.as_posix()).replace(
-            "[repos]", '[repos]\ntracker = "not-a-repo"'
-        )
+        CONFIG_NO_TRACKER.format(workspace=workspace).replace("[repos]", '[repos]\ntracker = "not-a-repo"')
     )
     with pytest.raises(config.ConfigError):
         config.load(cfg_path)
+
+
+def test_every_http_builder_produces_https_url_from_configured_endpoints(policy: config.Config) -> None:
+    for name, op in ops.OPS.items():
+        if op.backend != "http-read":
+            continue
+        params = {}
+        for p in op.params:
+            if p in op.body_files:
+                f = policy.workspace / "file"
+                f.write_text("x")
+                params[p] = str(f)
+            elif p in op.enums:
+                params[p] = policy.enum_values(op.enums[p])[0]
+            else:
+                params[p] = "dummy-value"
+        req = op.build(policy.as_mapping(), **params)
+        assert isinstance(req, dict)
+        url = str(req.get("url", ""))
+        assert url.startswith("https://")
+        assert any(url.startswith(base) for base in policy.endpoints.values()), (
+            f"{name} built {url} which does not start with a configured endpoint"
+        )
+
+
+def test_http_operation_with_writes_is_rejected() -> None:
+    with pytest.raises(ValueError, match="must be read-only"):
+        ops._register(ops.Op(name="test-bad", params=(), build=lambda: {}, backend="http-read", writes=True))
+
+
+def test_run_http_execution_success(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class MockResponse:
+        def read(self) -> bytes:
+            return b"hello world"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    def mock_urlopen(req, timeout=None):
+        assert timeout == 30
+        assert req.get_header("User-agent") == "apache-magpie-vetted-ops/0.1.0"
+        return MockResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    rc = cli._run_http({"url": "https://example.com"}, body=None)
+    assert rc == cli.EXIT_OK
+    assert capsys.readouterr().out == "hello world"
+
+
+def test_run_http_execution_httperror(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def mock_urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    rc = cli._run_http({"url": "https://example.com"}, body=None)
+    assert rc == cli.EXIT_COMMAND
+    assert "404 Not Found" in capsys.readouterr().err
+
+
+def test_run_http_execution_urlerror(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def mock_urlopen(req, timeout=None):
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    rc = cli._run_http({"url": "https://example.com"}, body=None)
+    assert rc == cli.EXIT_COMMAND
+    assert "connection refused" in capsys.readouterr().err
+
+
+def test_run_http_execution_timeouterror(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def mock_urlopen(req, timeout=None):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    rc = cli._run_http({"url": "https://example.com"}, body=None)
+    assert rc == cli.EXIT_COMMAND
+    assert "timed out" in capsys.readouterr().err
+
+
+def test_run_http_execution_non_https_rejected(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = cli._run_http({"url": "http://insecure.example.com"}, body=None)
+    assert rc == cli.EXIT_COMMAND
+    assert "missing valid https://" in capsys.readouterr().err
