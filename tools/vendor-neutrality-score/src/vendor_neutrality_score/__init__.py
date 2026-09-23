@@ -174,6 +174,7 @@ HARNESS_VOCAB = {
     "Copilot",
     "OpenCode",
     "Kiro",
+    "Amazon Q",
 }
 AGNOSTIC_HARNESS = "agnostic"
 _HARNESS_RE = re.compile(r"^\*\*Harness:\*\*[ \t]+(.+?)[ \t]*$", re.MULTILINE)

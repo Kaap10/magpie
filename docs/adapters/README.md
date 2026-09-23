@@ -29,6 +29,7 @@ One page per supported agentic harness, each declaring
 `capability:platform`:
 
 - [**Aider**](aider.md) — terminal pair programming agent harness.
+- [**Amazon Q Developer CLI**](amazon-q.md) — AWS-native agentic CLI.
 - [**Codex**](codex.md) — first-class harness.
 - [**Copilot CLI**](copilot.md) — standalone CLI and Coding Agent.
 - [**Cursor**](cursor.md) — Composer and the Agent CLI.
@@ -56,6 +57,7 @@ of nine.
 | **Cursor** | `agent-iso cursor` | Cursor's own policy | ❌ **none** |
 | **Goose (Block)** | `agent-iso goose` | Goose developer mode / approval prompts | ❌ **none** |
 | **Aider** | `agent-iso aider` | Aider's own policy / git repository map | ❌ **none** |
+| **Amazon Q** | `agent-iso q` | Q's own trust prompts | ❌ **none** |
 | **Copilot CLI** | `agent-iso copilot` | Copilot's own approval prompts | ❌ **none** |
 
 **What the last column costs.** The action guard is what deterministically
