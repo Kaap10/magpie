@@ -796,6 +796,28 @@ soft limit for closed-bucket scans: if multiple closed trackers
 are in scope, run the checks in parallel via the subagent fanout
 (one vetted-op-read check per subagent), not serially in the orchestrator.
 
+**Security-pages checklist.** The same closed-`announced` bucket
+is the only place the post-announcement security-pages step can be
+observed: the Step 14 close-out adds `announced` and closes the
+tracker in one apply, so an open tracker never carries the trigger
+state. For each closed-`announced` tracker whose *"Public advisory
+URL"* body field is populated, scan the issue body and every comment
+for the ticked checklist item
+```html
+- [x] <!-- apache-magpie: security-pages-checklist v1 -->
+```
+and, separately, for a reminder comment carrying
+```html
+<!-- apache-magpie: security-pages-reminder v1 -->
+```
+on its first line. Record `security_pages_reminder_pending: true` in
+the observed state only when **no** ticked checklist item exists
+**and** no reminder comment exists; an unticked box in the hand-off
+comment is the pending state, not the satisfied one. Step 2b turns a
+pending flag into the *Security-pages reminder comment* proposal
+([`signals-to-actions.md`](signals-to-actions.md)). The scan reads
+comments the 1g fetch already returns — no extra API call.
+
 **When the tracker has no CVE ID.** Closed trackers without a
 `CVE-YYYY-NNNNN` in the *CVE tool link* body field are closing
 dispositions (`invalid` / `duplicate` /
