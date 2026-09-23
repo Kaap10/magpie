@@ -1105,6 +1105,33 @@ upgrade path. The walking pass under whole-user scope is also a
 one-time bulk operation — once existing checkouts are populated,
 the global `post-checkout` keeps everything aligned going forward.
 
+#### The sandbox has to read the shared hook dir
+
+Global `core.hooksPath` points git at `~/.claude/git-hooks/`, under
+the home directory the sandbox read-denies. Git run inside the
+sandbox then sees no hook directory at all and skips every hook
+without an error — `pre-commit` (and so `prek`), `commit-msg`,
+`pre-push` alike — so an agent's sandboxed commit goes out
+unchecked and CI is the first to notice. Grant the directory
+read-only in user-scope settings, where the scope lives too:
+
+```jsonc
+// ~/.claude/settings.json
+"sandbox": {
+  "filesystem": {
+    "allowRead": [
+      "~/.claude/git-hooks/"
+      // and "~/.claude-config/git-hooks/" when the hooks are
+      // symlinks into the sync repo: the sandbox checks the
+      // resolved path
+    ]
+  }
+}
+```
+
+The install skill proposes it at Step P.3-whole-user, and
+`setup-isolated-setup-verify` check 8 flags it when missing.
+
 #### Whole-user with the per-repo dispatcher
 
 The `core.hooksPath`-shadowing trade-off above has a clean
@@ -1514,7 +1541,7 @@ automatically. Five classes of failure are recognised today:
 
 The hint also tells the user to run
 `/magpie-setup:isolated-setup-doctor` for a structured probe of all
-seven failure modes, so a single mid-flow failure can lead to a
+eight failure modes, so a single mid-flow failure can lead to a
 broader sandbox health-check.
 
 ### Why install it user-scope, not project-scope
