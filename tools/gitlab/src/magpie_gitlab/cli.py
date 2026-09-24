@@ -16,12 +16,14 @@
 # under the License.
 
 import argparse
-import sys
 import json
+import sys
+
 from .client import load_config
-from .issues import list_issues, get_issue
-from .merge_requests import list_mrs, get_mr, get_mr_diff, get_mr_commits
+from .issues import get_issue, list_issues
+from .merge_requests import get_mr, get_mr_commits, get_mr_diff, list_mrs
 from .pipelines import get_pipeline_status
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="GitLab CLI for Magpie")
@@ -91,12 +93,13 @@ def main() -> int:
         elif args.command == "pipeline":
             if args.action == "status":
                 res = get_pipeline_status(args.project, args.pipeline_id, config)
-        
+
         print(json.dumps(res, indent=2))
         return 0
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

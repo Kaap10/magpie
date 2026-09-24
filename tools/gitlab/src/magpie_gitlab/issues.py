@@ -16,11 +16,14 @@
 # under the License.
 
 from typing import Any
+
 from .client import GitLabConfig, get_json, quote_path
+
 
 def list_issues(project: str, config: GitLabConfig, state: str = "opened") -> Any:
     url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/issues?state={state}"
     return get_json(url, config)
+
 
 def get_issue(project: str, issue_iid: str, config: GitLabConfig) -> Any:
     url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/issues/{issue_iid}"

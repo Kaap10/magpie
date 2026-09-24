@@ -15,9 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from magpie_gitlab.pipelines import get_pipeline_status, list_mr_pipelines
 from magpie_gitlab.client import load_config
+from magpie_gitlab.pipelines import get_pipeline_status, list_mr_pipelines
+
 from .conftest import build_mock_response
+
 
 def test_get_pipeline_status(mock_urlopen, mock_env):
     mock_urlopen.return_value = build_mock_response({"id": 1, "status": "success"})
@@ -27,10 +29,14 @@ def test_get_pipeline_status(mock_urlopen, mock_env):
     req = mock_urlopen.call_args[0][0]
     assert req.full_url == "https://gitlab.example.com/api/v4/projects/group%2Fproject/pipelines/1"
 
+
 def test_list_mr_pipelines(mock_urlopen, mock_env):
     mock_urlopen.return_value = build_mock_response([{"id": 1, "status": "success"}])
     cfg = load_config()
     res = list_mr_pipelines("group/project", "1", cfg)
     assert len(res) == 1
     req = mock_urlopen.call_args[0][0]
-    assert req.full_url == "https://gitlab.example.com/api/v4/projects/group%2Fproject/merge_requests/1/pipelines"
+    assert (
+        req.full_url
+        == "https://gitlab.example.com/api/v4/projects/group%2Fproject/merge_requests/1/pipelines"
+    )

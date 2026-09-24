@@ -25,13 +25,16 @@ from typing import Any
 
 DEFAULT_TIMEOUT_SECONDS = 30
 
+
 class GitLabError(Exception):
     pass
+
 
 @dataclass
 class GitLabConfig:
     token: str | None
     instance_url: str
+
 
 def load_config() -> GitLabConfig:
     return GitLabConfig(
@@ -39,20 +42,21 @@ def load_config() -> GitLabConfig:
         instance_url=os.environ.get("GITLAB_INSTANCE_URL", "https://gitlab.com").rstrip("/"),
     )
 
+
 def require(value: str | None, name: str) -> str:
     if not value:
         raise GitLabError(f"{name} is required")
     return value
 
+
 def quote_path(value: str) -> str:
     return urllib.parse.quote(value, safe="")
+
 
 def get_json(url: str, config: GitLabConfig) -> Any:
     token = require(config.token, "GITLAB_TOKEN")
     request = urllib.request.Request(
-        url,
-        headers={"Accept": "application/json", "Authorization": f"Bearer {token}"},
-        method="GET"
+        url, headers={"Accept": "application/json", "Authorization": f"Bearer {token}"}, method="GET"
     )
     try:
         with urllib.request.urlopen(request, timeout=DEFAULT_TIMEOUT_SECONDS) as response:

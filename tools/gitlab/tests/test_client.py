@@ -15,10 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import pytest
 import urllib.error
-from magpie_gitlab.client import load_config, get_json, require, quote_path, GitLabError, GitLabConfig
+
+import pytest
+
+from magpie_gitlab.client import GitLabError, get_json, load_config, quote_path, require
+
 from .conftest import build_mock_response
+
 
 def test_load_config_default(monkeypatch):
     monkeypatch.delenv("GITLAB_INSTANCE_URL", raising=False)
@@ -27,13 +31,16 @@ def test_load_config_default(monkeypatch):
     assert cfg.instance_url == "https://gitlab.com"
     assert cfg.token == "token"
 
+
 def test_load_config_custom(mock_env):
     cfg = load_config()
     assert cfg.instance_url == "https://gitlab.example.com"
     assert cfg.token == "glpat-test123"
 
+
 def test_quote_path():
     assert quote_path("group/project") == "group%2Fproject"
+
 
 def test_require():
     assert require("val", "VAR") == "val"
@@ -42,6 +49,7 @@ def test_require():
     with pytest.raises(GitLabError, match="VAR is required"):
         require("", "VAR")
 
+
 def test_get_json_success(mock_urlopen, mock_env):
     mock_urlopen.return_value = build_mock_response({"key": "value"})
     cfg = load_config()
@@ -49,6 +57,7 @@ def test_get_json_success(mock_urlopen, mock_env):
     assert res == {"key": "value"}
     req = mock_urlopen.call_args[0][0]
     assert req.headers.get("Authorization") == "Bearer glpat-test123"
+
 
 def test_get_json_http_error(mock_urlopen, mock_env):
     mock_urlopen.side_effect = urllib.error.HTTPError("url", 404, "Not Found", {}, None)

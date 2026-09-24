@@ -17,14 +17,17 @@
 
 import json
 import urllib.request
-import pytest
 from unittest import mock
+
+import pytest
+
 
 @pytest.fixture
 def mock_urlopen(monkeypatch):
     mock_open = mock.MagicMock()
     monkeypatch.setattr(urllib.request, "urlopen", mock_open)
     return mock_open
+
 
 def build_mock_response(json_data, status=200):
     body = json.dumps(json_data).encode("utf-8")
@@ -34,6 +37,7 @@ def build_mock_response(json_data, status=200):
     resp.__enter__.return_value = resp
     resp.__exit__.return_value = None
     return resp
+
 
 @pytest.fixture
 def mock_env(monkeypatch):

@@ -16,16 +16,18 @@
 # under the License.
 
 import json
-from unittest import mock
+
 from magpie_gitlab.cli import main
+
 from .conftest import build_mock_response
+
 
 def test_cli_issue_get(mock_urlopen, mock_env, monkeypatch, capsys):
     mock_urlopen.return_value = build_mock_response({"id": 1, "title": "CLI Test"})
     monkeypatch.setattr("sys.argv", ["magpie-gitlab", "issue", "get", "group/project", "1"])
-    
+
     assert main() == 0
-    
+
     captured = capsys.readouterr()
     res = json.loads(captured.out)
     assert res["title"] == "CLI Test"

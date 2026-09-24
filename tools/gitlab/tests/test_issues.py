@@ -15,9 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from magpie_gitlab.issues import list_issues, get_issue
 from magpie_gitlab.client import load_config
+from magpie_gitlab.issues import get_issue, list_issues
+
 from .conftest import build_mock_response
+
 
 def test_list_issues(mock_urlopen, mock_env):
     mock_urlopen.return_value = build_mock_response([{"id": 1, "title": "Issue 1"}])
@@ -25,15 +27,16 @@ def test_list_issues(mock_urlopen, mock_env):
     res = list_issues("group/project", cfg)
     assert len(res) == 1
     assert res[0]["title"] == "Issue 1"
-    
+
     req = mock_urlopen.call_args[0][0]
     assert req.full_url == "https://gitlab.example.com/api/v4/projects/group%2Fproject/issues?state=opened"
+
 
 def test_get_issue(mock_urlopen, mock_env):
     mock_urlopen.return_value = build_mock_response({"id": 1, "title": "Issue 1"})
     cfg = load_config()
     res = get_issue("group/project", "1", cfg)
     assert res["id"] == 1
-    
+
     req = mock_urlopen.call_args[0][0]
     assert req.full_url == "https://gitlab.example.com/api/v4/projects/group%2Fproject/issues/1"
