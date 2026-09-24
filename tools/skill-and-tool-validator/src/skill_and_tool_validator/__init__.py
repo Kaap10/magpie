@@ -1751,6 +1751,7 @@ def _resolve_skill_dir_or_link(item: Path) -> Path | None:
                 if target.is_dir():
                     return target
         except OSError:
+            # Skip unreadable or broken symlink pointer files
             pass
     return None
 

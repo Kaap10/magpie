@@ -76,12 +76,27 @@ def render(root: Path, measured_on: str = "unrecorded") -> str:
     # `is_dir()` follows the link, so this reads the same whether the entry is
     # the mirror or (in a fixture, or an adopter's snapshot) a real directory.
     entries = sorted(skills.iterdir()) if skills.is_dir() else []
-    paths = [e / "SKILL.md" for e in entries if e.is_dir() and (e / "SKILL.md").is_file()]
+    paths: list[tuple[str, Path]] = []
+    for e in entries:
+        if e.name.startswith("."):
+            continue
+        if e.is_dir() and (e / "SKILL.md").is_file():
+            paths.append((f"skills/{e.name}/SKILL.md", e / "SKILL.md"))
+        elif e.is_file():
+            try:
+                content = e.read_text(encoding="utf-8").strip()
+                if ("/" in content or "\\" in content) and "\n" not in content:
+                    target = (e.parent / content).resolve()
+                    if (target / "SKILL.md").is_file():
+                        paths.append((f"skills/{e.name}/SKILL.md", target / "SKILL.md"))
+            except OSError:
+                # Pointer file unreadable on restricted environment
+                pass
     if not paths:
         raise ValueError("No skills/*/SKILL.md files found")
     encoder = offline_encoding()
     rows: list[tuple[str, int, str]] = []
-    for path in paths:
+    for name, path in paths:
         # The file itself is never a link: a harness relay or an external
         # `source.md` redirect is not a skill this measures. The *directory*
         # may be, which is how the mirror reaches the plugin that owns it.
@@ -90,7 +105,7 @@ def render(root: Path, measured_on: str = "unrecorded") -> str:
         # Normalize CRLF/CR exactly as text-mode reading does, across platforms.
         source = path.read_text(encoding="utf-8")
         digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
-        rows.append((path.relative_to(root).as_posix(), len(encoder.encode_ordinary(source)), digest))
+        rows.append((name, len(encoder.encode_ordinary(source)), digest))
     tokenizer = version("tiktoken")
     manifest = json.dumps(
         {"schema": 1, "tokenizer": tokenizer, "encoding": ENCODING, "files": rows},
