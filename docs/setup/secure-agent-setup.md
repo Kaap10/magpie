@@ -490,7 +490,15 @@ below, annotated.
     // with `x509: OSStatus -26276`. Details, the `gh tofile` alias
     // workaround, and the upstream report (anthropics/claude-code#95532)
     // are in sandbox-troubleshooting.md → "`gh` fails with TLS …".
-    "excludedCommands": ["gh *"],
+    // The adversarial-review tool runs other models' CLIs, which need network
+    // access and their own credentials (~/.codex, ~/.copilot, ~/.gemini,
+    // ~/.claude). Only its single-line, installed-plugin form is excluded;
+    // it keeps its permission prompt (no `allow`), and the plugin cache is
+    // `Edit`-denied below. See the isolated-setup-install skill, Step R.
+    "excludedCommands": [
+      "gh *",
+      "uvx --from ~/.claude/plugins/cache/apache-magpie/magpie-adversarial-review/*/tools/adversarial-review adversarial-review *"
+    ],
     // The `lychee` link-check hook runs in OFFLINE mode (`offline =
     // true` in `.lychee.toml`): it validates only local cross-file and
     // anchor references and never fetches remote URLs, so it makes no
@@ -650,7 +658,10 @@ below, annotated.
       // every file-writing tool (Write and NotebookEdit included), and a
       // `Write(path)` rule is not matched by the file permission check at all.
       "Edit(~/.claude/plugins/cache/apache-magpie/magpie-vetted-ops/**)",
-      "Edit(.apache-magpie-overrides/tools/vetted-ops/**)"
+      "Edit(.apache-magpie-overrides/tools/vetted-ops/**)",
+      // The adversarial-review tool runs unsandboxed (excludedCommands above), so
+      // the code it runs must not be editable by the agent that calls it.
+      "Edit(~/.claude/plugins/cache/apache-magpie/magpie-adversarial-review/**)"
     ],
     "ask": [
       "Bash(git push *)",                        // including --force / --force-with-lease variants
@@ -3212,6 +3223,17 @@ below and report ✓ done / ✗ missing / ⚠ partial, with the evidence
     be agent-writable. Copies that differ from
     `tools/skill-evals/` are ⚠, not ✗: the harness runs, it just
     grades against an older runner than the tree's.
+14. **Adversarial-review exclusion**, if the
+    `magpie-adversarial-review` plugin is installed (n/a otherwise).
+    `sandbox.excludedCommands` contains
+    `"uvx --from ~/.claude/plugins/cache/apache-magpie/magpie-adversarial-review/*/tools/adversarial-review adversarial-review *"`,
+    `permissions.deny` contains
+    `Edit(~/.claude/plugins/cache/apache-magpie/magpie-adversarial-review/**)`,
+    and **no** `permissions.allow` entry covers the tool. A missing
+    exclusion is ⚠ (every reviewer reports `unavailable` from inside
+    the sandbox); a missing deny is ✗ (the exclusion runs that code
+    unsandboxed); an `allow` is ✗ (each run sends the change to other
+    model providers and must keep its prompt).
 ```
 
 Re-run either form after every Claude Code upgrade — the sandbox
