@@ -20,7 +20,7 @@ when_to_use: |
   has not yet engaged the PR.
 argument-hint: "[pr:N] [area:LBL] [collab:true|false] [team:NAME] [ready] [dry-run]"
 capability: capability:review
-surface_hash: sha256:d8520038107947dc
+surface_hash: sha256:3210ab651b79abc2
 license: Apache-2.0
 ---
 <!-- SPDX-License-Identifier: Apache-2.0
@@ -225,11 +225,12 @@ quick reference, but the source files are the ground truth.
 
 **Golden rule 4 — adversarial reviewers are additive, not
 substitutes.** If the maintainer has named a second LLM
-reviewer (via the `with-reviewer:` selector or a "Review
-preferences" entry in their agent-instructions file —
-`AGENTS.md` or a harness-specific equivalent), the skill
-proposes invoking it **in addition** to its own pass — not
-instead of. The second reviewer runs *after* the skill has
+reviewer — model CLIs through the `with-reviewers:` selector or
+the project's `adversarial-review.md`, or a slash command through
+`with-reviewer:` or a "Review preferences" entry in their
+agent-instructions file (`AGENTS.md` or a harness-specific
+equivalent) — the skill runs or proposes it **in addition** to its
+own pass, not instead of. The second reviewer runs *after* the skill has
 drafted its own findings, so the maintainer can see two
 independent reads. See [`adversarial.md`](adversarial.md) for
 the "assistant-proposes-user-fires" pattern (slash commands
@@ -421,7 +422,8 @@ query and chip semantics.
 | `requested-only` / `mine-only` / `codeowner-only` / `mentioned-only` / `reviewed-before-only` | use **only** the named half of the default union (drops the other four) |
 | `no-touching-mine` / `no-codeowner` / `no-mentioned` / `no-reviewed-before` | drop just the named half; keep the rest of the union (composable) |
 | `since:<window>` | tune the recency window for the touching-mine main-branch source (default `30d`; accepts `7d`, `2w`, `90d`, …) |
-| `with-reviewer:<command>` | name the slash command the skill should propose at Step 5 for second-read coverage |
+| `with-reviewers:<list>` | run these model CLIs (`codex`, `copilot`, `gemini`, `claude`) as adversarial reviewers at Step 5, through the `magpie-adversarial-review` tool — the agent runs them; the harness prompt gates each run |
+| `with-reviewer:<command>` | name the slash command the skill should propose at Step 5 for second-read coverage (the maintainer types it) |
 | `repo:<owner>/<name>` | override the target repository |
 | `max:<N>` | stop after `<N>` PRs have been reviewed this session |
 | `dry-run` | examine and draft but refuse to actually post any review |
@@ -465,6 +467,7 @@ examples a maintainer can paste:
 | Stay body-only this session (no inline picker) | `pr-management-code-review inline:off` |
 | Dry-run the queue — draft everything, post nothing | `pr-management-code-review dry-run` |
 | Same, against a different repo | `pr-management-code-review dry-run repo:<upstream>-site` |
+| Have other models read each PR adversarially, run by the agent | `pr-management-code-review with-reviewers:codex,copilot` |
 | Pair with an adversarial reviewer for a second read on each PR | `pr-management-code-review with-reviewer:/codex-plugin:adversarial-review` |
 | Skip background analysis subagents (tiny queue, prefetch is wasted) | `pr-management-code-review max:1 no-prefetch` |
 
@@ -486,12 +489,12 @@ touching any PR:
    account must be a collaborator on `<repo>` (without
    collaborator access, posting reviews via `gh pr review` will
    silently fail with a permission error).
-2. Resolve adversarial-reviewer configuration — the
-   `with-reviewer:` selector wins; otherwise check the
-   maintainer's agent-instructions file (`AGENTS.md` first,
-   then any harness-specific `CLAUDE.md`) for a "Review
-   preferences" entry. Announce the resolution once at session
-   start.
+2. Resolve adversarial-reviewer configuration, in the order of
+   [`prerequisites.md` §2](prerequisites.md#2-resolve-adversarial-reviewer-configuration-degrades):
+   `no-adversarial`, then `with-reviewers:`, then `with-reviewer:`,
+   then `adversarial-review.md`, then a "Review preferences" entry
+   (`AGENTS.md` first, then any harness-specific `CLAUDE.md`).
+   Announce the resolution once at session start.
 3. Resolve the selector against `<repo>`, including the
    touching-mine active-set computation, and produce the
    working list of PR numbers to review, in order.
@@ -676,6 +679,7 @@ writes a session log to disk.
 | `requested-only` / `mine-only` / `codeowner-only` / `mentioned-only` / `reviewed-before-only` | use only one half of the my-reviews union |
 | `no-touching-mine` / `no-codeowner` / `no-mentioned` / `no-reviewed-before` | drop just one half; keep the rest |
 | `since:<window>` | tune the touching-mine main-branch recency window (default `30d`) |
+| `with-reviewers:<list>` | run these model CLIs as adversarial reviewers through the adversarial-review tool |
 | `with-reviewer:<command>` | name the slash command to propose for second-read coverage |
 | `repo:<owner>/<name>` | override the target repository |
 | `max:<N>` | stop after `<N>` PRs reviewed |

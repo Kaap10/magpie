@@ -515,10 +515,21 @@ from text the contributor wrote.
 
 If an adversarial reviewer was configured at session start (see
 [`prerequisites.md`](prerequisites.md)) and the maintainer
-hasn't passed `no-adversarial`, **propose** invoking it now.
-See [`adversarial.md`](adversarial.md) for full mechanics.
+hasn't passed `no-adversarial`, bring it in now, after the Step 4
+findings are drafted. See [`adversarial.md`](adversarial.md) for full
+mechanics.
 
-The proposal is:
+**Tool path** (`with-reviewers:` or `adversarial-review.md`): run the
+tool over this PR — the one-line command in
+[`adversarial.md`](adversarial.md#model-clis-through-the-tool-with-reviewers)
+— and fold the report's findings into the Step 4 list. Deduplicate
+where a reviewer landed on the same line as the primary pass, and mark
+each finding with its source: `primary`, `adversarial (<reviewers>)`, or
+`both`. List any reviewer that did not answer, with its reason, in the
+session summary. No typed step and no pause beyond the harness prompt.
+
+**Slash path** (`with-reviewer:` or "Review preferences"): **propose**
+invoking it:
 
 > *Now I'd like a second read. Type `<ADVERSARIAL_COMMAND>`
 > and I'll wait. Or `[N]o` / `[Q]uit` to skip.*
@@ -702,7 +713,10 @@ queue while the maintainer is in Steps 1–8 of the current
 one. The subagent does the full Step 2–7 work (fetch, classify
 findings, draft body); the parent skill renders the prefetched
 package as a single ready-made headline-plus-findings-plus-draft
-when the maintainer reaches the PR. See
+when the maintainer reaches the PR. Step 5 is **not** part of the
+prefetch: subagents have no shell. When a tool-path reviewer is
+configured, the parent runs Step 5 for each prefetched PR once it
+renders the package, and folds the findings in before Step 6. See
 [Background analysis subagents](#background-analysis-subagents)
 below for the mechanics.
 
@@ -718,8 +732,9 @@ criteria source files) together dominate the per-PR
 wall-clock cost. While the maintainer is reading the current
 PR's draft, those steps can run for the *next* PRs in
 parallel — when the maintainer reaches them, the package is
-already drafted and only Step 6 (disposition pick) and Step 7
-(confirmation) are left to run interactively.
+already drafted and only Step 5 (when a tool-path adversarial
+reviewer is configured), Step 6 (disposition pick) and Step 7
+(confirmation) are left to run.
 
 The maintainer never sees the subagents directly. They run
 silently in the background; their output is what powers the
