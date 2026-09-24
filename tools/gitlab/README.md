@@ -21,10 +21,10 @@ following strict vendor-neutrality rules.
 
 ## Prerequisites
 
-- Python 3.11+ via `uv`.
-- `GITLAB_TOKEN` (or `CI_JOB_TOKEN`) environment variable with API access.
-- Optional: `GITLAB_INSTANCE_URL` (defaults to `https://gitlab.com`) for
-  self-hosted instances like Debian Salsa or GNOME GitLab.
+- **Runtime:** Python 3.11+ via `uv`.
+- **CLIs:** None.
+- **Credentials / auth:** `GITLAB_TOKEN` (or `CI_JOB_TOKEN`) environment variable with API access.
+- **Network:** Requires HTTPS access to `GITLAB_INSTANCE_URL` (defaults to `https://gitlab.com`).
 
 ## Usage
 

@@ -1199,14 +1199,14 @@ def is_path_allowlisted(file_path: Path) -> bool:
     """Check whether a file path is in the allowlist."""
     # Try relative path first, then absolute
     for path in (file_path, file_path.resolve()):
-        str_path = str(path)
+        str_path = path.as_posix()
         for prefix in ALLOWLIST_PATHS:
             if str_path.startswith(prefix):
                 return True
             if str_path.startswith("./" + prefix):
                 return True
             # Also match when the path contains the prefix as a component
-            if "/" + prefix in str_path or "\\" + prefix in str_path:
+            if "/" + prefix in str_path:
                 return True
     return False
 
