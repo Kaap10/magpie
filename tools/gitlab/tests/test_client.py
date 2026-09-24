@@ -16,7 +16,6 @@
 # under the License.
 
 import urllib.error
-from email.message import Message
 
 import pytest
 
@@ -61,7 +60,7 @@ def test_get_json_success(mock_urlopen, mock_env):
 
 
 def test_get_json_http_error(mock_urlopen, mock_env):
-    mock_urlopen.side_effect = urllib.error.HTTPError("url", 404, "Not Found", Message(), None)
+    mock_urlopen.side_effect = urllib.error.HTTPError("url", 404, "Not Found", {}, None)
     cfg = load_config()
     with pytest.raises(GitLabError, match="HTTP 404: Not Found"):
         get_json("https://gitlab.example.com/api", cfg)

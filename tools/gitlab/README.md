@@ -7,8 +7,6 @@
 
 - [GitLab bridge](#gitlab-bridge)
   - [Prerequisites](#prerequisites)
-  - [Configuration](#configuration)
-  - [Operations](#operations)
   - [Usage](#usage)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -17,32 +15,16 @@
 
 **Capability:** contract:tracker + contract:source-control + contract:change-request
 
-**Kind:** implementation
-
-**Vendor:** GitLab
-
 GitLab forge, issue tracker, and merge request bridge for Apache Magpie.
 Provides 100% offline-tested, deterministic API access to GitLab instances,
 following strict vendor-neutrality rules.
 
 ## Prerequisites
 
-- **Runtime:** Python 3.11+ via `uv`.
-- **CLIs:** `uv`.
-- **Credentials / auth:** `GITLAB_TOKEN` (or `CI_JOB_TOKEN`) environment variable with API access.
-- **Network:** Access to the configured GitLab instance; `GITLAB_INSTANCE_URL` defaults to `https://gitlab.com`. Fully offline when mocked.
-
-## Configuration
-
-Adopters configure GitLab through `<project-config>/project.md` and
-environment variables. Set `GITLAB_TOKEN` with API read/write scopes,
-and optionally `GITLAB_INSTANCE_URL` (defaults to `https://gitlab.com`)
-for self-hosted instances.
-
-## Operations
-
-For the complete operations catalogue and CLI-to-API mapping,
-see [tool.md](tool.md).
+- Python 3.11+ via `uv`.
+- `GITLAB_TOKEN` (or `CI_JOB_TOKEN`) environment variable with API access.
+- Optional: `GITLAB_INSTANCE_URL` (defaults to `https://gitlab.com`) for
+  self-hosted instances like Debian Salsa or GNOME GitLab.
 
 ## Usage
 

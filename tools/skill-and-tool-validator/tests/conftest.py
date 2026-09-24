@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+import builtins
 from pathlib import Path
 
 _original_write_text = Path.write_text

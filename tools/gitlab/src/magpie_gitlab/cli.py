@@ -90,8 +90,9 @@ def main() -> int:
                 res = get_mr_diff(args.project, args.mr_iid, config)
             elif args.action == "commits":
                 res = get_mr_commits(args.project, args.mr_iid, config)
-        elif args.command == "pipeline" and args.action == "status":
-            res = get_pipeline_status(args.project, args.pipeline_id, config)
+        elif args.command == "pipeline":
+            if args.action == "status":
+                res = get_pipeline_status(args.project, args.pipeline_id, config)
 
         print(json.dumps(res, indent=2))
         return 0
