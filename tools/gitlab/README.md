@@ -7,6 +7,8 @@
 
 - [GitLab bridge](#gitlab-bridge)
   - [Prerequisites](#prerequisites)
+  - [Configuration](#configuration)
+  - [Operations](#operations)
   - [Usage](#usage)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -14,6 +16,8 @@
 # GitLab bridge
 
 **Capability:** contract:tracker + contract:source-control + contract:change-request
+**Kind:** implementation
+**Vendor:** GitLab
 
 GitLab forge, issue tracker, and merge request bridge for Apache Magpie.
 Provides 100% offline-tested, deterministic API access to GitLab instances,
@@ -21,10 +25,29 @@ following strict vendor-neutrality rules.
 
 ## Prerequisites
 
-- Python 3.11+ via `uv`.
-- `GITLAB_TOKEN` (or `CI_JOB_TOKEN`) environment variable with API access.
-- Optional: `GITLAB_INSTANCE_URL` (defaults to `https://gitlab.com`) for
-  self-hosted instances like Debian Salsa or GNOME GitLab.
+- **Runtime:** Python 3.11+ via `uv`.
+- **CLIs:** `uv`.
+- **Credentials / auth:** `GITLAB_TOKEN` or `CI_JOB_TOKEN` with API access.
+- **Network:** Access to the configured GitLab instance; `GITLAB_INSTANCE_URL`
+  defaults to `https://gitlab.com`.
+
+## Configuration
+
+Set `GITLAB_TOKEN` in your environment (or `user.md`):
+
+```bash
+export GITLAB_TOKEN="glpat-..."
+```
+
+For self-hosted instances (e.g. Debian Salsa, GNOME):
+
+```bash
+export GITLAB_INSTANCE_URL="https://salsa.debian.org"
+```
+
+## Operations
+
+See [tool.md](tool.md) for the full operations catalogue and contract mapping.
 
 ## Usage
 
