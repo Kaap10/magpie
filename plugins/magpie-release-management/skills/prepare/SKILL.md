@@ -10,16 +10,18 @@ requires_config:
   - release-trains.md
 description: |
   Draft release preparation artefacts for `<upstream>`: the planning
-  issue, the version-bump and changelog prep PR (which, on first release,
-  includes a guided review of `git archive` source artefacts and
-  `.gitattributes` `export-ignore` entries), or the post-release
-  dev-version bump PR. For ASF projects, the one-time `automated-signing`
-  setup drafts the Infra key request, the Security Team notification
-  and reproducible-build workflow PR. Reads release metadata from
-  `<project-config>/release-trains.md` and
-  `<project-config>/release-management-config.md`. Outputs are drafts
-  confirmed by the Release Manager before filing; the agent never marks
-  a PR ready, merges, closes artefacts, files tickets, or sends mail.
+  issue, the version-bump and changelog prep PR (which, on a project's
+  first release, includes a guided review of what the `git archive`
+  source artefact ships and the `.gitattributes` `export-ignore`
+  entries that keep VCS/CI/editor metadata out), or the post-release
+  development-version bump PR. For ASF projects, the one-time
+  `automated-signing` setup drafts the Infra key request, the Security
+  Team notification and the reproducible-build workflow PR. Reads
+  release metadata from `<project-config>/release-trains.md` and
+  `<project-config>/release-management-config.md`. Every output is a
+  draft confirmed by the Release Manager before filing; the agent never
+  marks a PR ready, never merges, never closes any artefact, never files
+  a ticket and never sends mail.
 when_to_use: |
   Invoke when a Release Manager says "prepare the <version> release",
   "draft the planning issue for <version>", "open the prep PR for

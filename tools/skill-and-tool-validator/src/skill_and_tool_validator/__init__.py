@@ -1199,14 +1199,14 @@ def is_path_allowlisted(file_path: Path) -> bool:
     """Check whether a file path is in the allowlist."""
     # Try relative path first, then absolute
     for path in (file_path, file_path.resolve()):
-        str_path = path.as_posix()
+        str_path = str(path)
         for prefix in ALLOWLIST_PATHS:
             if str_path.startswith(prefix):
                 return True
             if str_path.startswith("./" + prefix):
                 return True
             # Also match when the path contains the prefix as a component
-            if "/" + prefix in str_path:
+            if "/" + prefix in str_path or "\\" + prefix in str_path:
                 return True
     return False
 
@@ -1362,7 +1362,7 @@ def validate_security_patterns(path: Path, text: str) -> Iterable[Violation]:
     # Skip paths that intentionally contain "bad pattern" examples
     # (e.g. the security checklist that documents what NOT to do).
     # ------------------------------------------------------------------
-    path_str = path.as_posix()
+    path_str = str(path)
     if any(skip in path_str for skip in SECURITY_PATTERN_SKIP_PATHS):
         return
 
@@ -1564,8 +1564,6 @@ def _git_show(base_ref: str, rel_path: str, repo_root: Path) -> str | None:
             cwd=str(repo_root),
             capture_output=True,
             text=True,
-            encoding="utf-8",
-            errors="replace",
             check=True,
         )
         return result.stdout
@@ -1593,7 +1591,7 @@ def validate_trigger_preservation(
 
     root = repo_root or find_repo_root()
     try:
-        rel_path = path.resolve().relative_to(root.resolve()).as_posix()
+        rel_path = str(path.resolve().relative_to(root))
     except ValueError:
         return
 
@@ -1729,44 +1727,12 @@ def find_repo_root(start: Path | None = None) -> Path:
     return cur
 
 
-def _resolve_skill_dir_or_link(item: Path) -> Path | None:
-    """Return the resolved skill directory for *item*.
-
-    Handles three cases:
-    1. *item* is a real directory — return it resolved.
-    2. *item* is a symlink to a directory — return the resolved target.
-    3. *item* is a plain file whose single-line content is a relative path
-       pointing to a directory (Git-on-Windows symlink pointer) — resolve
-       and return the target directory.
-
-    Returns *None* when none of the above applies.
-    """
-    if item.is_dir():
-        return item.resolve()
-    if item.is_file() and not item.name.startswith("."):
-        try:
-            content = item.read_text(encoding="utf-8").strip()
-            if ("/" in content or "\\" in content) and "\n" not in content:
-                target = (item.parent / content).resolve()
-                if target.is_dir():
-                    return target
-        except OSError:
-            # Skip unreadable or broken symlink pointer files
-            pass
-    return None
-
-
 def collect_files_to_check(root: Path | None = None) -> list[Path]:
     """Return every .md file under skills/ that should be validated."""
     base = (root or find_repo_root()) / SKILLS_DIR
     if not base.exists():
         return []
-    files_set: set[Path] = set(base.rglob("*.md"))
-    for item in base.iterdir():
-        resolved = _resolve_skill_dir_or_link(item)
-        if resolved is not None:
-            files_set.update(resolved.rglob("*.md"))
-    return sorted(files_set)
+    return list(base.rglob("*.md"))
 
 
 def collect_tool_dirs(root: Path | None = None) -> list[Path]:
@@ -2153,15 +2119,7 @@ def _live_skill_capabilities(repo_root: Path) -> dict[str, set[str]]:
     skills_dir = repo_root / SKILLS_DIR
     if not skills_dir.exists():
         return out
-    for item in skills_dir.iterdir():
-        if item.name.startswith("."):
-            continue
-        resolved_dir = _resolve_skill_dir_or_link(item)
-        if resolved_dir is None:
-            continue
-        skill_md = resolved_dir / "SKILL.md"
-        if not skill_md.exists():
-            continue
+    for skill_md in skills_dir.glob("*/SKILL.md"):
         try:
             text = skill_md.read_text(encoding="utf-8")
         except OSError:
@@ -2179,7 +2137,7 @@ def _live_skill_capabilities(repo_root: Path) -> dict[str, set[str]]:
             else:
                 entries.add(line)
         if entries:
-            out[item.name] = entries
+            out[skill_md.parent.name] = entries
     return out
 
 
@@ -2512,7 +2470,7 @@ def validate_lowercase_f_field(path: Path, text: str) -> Iterable[Violation]:
 
     All violations are **SOFT** — advisory only.
     """
-    if any(path.as_posix().endswith(suffix) for suffix in _LOWERCASE_F_SKIP_SUFFIXES):
+    if any(str(path).endswith(suffix) for suffix in _LOWERCASE_F_SKIP_SUFFIXES):
         return
     # Only inspect content inside fenced code blocks (real commands).
     # Prose mentions outside fenced blocks (e.g. in backtick spans or plain
@@ -2612,14 +2570,7 @@ def collect_skill_dirs(root: Path | None = None) -> set[Path]:
     base = (root or find_repo_root()) / SKILLS_DIR
     if not base.exists():
         return set()
-    result: set[Path] = set()
-    for p in base.iterdir():
-        if p.name.startswith("."):
-            continue
-        resolved = _resolve_skill_dir_or_link(p)
-        if resolved is not None:
-            result.add(resolved)
-    return result
+    return {p.resolve() for p in base.iterdir() if p.is_dir() and not p.name.startswith(".")}
 
 
 # ---------------------------------------------------------------------------
@@ -2948,9 +2899,8 @@ def validate_modes_doc_consistency(root: Path | None = None) -> Iterable[Violati
     # Check 1 & 2 — per-listed-skill checks.
     for mode, slugs in section_skills.items():
         for slug in slugs:
-            skill_item = repo_root / SKILLS_DIR / slug
-            resolved_dir = _resolve_skill_dir_or_link(skill_item)
-            if resolved_dir is None:
+            skill_dir = repo_root / SKILLS_DIR / slug
+            if not skill_dir.is_dir():
                 yield Violation(
                     doc_path,
                     None,
@@ -2959,7 +2909,7 @@ def validate_modes_doc_consistency(root: Path | None = None) -> Iterable[Violati
                     category=MODES_DOC_CATEGORY,
                 )
                 continue
-            skill_md = resolved_dir / "SKILL.md"
+            skill_md = skill_dir / "SKILL.md"
             if not skill_md.exists():
                 continue
             try:
@@ -3001,13 +2951,10 @@ def validate_modes_doc_consistency(root: Path | None = None) -> Iterable[Violati
     skills_base = repo_root / SKILLS_DIR
     if not skills_base.exists():
         return
-    for skill_item in sorted(skills_base.iterdir()):
-        if skill_item.name.startswith("."):
+    for skill_dir in sorted(skills_base.iterdir()):
+        if not skill_dir.is_dir() or skill_dir.name.startswith("."):
             continue
-        resolved_dir = _resolve_skill_dir_or_link(skill_item)
-        if resolved_dir is None:
-            continue
-        skill_md = resolved_dir / "SKILL.md"
+        skill_md = skill_dir / "SKILL.md"
         if not skill_md.exists():
             continue
         try:
@@ -3020,7 +2967,7 @@ def validate_modes_doc_consistency(root: Path | None = None) -> Iterable[Violati
         fm_mode = fm.get("mode", "")
         if fm_mode not in _MODES_DOC_NAMED_SECTIONS:
             continue
-        slug = skill_item.name
+        slug = skill_dir.name
         if slug not in section_skill_sets.get(fm_mode, set()):
             yield Violation(
                 doc_path,
@@ -3187,14 +3134,9 @@ def collect_skill_source_pointers(root: Path | None = None) -> list[Path]:
     base = (root or find_repo_root()) / SKILLS_DIR
     if not base.exists():
         return []
-    result: list[Path] = []
-    for d in base.iterdir():
-        if d.name.startswith("."):
-            continue
-        resolved = _resolve_skill_dir_or_link(d)
-        if resolved is not None and is_skill_source_pointer(resolved):
-            result.append(resolved)
-    return sorted(result)
+    return sorted(
+        d for d in base.iterdir() if d.is_dir() and not d.name.startswith(".") and is_skill_source_pointer(d)
+    )
 
 
 def _skill_source_descriptor_files(root: Path) -> list[Path]:
@@ -3407,21 +3349,18 @@ def validate_eval_coverage(root: Path | None = None) -> Iterable[Violation]:
     except OSError:
         # Same posture as collect_tool_python_files: unreadable → skip.
         return
-    for skill_item in skill_dirs:
-        if skill_item.name.startswith("."):
-            continue
-        resolved_dir = _resolve_skill_dir_or_link(skill_item)
-        if resolved_dir is None:
+    for skill_dir in skill_dirs:
+        if not skill_dir.is_dir():
             continue
         # A trusted-external-skill-source pointer dir carries its eval suite
         # in the source repo, fetched into the snapshot at adopt time — not
         # in-tree. Do not demand a local eval suite for it.
-        if is_skill_source_pointer(resolved_dir):
+        if is_skill_source_pointer(skill_dir):
             continue
-        slug = skill_item.name
+        slug = skill_dir.name
         if slug not in eval_slugs:
             yield Violation(
-                resolved_dir / "SKILL.md",
+                skill_dir / "SKILL.md",
                 None,
                 f"eval-coverage: no eval suite at tools/skill-evals/evals/{slug}/ — add one before shipping",
                 category=EVAL_COVERAGE_CATEGORY,

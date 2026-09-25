@@ -67,22 +67,6 @@ def offline_encoding() -> tiktoken.Encoding:
     return tiktoken.get_encoding(ENCODING)
 
 
-def _resolve_entry_dir(item: Path) -> Path:
-    if item.is_dir():
-        return item
-    if item.is_file():
-        try:
-            content = item.read_text(encoding="utf-8").strip()
-            if "\n" not in content and len(content) < 500:
-                target = (item.parent / content).resolve()
-                if target.is_dir():
-                    return target
-        except OSError:
-            # Not a readable symlink pointer file
-            pass
-    return item
-
-
 def render(root: Path, measured_on: str = "unrecorded") -> str:
     """Measure canonical files; exclude harness symlinks and external redirects."""
     skills = root / "skills"
@@ -92,17 +76,12 @@ def render(root: Path, measured_on: str = "unrecorded") -> str:
     # `is_dir()` follows the link, so this reads the same whether the entry is
     # the mirror or (in a fixture, or an adopter's snapshot) a real directory.
     entries = sorted(skills.iterdir()) if skills.is_dir() else []
-    paths: list[tuple[str, Path]] = []
-    for entry in entries:
-        resolved = _resolve_entry_dir(entry)
-        skill_file = resolved / "SKILL.md"
-        if resolved.is_dir() and skill_file.is_file():
-            paths.append((entry.name, skill_file))
+    paths = [e / "SKILL.md" for e in entries if e.is_dir() and (e / "SKILL.md").is_file()]
     if not paths:
         raise ValueError("No skills/*/SKILL.md files found")
     encoder = offline_encoding()
     rows: list[tuple[str, int, str]] = []
-    for entry_name, path in paths:
+    for path in paths:
         # The file itself is never a link: a harness relay or an external
         # `source.md` redirect is not a skill this measures. The *directory*
         # may be, which is how the mirror reaches the plugin that owns it.
@@ -111,8 +90,7 @@ def render(root: Path, measured_on: str = "unrecorded") -> str:
         # Normalize CRLF/CR exactly as text-mode reading does, across platforms.
         source = path.read_text(encoding="utf-8")
         digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
-        rel_path = f"skills/{entry_name}/SKILL.md"
-        rows.append((rel_path, len(encoder.encode_ordinary(source)), digest))
+        rows.append((path.relative_to(root).as_posix(), len(encoder.encode_ordinary(source)), digest))
     tokenizer = version("tiktoken")
     manifest = json.dumps(
         {"schema": 1, "tokenizer": tokenizer, "encoding": ENCODING, "files": rows},

@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
@@ -22,7 +24,7 @@ import sys
 from .client import get_project, load_config
 from .issues import get_issue, list_issues
 from .merge_requests import get_mr, get_mr_commits, get_mr_diff, list_mrs
-from .pipelines import get_pipeline_status
+from .pipelines import get_pipeline_status, list_mr_pipelines
 
 
 def main() -> int:
@@ -41,6 +43,7 @@ def main() -> int:
     issue_list = issue_subs.add_parser("list")
     issue_list.add_argument("project")
     issue_list.add_argument("--state", default="opened")
+    issue_list.add_argument("--limit", type=int, default=None)
     issue_get = issue_subs.add_parser("get")
     issue_get.add_argument("project")
     issue_get.add_argument("issue_iid")
@@ -51,6 +54,7 @@ def main() -> int:
     mr_list = mr_subs.add_parser("list")
     mr_list.add_argument("project")
     mr_list.add_argument("--state", default="opened")
+    mr_list.add_argument("--limit", type=int, default=None)
     mr_get = mr_subs.add_parser("get")
     mr_get.add_argument("project")
     mr_get.add_argument("mr_iid")
@@ -60,6 +64,11 @@ def main() -> int:
     mr_commits = mr_subs.add_parser("commits")
     mr_commits.add_argument("project")
     mr_commits.add_argument("mr_iid")
+    mr_commits.add_argument("--limit", type=int, default=None)
+    mr_pipelines = mr_subs.add_parser("pipelines")
+    mr_pipelines.add_argument("project")
+    mr_pipelines.add_argument("mr_iid")
+    mr_pipelines.add_argument("--limit", type=int, default=None)
 
     # pipeline
     pipe_p = subparsers.add_parser("pipeline")
@@ -92,12 +101,17 @@ def main() -> int:
                 res = get_mr_diff(args.project, args.mr_iid, config)
             elif args.action == "commits":
                 res = get_mr_commits(args.project, args.mr_iid, config)
+            elif args.action == "pipelines":
+                res = list_mr_pipelines(args.project, args.mr_iid, config)
         elif args.command == "pipeline" and args.action == "status":
             res = get_pipeline_status(args.project, args.pipeline_id, config)
 
         if res is None:
             parser.print_help()
             return 1
+
+        if isinstance(res, list) and getattr(args, "limit", None) is not None:
+            res = res[: args.limit]
 
         print(json.dumps(res, indent=2))
         return 0

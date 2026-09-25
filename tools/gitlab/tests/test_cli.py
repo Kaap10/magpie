@@ -45,3 +45,29 @@ def test_cli_repo_get(mock_urlopen, mock_env, monkeypatch, capsys):
     res = json.loads(captured.out)
     assert res["id"] == 99
     assert res["name"] == "repo-test"
+
+
+def test_cli_mr_pipelines(mock_urlopen, mock_env, monkeypatch, capsys):
+    mock_urlopen.return_value = build_mock_response([{"id": 101, "status": "success"}])
+    monkeypatch.setattr("sys.argv", ["magpie-gitlab", "mr", "pipelines", "group/project", "5"])
+
+    assert main() == 0
+
+    captured = capsys.readouterr()
+    res = json.loads(captured.out)
+    assert len(res) == 1
+    assert res[0]["id"] == 101
+    assert res[0]["status"] == "success"
+
+
+def test_cli_issue_list_limit(mock_urlopen, mock_env, monkeypatch, capsys):
+    mock_urlopen.return_value = build_mock_response([{"id": 1}, {"id": 2}, {"id": 3}])
+    monkeypatch.setattr("sys.argv", ["magpie-gitlab", "issue", "list", "group/project", "--limit", "2"])
+
+    assert main() == 0
+
+    captured = capsys.readouterr()
+    res = json.loads(captured.out)
+    assert len(res) == 2
+    assert res[0]["id"] == 1
+    assert res[1]["id"] == 2

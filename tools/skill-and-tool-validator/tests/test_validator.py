@@ -499,10 +499,7 @@ class TestValidateNameConvention:
         real = self._skill(tmp_path, "triage", "triage")
         mirror = tmp_path / "flat" / "issue-triage"
         mirror.parent.mkdir()
-        try:
-            mirror.symlink_to(real.parent, target_is_directory=True)
-        except (OSError, NotImplementedError):
-            pytest.skip("symlinks not supported on this platform/configuration")
+        mirror.symlink_to(real.parent, target_is_directory=True)
         path = mirror / "SKILL.md"
         assert list(validate_name_convention(path, path.read_text())) == []
 

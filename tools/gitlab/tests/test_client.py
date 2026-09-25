@@ -82,11 +82,33 @@ def test_load_config_insecure_url(monkeypatch):
 
 
 def test_load_config_localhost_http_allowed(monkeypatch):
-    """HTTP is allowed for localhost (local dev / testing)."""
+    """HTTP is allowed for localhost / 127.0.0.1 / ::1 (local dev / testing)."""
     monkeypatch.setenv("GITLAB_TOKEN", "token")
     monkeypatch.setenv("GITLAB_INSTANCE_URL", "http://localhost:8080")
     cfg = load_config()
     assert cfg.instance_url == "http://localhost:8080"
+
+    monkeypatch.setenv("GITLAB_INSTANCE_URL", "http://127.0.0.1:8080")
+    cfg2 = load_config()
+    assert cfg2.instance_url == "http://127.0.0.1:8080"
+
+
+def test_load_config_localhost_non_http_rejected(monkeypatch):
+    """Non-HTTP schemes on localhost (ftp, file, etc.) must be rejected."""
+    monkeypatch.setenv("GITLAB_TOKEN", "token")
+    monkeypatch.setenv("GITLAB_INSTANCE_URL", "ftp://localhost:21")
+    with pytest.raises(
+        GitLabError,
+        match="Insecure instance URL scheme 'ftp': HTTPS is required",
+    ):
+        load_config()
+
+    monkeypatch.setenv("GITLAB_INSTANCE_URL", "file://localhost/tmp")
+    with pytest.raises(
+        GitLabError,
+        match="Insecure instance URL scheme 'file': HTTPS is required",
+    ):
+        load_config()
 
 
 def test_load_config_custom(mock_env):
@@ -113,17 +135,48 @@ def test_require():
 
 
 # ---------------------------------------------------------------------------
-# get_json -- bearer token
+# get_json -- authentication headers
 # ---------------------------------------------------------------------------
 
 
-def test_get_json_success(mock_urlopen, mock_env):
+def test_get_json_unauthenticated(mock_urlopen, monkeypatch):
+    """Unauthenticated public reads should succeed with no auth header."""
+    monkeypatch.delenv("GITLAB_TOKEN", raising=False)
+    monkeypatch.delenv("CI_JOB_TOKEN", raising=False)
+    monkeypatch.setenv("GITLAB_INSTANCE_URL", "https://gitlab.example.com")
+    mock_urlopen.return_value = build_mock_response({"public": "repo"})
+    cfg = load_config()
+    res = get_json("https://gitlab.example.com/api/v4/projects/public%2Frepo", cfg)
+    assert res == {"public": "repo"}
+    req = mock_urlopen.call_args[0][0]
+    assert "Authorization" not in req.headers
+    assert "Private-token" not in req.headers
+    assert "Job-token" not in req.headers
+    assert req.headers.get("Accept") == "application/json"
+
+
+def test_get_json_private_token(mock_urlopen, mock_env):
+    """Personal Access Tokens starting with glpat- should use PRIVATE-TOKEN header."""
     mock_urlopen.return_value = build_mock_response({"key": "value"})
     cfg = load_config()
     res = get_json("https://gitlab.example.com/api", cfg)
     assert res == {"key": "value"}
     req = mock_urlopen.call_args[0][0]
-    assert req.headers.get("Authorization") == "Bearer glpat-test123"
+    assert req.headers.get("Private-token") == "glpat-test123"
+    assert "Authorization" not in req.headers
+
+
+def test_get_json_bearer_token(mock_urlopen, monkeypatch):
+    """Tokens not starting with glpat- should use Bearer header."""
+    monkeypatch.setenv("GITLAB_TOKEN", "oauth-bearer-token")
+    monkeypatch.setenv("GITLAB_INSTANCE_URL", "https://gitlab.example.com")
+    mock_urlopen.return_value = build_mock_response({"auth": "ok"})
+    cfg = load_config()
+    res = get_json("https://gitlab.example.com/api", cfg)
+    assert res == {"auth": "ok"}
+    req = mock_urlopen.call_args[0][0]
+    assert req.headers.get("Authorization") == "Bearer oauth-bearer-token"
+    assert "Private-token" not in req.headers
 
 
 def test_get_json_http_error(mock_urlopen, mock_env):
@@ -150,6 +203,7 @@ def test_get_json_job_token_header(mock_urlopen, monkeypatch):
     req = mock_urlopen.call_args[0][0]
     assert req.headers.get("Job-token") == "job-tok-789"
     assert "Authorization" not in req.headers
+    assert "Private-token" not in req.headers
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +226,19 @@ def test_get_paged_json_multi_page(mock_urlopen, mock_env):
 
     cfg = load_config()
     items = get_paged_json("https://gitlab.example.com/api/v4/projects/test/issues", cfg)
+    assert items == [{"id": 1}, {"id": 2}]
+    assert mock_urlopen.call_count == 2
+
+
+def test_get_paged_json_max_pages(mock_urlopen, mock_env):
+    """Pagination must halt when max_pages ceiling is reached."""
+    page1 = build_mock_response([{"id": 1}], headers={"X-Next-Page": "2"})
+    page2 = build_mock_response([{"id": 2}], headers={"X-Next-Page": "3"})
+    page3 = build_mock_response([{"id": 3}], headers={"X-Next-Page": ""})
+    mock_urlopen.side_effect = [page1, page2, page3]
+
+    cfg = load_config()
+    items = get_paged_json("https://gitlab.example.com/api/v4/projects/test/issues", cfg, max_pages=2)
     assert items == [{"id": 1}, {"id": 2}]
     assert mock_urlopen.call_count == 2
 
@@ -212,8 +279,18 @@ def test_safe_redirect_blocks_cross_origin():
 
 
 def test_safe_redirect_allows_same_origin():
-    """Same-origin same-scheme redirect should be allowed."""
+    """Same-origin same-scheme absolute redirect should be allowed."""
     handler = _SafeRedirectHandler()
     req = _ur.Request("https://gitlab.example.com/api/old")
     result = handler.redirect_request(req, None, 302, "Found", {}, "https://gitlab.example.com/api/new")
     assert result is not None
+    assert result.full_url == "https://gitlab.example.com/api/new"
+
+
+def test_safe_redirect_allows_relative_same_origin():
+    """Relative redirect on same origin should be resolved and allowed."""
+    handler = _SafeRedirectHandler()
+    req = _ur.Request("https://gitlab.example.com/api/v4/projects")
+    result = handler.redirect_request(req, None, 302, "Found", {}, "/api/v4/projects/1")
+    assert result is not None
+    assert result.full_url == "https://gitlab.example.com/api/v4/projects/1"

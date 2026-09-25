@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 DEFAULT_TIMEOUT_SECONDS = 30
+DEFAULT_MAX_PAGES = 10
 
 
 class GitLabError(Exception):
@@ -37,6 +38,7 @@ class GitLabConfig:
     token: str | None
     instance_url: str
     token_type: str = field(default="bearer")
+    auth_scheme: str = field(default="")
 
 
 # ---------------------------------------------------------------------------
@@ -47,12 +49,11 @@ class GitLabConfig:
 def validate_instance_url(url: str) -> None:
     """Reject non-HTTPS URLs unless they target localhost for local dev."""
     parsed = urllib.parse.urlparse(url)
-    if parsed.scheme != "https" and parsed.hostname not in (
-        "localhost",
-        "127.0.0.1",
-        "::1",
-    ):
-        raise GitLabError(f"Insecure instance URL scheme '{parsed.scheme}': HTTPS is required")
+    if parsed.scheme == "https":
+        return
+    if parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1"):
+        return
+    raise GitLabError(f"Insecure instance URL scheme '{parsed.scheme}': HTTPS is required")
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +75,8 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         newurl: str,
     ) -> urllib.request.Request | None:
         orig = urllib.parse.urlparse(req.full_url)
-        dest = urllib.parse.urlparse(newurl)
+        resolved_dest = urllib.parse.urljoin(req.full_url, newurl)
+        dest = urllib.parse.urlparse(resolved_dest)
 
         # Deny transport downgrade (HTTPS -> HTTP)
         if orig.scheme == "https" and dest.scheme != "https":
@@ -83,11 +85,10 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         # Deny cross-origin host redirect
         if orig.hostname != dest.hostname:
             raise GitLabError(
-                f"Redirect blocked: cross-origin redirect from "
-                f"{orig.hostname} to {dest.hostname} is forbidden"
+                f"Redirect blocked: cross-origin redirect from {orig.hostname} to {dest.hostname} is forbidden"
             )
 
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        return super().redirect_request(req, fp, code, msg, headers, resolved_dest)
 
 
 def _build_opener() -> urllib.request.OpenerDirector:
@@ -102,11 +103,14 @@ def _build_opener() -> urllib.request.OpenerDirector:
 def load_config() -> GitLabConfig:
     """Build a ``GitLabConfig`` from environment variables.
 
-    Prefers ``GITLAB_TOKEN`` (sent as ``Authorization: Bearer``).
+    Prefers ``GITLAB_TOKEN`` (Personal Access Token, sent as ``PRIVATE-TOKEN:``
+    when starting with ``glpat-`` or ``Authorization: Bearer`` otherwise).
     Falls back to ``CI_JOB_TOKEN`` (sent as ``JOB-TOKEN:``).
+    Tokens are optional for unauthenticated reads on public projects.
     """
     gitlab_token = os.environ.get("GITLAB_TOKEN")
     ci_job_token = os.environ.get("CI_JOB_TOKEN")
+    auth_scheme = os.environ.get("GITLAB_AUTH_SCHEME", "")
 
     if gitlab_token:
         token = gitlab_token
@@ -124,6 +128,7 @@ def load_config() -> GitLabConfig:
         token=token,
         instance_url=instance_url,
         token_type=token_type,
+        auth_scheme=auth_scheme,
     )
 
 
@@ -143,13 +148,17 @@ def quote_path(value: str) -> str:
 
 
 def _auth_headers(config: GitLabConfig) -> dict[str, str]:
-    """Return the correct authentication header for the token type."""
-    token = require(config.token, "GITLAB_TOKEN or CI_JOB_TOKEN")
+    """Return the correct authentication header for the token type, or none if unauthenticated."""
     headers: dict[str, str] = {"Accept": "application/json"}
-    if config.token_type == "job_token":
-        headers["JOB-TOKEN"] = token
+    if not config.token:
+        return headers
+    scheme = config.auth_scheme.lower()
+    if config.token_type == "job_token" or scheme in ("job-token", "job_token"):
+        headers["JOB-TOKEN"] = config.token
+    elif config.token.startswith("glpat-") or scheme in ("private-token", "privatetoken"):
+        headers["PRIVATE-TOKEN"] = config.token
     else:
-        headers["Authorization"] = f"Bearer {token}"
+        headers["Authorization"] = f"Bearer {config.token}"
     return headers
 
 
@@ -175,13 +184,18 @@ def get_json(url: str, config: GitLabConfig) -> Any:
         raise GitLabError(f"Request failed: {exc}") from exc
 
 
-def get_paged_json(url: str, config: GitLabConfig) -> list[Any]:
-    """Fetch a paginated JSON collection, following ``X-Next-Page``."""
+def get_paged_json(
+    url: str,
+    config: GitLabConfig,
+    max_pages: int | None = DEFAULT_MAX_PAGES,
+) -> list[Any]:
+    """Fetch a paginated JSON collection, following ``X-Next-Page`` up to ``max_pages``."""
     validate_instance_url(url)
     headers = _auth_headers(config)
     items: list[Any] = []
     separator = "&" if "?" in url else "?"
-    current_url: str | None = f"{url}{separator}per_page=100"
+    current_url: str | None = f"{url}{separator}per_page=100" if "per_page=" not in url else url
+    pages_fetched = 0
 
     opener = _build_opener()
     while current_url:
@@ -194,6 +208,10 @@ def get_paged_json(url: str, config: GitLabConfig) -> list[Any]:
                 else:
                     # Non-list response -- return as single-element list.
                     return [data]
+
+                pages_fetched += 1
+                if max_pages is not None and pages_fetched >= max_pages:
+                    break
 
                 next_page = response.headers.get("X-Next-Page") if hasattr(response, "headers") else None
                 if isinstance(next_page, str) and next_page.strip():

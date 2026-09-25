@@ -298,37 +298,15 @@ def _split_frontmatter(text: str) -> tuple[str, str]:
     return "", text
 
 
-def _resolve_entry_dir(item: Path) -> Path:
-    if item.is_dir():
-        return item
-    if item.is_file():
-        try:
-            content = item.read_text(encoding="utf-8").strip()
-            if "\n" not in content and len(content) < 500:
-                target = (item.parent / content).resolve()
-                if target.is_dir():
-                    return target
-        except OSError:
-            # Not a readable symlink pointer file
-            pass
-    return item
-
-
 def load_skills(repo_root: Path) -> list[tuple[str, str, str]]:
     """Return (name, organization, body) for every ``skills/*/SKILL.md``."""
     out: list[tuple[str, str, str]] = []
-    skills_dir = repo_root / "skills"
-    if not skills_dir.is_dir():
-        return out
-    for entry in sorted(skills_dir.iterdir()):
-        resolved = _resolve_entry_dir(entry)
-        skill_md = resolved / "SKILL.md"
-        if resolved.is_dir() and skill_md.is_file():
-            text = skill_md.read_text(encoding="utf-8")
-            front, body = _split_frontmatter(text)
-            org_m = _ORG_RE.search(front)
-            org = org_m.group(1).strip() if org_m else "agnostic"
-            out.append((entry.name, org, body))
+    for skill_md in sorted((repo_root / "skills").glob("*/SKILL.md")):
+        text = skill_md.read_text(encoding="utf-8")
+        front, body = _split_frontmatter(text)
+        org_m = _ORG_RE.search(front)
+        org = org_m.group(1).strip() if org_m else "agnostic"
+        out.append((skill_md.parent.name, org, body))
     return out
 
 

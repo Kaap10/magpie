@@ -114,7 +114,7 @@ arithmetic, which is now tested rather than graded.
 
 <!-- BEGIN GENERATED SKILL TOKEN COUNTS -->
 
-Measured on (UTC): 2026-09-25.
+Measured on (UTC): 2026-09-24.
 
 Tokenizer: **tiktoken 0.14.0, `cl100k_base`**. Method: full UTF-8 file,
 including frontmatter and comments; line endings normalized to LF;
@@ -122,7 +122,7 @@ special-token spellings counted as ordinary text.
 Coverage: **75 of 75 local `skills/*/SKILL.md` files**.
 External `source.md` redirects and harness symlinks are excluded.
 
-Measurement manifest SHA-256: `5f3bd41f3ad4a0a833bdc1f9fbfa05d60d32037509c89e4a7e13952db347574a`.
+Measurement manifest SHA-256: `68cb00b425b1aa4a7a7cf803b6dd5c2fa6e991600ce2d0b4b3db2c0399c95c82`.
 
 | Skill file | Measured tokens | Source SHA-256 (first 16 characters) |
 |---|---:|---|
@@ -165,7 +165,7 @@ Measurement manifest SHA-256: `5f3bd41f3ad4a0a833bdc1f9fbfa05d60d32037509c89e4a7
 | [release-archive-sweep](../skills/release-archive-sweep/SKILL.md) | 4,522 | `eb3d461d811ac046` |
 | [release-audit-report](../skills/release-audit-report/SKILL.md) | 6,688 | `8c518f39ab65df81` |
 | [release-keys-sync](../skills/release-keys-sync/SKILL.md) | 4,865 | `a51f94544f85b8a2` |
-| [release-prepare](../skills/release-prepare/SKILL.md) | 13,861 | `cceab822db73fe04` |
+| [release-prepare](../skills/release-prepare/SKILL.md) | 13,889 | `6724e82522fd8629` |
 | [release-promote](../skills/release-promote/SKILL.md) | 6,964 | `737e78ce7aed15c3` |
 | [release-rc-cut](../skills/release-rc-cut/SKILL.md) | 11,861 | `6c323c5ef32381c5` |
 | [release-verify-rc](../skills/release-verify-rc/SKILL.md) | 10,798 | `9334e3c6165a352e` |
