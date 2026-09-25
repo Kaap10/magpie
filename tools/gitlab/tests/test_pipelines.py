@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 from magpie_gitlab.client import load_config
 from magpie_gitlab.pipelines import get_pipeline_status, list_mr_pipelines
 
@@ -38,5 +40,5 @@ def test_list_mr_pipelines(mock_urlopen, mock_env):
     req = mock_urlopen.call_args[0][0]
     assert (
         req.full_url
-        == "https://gitlab.example.com/api/v4/projects/group%2Fproject/merge_requests/1/pipelines"
+        == "https://gitlab.example.com/api/v4/projects/group%2Fproject/merge_requests/1/pipelines?per_page=100"
     )

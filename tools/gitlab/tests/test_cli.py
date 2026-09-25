@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 import json
 
 from magpie_gitlab.cli import main
@@ -31,3 +33,15 @@ def test_cli_issue_get(mock_urlopen, mock_env, monkeypatch, capsys):
     captured = capsys.readouterr()
     res = json.loads(captured.out)
     assert res["title"] == "CLI Test"
+
+
+def test_cli_repo_get(mock_urlopen, mock_env, monkeypatch, capsys):
+    mock_urlopen.return_value = build_mock_response({"id": 99, "name": "repo-test"})
+    monkeypatch.setattr("sys.argv", ["magpie-gitlab", "repo", "get", "group/repo-test"])
+
+    assert main() == 0
+
+    captured = capsys.readouterr()
+    res = json.loads(captured.out)
+    assert res["id"] == 99
+    assert res["name"] == "repo-test"

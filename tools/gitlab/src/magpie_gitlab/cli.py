@@ -19,7 +19,7 @@ import argparse
 import json
 import sys
 
-from .client import load_config
+from .client import get_project, load_config
 from .issues import get_issue, list_issues
 from .merge_requests import get_mr, get_mr_commits, get_mr_diff, list_mrs
 from .pipelines import get_pipeline_status
@@ -76,7 +76,9 @@ def main() -> int:
     try:
         config = load_config()
         res = None
-        if args.command == "issue":
+        if args.command == "repo" and args.action == "get":
+            res = get_project(args.project, config)
+        elif args.command == "issue":
             if args.action == "list":
                 res = list_issues(args.project, config, args.state)
             elif args.action == "get":
@@ -92,6 +94,10 @@ def main() -> int:
                 res = get_mr_commits(args.project, args.mr_iid, config)
         elif args.command == "pipeline" and args.action == "status":
             res = get_pipeline_status(args.project, args.pipeline_id, config)
+
+        if res is None:
+            parser.print_help()
+            return 1
 
         print(json.dumps(res, indent=2))
         return 0

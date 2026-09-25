@@ -15,7 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from magpie_gitlab.client import load_config
+from __future__ import annotations
+
+import pytest
+
+from magpie_gitlab.client import GitLabError, load_config
 from magpie_gitlab.merge_requests import get_mr, get_mr_commits, get_mr_diff, list_mrs
 
 from .conftest import build_mock_response
@@ -29,7 +33,7 @@ def test_list_mrs(mock_urlopen, mock_env):
     req = mock_urlopen.call_args[0][0]
     assert (
         req.full_url
-        == "https://gitlab.example.com/api/v4/projects/group%2Fproject/merge_requests?state=opened"
+        == "https://gitlab.example.com/api/v4/projects/group%2Fproject/merge_requests?state=opened&per_page=100"
     )
 
 
@@ -53,6 +57,14 @@ def test_get_mr_diff(mock_urlopen, mock_env):
     )
 
 
+def test_get_mr_diff_overflow(mock_urlopen, mock_env):
+    """When GitLab returns overflow: true the diff is incomplete."""
+    mock_urlopen.return_value = build_mock_response({"changes": [], "overflow": True})
+    cfg = load_config()
+    with pytest.raises(GitLabError, match="truncated"):
+        get_mr_diff("group/project", "1", cfg)
+
+
 def test_get_mr_commits(mock_urlopen, mock_env):
     mock_urlopen.return_value = build_mock_response([{"id": "abc"}])
     cfg = load_config()
@@ -60,5 +72,6 @@ def test_get_mr_commits(mock_urlopen, mock_env):
     assert len(res) == 1
     req = mock_urlopen.call_args[0][0]
     assert (
-        req.full_url == "https://gitlab.example.com/api/v4/projects/group%2Fproject/merge_requests/1/commits"
+        req.full_url
+        == "https://gitlab.example.com/api/v4/projects/group%2Fproject/merge_requests/1/commits?per_page=100"
     )

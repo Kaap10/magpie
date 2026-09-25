@@ -15,12 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 import json
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 DEFAULT_TIMEOUT_SECONDS = 30
@@ -34,13 +36,100 @@ class GitLabError(Exception):
 class GitLabConfig:
     token: str | None
     instance_url: str
+    token_type: str = field(default="bearer")
+
+
+# ---------------------------------------------------------------------------
+# URL validation
+# ---------------------------------------------------------------------------
+
+
+def validate_instance_url(url: str) -> None:
+    """Reject non-HTTPS URLs unless they target localhost for local dev."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" and parsed.hostname not in (
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    ):
+        raise GitLabError(f"Insecure instance URL scheme '{parsed.scheme}': HTTPS is required")
+
+
+# ---------------------------------------------------------------------------
+# Safe redirect handler -- prevents token leak on cross-origin or
+# HTTPS->HTTP redirects (CWE-200 / CWE-319).
+# ---------------------------------------------------------------------------
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Block redirects that would leak credentials to another origin."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        orig = urllib.parse.urlparse(req.full_url)
+        dest = urllib.parse.urlparse(newurl)
+
+        # Deny transport downgrade (HTTPS -> HTTP)
+        if orig.scheme == "https" and dest.scheme != "https":
+            raise GitLabError("Redirect blocked: HTTPS-to-HTTP downgrade is forbidden")
+
+        # Deny cross-origin host redirect
+        if orig.hostname != dest.hostname:
+            raise GitLabError(
+                f"Redirect blocked: cross-origin redirect from "
+                f"{orig.hostname} to {dest.hostname} is forbidden"
+            )
+
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _build_opener() -> urllib.request.OpenerDirector:
+    return urllib.request.build_opener(_SafeRedirectHandler)
+
+
+# ---------------------------------------------------------------------------
+# Config loading
+# ---------------------------------------------------------------------------
 
 
 def load_config() -> GitLabConfig:
+    """Build a ``GitLabConfig`` from environment variables.
+
+    Prefers ``GITLAB_TOKEN`` (sent as ``Authorization: Bearer``).
+    Falls back to ``CI_JOB_TOKEN`` (sent as ``JOB-TOKEN:``).
+    """
+    gitlab_token = os.environ.get("GITLAB_TOKEN")
+    ci_job_token = os.environ.get("CI_JOB_TOKEN")
+
+    if gitlab_token:
+        token = gitlab_token
+        token_type = "bearer"
+    elif ci_job_token:
+        token = ci_job_token
+        token_type = "job_token"
+    else:
+        token = None
+        token_type = "bearer"
+
+    instance_url = os.environ.get("GITLAB_INSTANCE_URL", "https://gitlab.com").rstrip("/")
+    validate_instance_url(instance_url)
     return GitLabConfig(
-        token=os.environ.get("GITLAB_TOKEN") or os.environ.get("CI_JOB_TOKEN"),
-        instance_url=os.environ.get("GITLAB_INSTANCE_URL", "https://gitlab.com").rstrip("/"),
+        token=token,
+        instance_url=instance_url,
+        token_type=token_type,
     )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def require(value: str | None, name: str) -> str:
@@ -53,15 +142,83 @@ def quote_path(value: str) -> str:
     return urllib.parse.quote(value, safe="")
 
 
+def _auth_headers(config: GitLabConfig) -> dict[str, str]:
+    """Return the correct authentication header for the token type."""
+    token = require(config.token, "GITLAB_TOKEN or CI_JOB_TOKEN")
+    headers: dict[str, str] = {"Accept": "application/json"}
+    if config.token_type == "job_token":
+        headers["JOB-TOKEN"] = token
+    else:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+# ---------------------------------------------------------------------------
+# Core HTTP helpers
+# ---------------------------------------------------------------------------
+
+
 def get_json(url: str, config: GitLabConfig) -> Any:
-    token = require(config.token, "GITLAB_TOKEN")
-    request = urllib.request.Request(
-        url, headers={"Accept": "application/json", "Authorization": f"Bearer {token}"}, method="GET"
-    )
+    """Fetch a single JSON resource (no pagination)."""
+    validate_instance_url(url)
+    headers = _auth_headers(config)
+    request = urllib.request.Request(url, headers=headers, method="GET")
+    opener = _build_opener()
     try:
-        with urllib.request.urlopen(request, timeout=DEFAULT_TIMEOUT_SECONDS) as response:
+        with opener.open(request, timeout=DEFAULT_TIMEOUT_SECONDS) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         raise GitLabError(f"HTTP {exc.code}: {exc.reason}") from exc
+    except GitLabError:
+        raise
     except Exception as exc:
         raise GitLabError(f"Request failed: {exc}") from exc
+
+
+def get_paged_json(url: str, config: GitLabConfig) -> list[Any]:
+    """Fetch a paginated JSON collection, following ``X-Next-Page``."""
+    validate_instance_url(url)
+    headers = _auth_headers(config)
+    items: list[Any] = []
+    separator = "&" if "?" in url else "?"
+    current_url: str | None = f"{url}{separator}per_page=100"
+
+    opener = _build_opener()
+    while current_url:
+        request = urllib.request.Request(current_url, headers=headers, method="GET")
+        try:
+            with opener.open(request, timeout=DEFAULT_TIMEOUT_SECONDS) as response:
+                data = json.loads(response.read().decode("utf-8"))
+                if isinstance(data, list):
+                    items.extend(data)
+                else:
+                    # Non-list response -- return as single-element list.
+                    return [data]
+
+                next_page = response.headers.get("X-Next-Page") if hasattr(response, "headers") else None
+                if isinstance(next_page, str) and next_page.strip():
+                    parsed = urllib.parse.urlparse(current_url)
+                    query = urllib.parse.parse_qs(parsed.query)
+                    query["page"] = [next_page.strip()]
+                    new_query = urllib.parse.urlencode(query, doseq=True)
+                    current_url = urllib.parse.urlunparse(parsed._replace(query=new_query))
+                else:
+                    current_url = None
+        except urllib.error.HTTPError as exc:
+            raise GitLabError(f"HTTP {exc.code}: {exc.reason}") from exc
+        except GitLabError:
+            raise
+        except Exception as exc:
+            raise GitLabError(f"Request failed: {exc}") from exc
+
+    return items
+
+
+# ---------------------------------------------------------------------------
+# High-level resource helpers
+# ---------------------------------------------------------------------------
+
+
+def get_project(project: str, config: GitLabConfig) -> Any:
+    url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}"
+    return get_json(url, config)

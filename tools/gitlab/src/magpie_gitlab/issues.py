@@ -15,14 +15,16 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 from typing import Any
 
-from .client import GitLabConfig, get_json, quote_path
+from .client import GitLabConfig, get_json, get_paged_json, quote_path
 
 
 def list_issues(project: str, config: GitLabConfig, state: str = "opened") -> Any:
     url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/issues?state={state}"
-    return get_json(url, config)
+    return get_paged_json(url, config)
 
 
 def get_issue(project: str, issue_iid: str, config: GitLabConfig) -> Any:

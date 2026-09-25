@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 from magpie_gitlab.client import load_config
 from magpie_gitlab.issues import get_issue, list_issues
 
@@ -29,7 +31,10 @@ def test_list_issues(mock_urlopen, mock_env):
     assert res[0]["title"] == "Issue 1"
 
     req = mock_urlopen.call_args[0][0]
-    assert req.full_url == "https://gitlab.example.com/api/v4/projects/group%2Fproject/issues?state=opened"
+    assert (
+        req.full_url
+        == "https://gitlab.example.com/api/v4/projects/group%2Fproject/issues?state=opened&per_page=100"
+    )
 
 
 def test_get_issue(mock_urlopen, mock_env):

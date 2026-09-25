@@ -15,14 +15,16 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 from typing import Any
 
-from .client import GitLabConfig, get_json, quote_path
+from .client import GitLabConfig, GitLabError, get_json, get_paged_json, quote_path
 
 
 def list_mrs(project: str, config: GitLabConfig, state: str = "opened") -> Any:
     url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/merge_requests?state={state}"
-    return get_json(url, config)
+    return get_paged_json(url, config)
 
 
 def get_mr(project: str, mr_iid: str, config: GitLabConfig) -> Any:
@@ -31,10 +33,14 @@ def get_mr(project: str, mr_iid: str, config: GitLabConfig) -> Any:
 
 
 def get_mr_diff(project: str, mr_iid: str, config: GitLabConfig) -> Any:
+    """Fetch MR changes.  Raises if GitLab truncated the diff."""
     url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/merge_requests/{mr_iid}/changes"
-    return get_json(url, config)
+    res = get_json(url, config)
+    if isinstance(res, dict) and res.get("overflow") is True:
+        raise GitLabError("Merge request diff is truncated (GitLab overflow limit reached)")
+    return res
 
 
 def get_mr_commits(project: str, mr_iid: str, config: GitLabConfig) -> Any:
     url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/merge_requests/{mr_iid}/commits"
-    return get_json(url, config)
+    return get_paged_json(url, config)
