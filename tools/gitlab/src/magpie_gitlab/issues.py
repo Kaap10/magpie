@@ -17,16 +17,23 @@
 
 from __future__ import annotations
 
+import urllib.parse
 from typing import Any
 
 from .client import GitLabConfig, get_json, get_paged_json, quote_path
 
 
-def list_issues(project: str, config: GitLabConfig, state: str = "opened") -> Any:
-    url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/issues?state={state}"
-    return get_paged_json(url, config)
+def list_issues(
+    project: str,
+    config: GitLabConfig,
+    state: str = "opened",
+    limit: int | None = None,
+) -> list[Any]:
+    query = urllib.parse.urlencode({"state": state})
+    url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/issues?{query}"
+    return get_paged_json(url, config, limit=limit)
 
 
-def get_issue(project: str, issue_iid: str, config: GitLabConfig) -> Any:
-    url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/issues/{issue_iid}"
+def get_issue(project: str, issue_iid: int | str, config: GitLabConfig) -> Any:
+    url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/issues/{quote_path(str(issue_iid))}"
     return get_json(url, config)

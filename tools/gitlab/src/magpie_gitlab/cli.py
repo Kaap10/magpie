@@ -29,58 +29,64 @@ from .pipelines import get_pipeline_status, list_mr_pipelines
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="GitLab CLI for Magpie")
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
     # repo
     repo_p = subparsers.add_parser("repo")
-    repo_subs = repo_p.add_subparsers(dest="action")
+    repo_subs = repo_p.add_subparsers(dest="action", required=True)
     repo_get = repo_subs.add_parser("get")
     repo_get.add_argument("project")
 
     # issue
     issue_p = subparsers.add_parser("issue")
-    issue_subs = issue_p.add_subparsers(dest="action")
+    issue_subs = issue_p.add_subparsers(dest="action", required=True)
     issue_list = issue_subs.add_parser("list")
     issue_list.add_argument("project")
-    issue_list.add_argument("--state", default="opened")
+    issue_list.add_argument(
+        "--state",
+        choices=["opened", "closed", "all"],
+        default="opened",
+    )
     issue_list.add_argument("--limit", type=int, default=None)
     issue_get = issue_subs.add_parser("get")
     issue_get.add_argument("project")
-    issue_get.add_argument("issue_iid")
+    issue_get.add_argument("issue_iid", type=int)
 
     # mr
     mr_p = subparsers.add_parser("mr")
-    mr_subs = mr_p.add_subparsers(dest="action")
+    mr_subs = mr_p.add_subparsers(dest="action", required=True)
     mr_list = mr_subs.add_parser("list")
     mr_list.add_argument("project")
-    mr_list.add_argument("--state", default="opened")
+    mr_list.add_argument(
+        "--state",
+        choices=["opened", "closed", "locked", "merged", "all"],
+        default="opened",
+    )
     mr_list.add_argument("--limit", type=int, default=None)
     mr_get = mr_subs.add_parser("get")
     mr_get.add_argument("project")
-    mr_get.add_argument("mr_iid")
+    mr_get.add_argument("mr_iid", type=int)
     mr_diff = mr_subs.add_parser("diff")
     mr_diff.add_argument("project")
-    mr_diff.add_argument("mr_iid")
+    mr_diff.add_argument("mr_iid", type=int)
+    mr_diff.add_argument("--limit", type=int, default=None)
     mr_commits = mr_subs.add_parser("commits")
     mr_commits.add_argument("project")
-    mr_commits.add_argument("mr_iid")
+    mr_commits.add_argument("mr_iid", type=int)
     mr_commits.add_argument("--limit", type=int, default=None)
     mr_pipelines = mr_subs.add_parser("pipelines")
     mr_pipelines.add_argument("project")
-    mr_pipelines.add_argument("mr_iid")
+    mr_pipelines.add_argument("mr_iid", type=int)
     mr_pipelines.add_argument("--limit", type=int, default=None)
 
     # pipeline
     pipe_p = subparsers.add_parser("pipeline")
-    pipe_subs = pipe_p.add_subparsers(dest="action")
+    pipe_subs = pipe_p.add_subparsers(dest="action", required=True)
     pipe_status = pipe_subs.add_parser("status")
     pipe_status.add_argument("project")
-    pipe_status.add_argument("pipeline_id")
+    pipe_status.add_argument("pipeline_id", type=int)
 
     args = parser.parse_args()
-    if not args.command:
-        parser.print_help()
-        return 1
 
     try:
         config = load_config()
@@ -89,29 +95,26 @@ def main() -> int:
             res = get_project(args.project, config)
         elif args.command == "issue":
             if args.action == "list":
-                res = list_issues(args.project, config, args.state)
+                res = list_issues(args.project, config, state=args.state, limit=args.limit)
             elif args.action == "get":
                 res = get_issue(args.project, args.issue_iid, config)
         elif args.command == "mr":
             if args.action == "list":
-                res = list_mrs(args.project, config, args.state)
+                res = list_mrs(args.project, config, state=args.state, limit=args.limit)
             elif args.action == "get":
                 res = get_mr(args.project, args.mr_iid, config)
             elif args.action == "diff":
-                res = get_mr_diff(args.project, args.mr_iid, config)
+                res = get_mr_diff(args.project, args.mr_iid, config, limit=args.limit)
             elif args.action == "commits":
-                res = get_mr_commits(args.project, args.mr_iid, config)
+                res = get_mr_commits(args.project, args.mr_iid, config, limit=args.limit)
             elif args.action == "pipelines":
-                res = list_mr_pipelines(args.project, args.mr_iid, config)
+                res = list_mr_pipelines(args.project, args.mr_iid, config, limit=args.limit)
         elif args.command == "pipeline" and args.action == "status":
             res = get_pipeline_status(args.project, args.pipeline_id, config)
 
         if res is None:
             parser.print_help()
             return 1
-
-        if isinstance(res, list) and getattr(args, "limit", None) is not None:
-            res = res[: args.limit]
 
         print(json.dumps(res, indent=2))
         return 0

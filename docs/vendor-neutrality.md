@@ -358,7 +358,9 @@ declare it under *Tools enabled*; no skill changes).
 
 The forge/tracker extension points are open, labelled `good first
 issue`, not hypothetical:
-
+[GitLab](https://github.com/apache/magpie/issues/305) (initial
+[`tools/gitlab`](../tools/gitlab/) `partial-read-only` bridge;
+full write and mutation coverage tracked there),
 [Codeberg / Gitea / Forgejo](https://github.com/apache/magpie/issues/310),
 [Pagure](https://github.com/apache/magpie/issues/312) (Fedora /
 `pagure.io`),
@@ -503,7 +505,7 @@ coverage without pretending one team can implement an open-ended set.
 |---|---|---|---|
 | LLM backend | ✅ by construction | Claude Code, Ollama, vLLM, Apache-hosted, Bedrock, direct Anthropic | Any endpoint meeting the capability floor + privacy gate |
 | Agentic harness | ✅ by construction (`AGENTS.md` standard) | Claude Code; OpenCode; [Codex adapter](adapters/codex.md) (experimental); [Gemini adapter](adapters/gemini.md) (experimental); community use under Cursor, Copilot, Kiro | Remaining runtime adapters [#314–#322](https://github.com/apache/magpie/issues?q=is%3Aissue+state%3Aopen+adapter+in%3Atitle) |
-| Forge / tracker | ✅ by construction | GitHub, Jira, SourceHut, GitLab; Bitbucket `partial-read-only` foundation excluded from complete-backend counts; CVE/scan/relay via adapter contracts | Forgejo/Gitea [#310](https://github.com/apache/magpie/issues/310), Pagure [#312](https://github.com/apache/magpie/issues/312), full Bitbucket tracker/change-request/Jira coverage [#606](https://github.com/apache/magpie/issues/606), Bugzilla [#302](https://github.com/apache/magpie/issues/302) |
+| Forge / tracker | ✅ by construction | GitHub, Jira, SourceHut; Bitbucket and GitLab `partial-read-only` foundations excluded from complete-backend counts; CVE/scan/relay via adapter contracts | Forgejo/Gitea [#310](https://github.com/apache/magpie/issues/310), Pagure [#312](https://github.com/apache/magpie/issues/312), full Bitbucket tracker/change-request/Jira coverage [#606](https://github.com/apache/magpie/issues/606), GitLab [#305](https://github.com/apache/magpie/issues/305), Bugzilla [#302](https://github.com/apache/magpie/issues/302) |
 | Communication channels | ✅ by construction | PonyMail / mail-archive reads | mbox [#304](https://github.com/apache/magpie/issues/304), IMAP [#303](https://github.com/apache/magpie/issues/303), Mailman 3 [#306](https://github.com/apache/magpie/issues/306); Discourse [#307](https://github.com/apache/magpie/issues/307), Zulip [#308](https://github.com/apache/magpie/issues/308), Matrix [#309](https://github.com/apache/magpie/issues/309) |
 | Source control (VCS) | ✅ by construction | **Git (complete)**, **Mercurial (complete)**; ASF SVN surface ([`tools/asf-svn`](../tools/asf-svn/): source control + dist.apache.org + authorization) | Subversion generic VCS binding [\#602](https://github.com/apache/magpie/issues/602) (detected); Jujutsu [\#603](https://github.com/apache/magpie/issues/603), Fossil [\#604](https://github.com/apache/magpie/issues/604), Perforce [\#605](https://github.com/apache/magpie/issues/605) (tracked) |
 | Project governance | ✅ by construction | ASF + non-ASF adopter profiles | Adopter config (modes, thresholds) |
@@ -568,9 +570,9 @@ generated block below.
 
 | Capability contract | Neutral? | Class | Backends today | Basis |
 |---|---|---|---|---|
-| `contract:tracker` | ✅ | vendor-backed | Atlassian, Fossil, GitHub, SourceHut | 4 backend vendors: Atlassian, Fossil, GitHub, SourceHut; partial foundation, not counted: bitbucket |
-| `contract:source-control` | ✅ | vendor-backed | Fossil, Git, GitHub, SourceHut, Subversion | 5 backend vendors: Fossil, Git, GitHub, SourceHut, Subversion |
-| `contract:change-request` | ✅ | vendor-backed | Atlassian, GitHub, email | 3 backend vendors: Atlassian, GitHub, email; partial foundation, not counted: bitbucket |
+| `contract:tracker` | ✅ | vendor-backed | Atlassian, Fossil, GitHub, SourceHut | 4 backend vendors: Atlassian, Fossil, GitHub, SourceHut; partial foundation, not counted: bitbucket, gitlab |
+| `contract:source-control` | ✅ | vendor-backed | Fossil, Git, GitHub, SourceHut, Subversion | 5 backend vendors: Fossil, Git, GitHub, SourceHut, Subversion; partial foundation, not counted: gitlab |
+| `contract:change-request` | ✅ | vendor-backed | Atlassian, GitHub, email | 3 backend vendors: Atlassian, GitHub, email; partial foundation, not counted: bitbucket, gitlab |
 | `contract:mail-archive` | ✅ | vendor-backed | ASF, Google, SourceHut | 3 backend vendors: ASF, Google, SourceHut |
 | `contract:mail-source` | ✅ | vendor-backed | ASF, Google, Maildir | 3 backend vendors: ASF, Google, Maildir |
 | `contract:mail-create` | ✅ | vendor-backed | Google, Maildir | 2 backend vendors: Google, Maildir |
@@ -580,15 +582,15 @@ generated block below.
 | `contract:project-metadata` | ✅ | single-org | ASF | single-organisation capability (ASF); no vendor choice to make |
 | `contract:security-cross-ref` | ❌ | vendor-backed | OSV.dev | only 1 backend vendor (OSV.dev); needs 1 more |
 
-**Per-skill assessment: 75/75 skills carry no vendor lock-in.** A skill is *capability-pure* when it names no backend at all, *portable* when every backend it names has an alternative (its contract is green), and *vendor-coupled* only when it reaches for a backend that is the sole implementation of a capability.
+**Per-skill assessment: 0/0 skills carry no vendor lock-in.** A skill is *capability-pure* when it names no backend at all, *portable* when every backend it names has an alternative (its contract is green), and *vendor-coupled* only when it reaches for a backend that is the sole implementation of a capability.
 
 | Skill neutrality | Count |
 |---|---|
-| capability-pure (names no backend) | 15 |
-| portable (named backends are swappable) | 60 |
+| capability-pure (names no backend) | 0 |
+| portable (named backends are swappable) | 0 |
 | vendor-coupled (sole-backend dependency) | 0 |
 
-Organization scope (declared, orthogonal to vendor): ASF = 14, agnostic = 61.
+Organization scope (declared, orthogonal to vendor): .
 
 **LLM / agent-integration neutrality**
 

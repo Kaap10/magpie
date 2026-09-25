@@ -26,7 +26,7 @@ from .conftest import build_mock_response
 def test_get_pipeline_status(mock_urlopen, mock_env):
     mock_urlopen.return_value = build_mock_response({"id": 1, "status": "success"})
     cfg = load_config()
-    res = get_pipeline_status("group/project", "1", cfg)
+    res = get_pipeline_status("group/project", 1, cfg)
     assert res["status"] == "success"
     req = mock_urlopen.call_args[0][0]
     assert req.full_url == "https://gitlab.example.com/api/v4/projects/group%2Fproject/pipelines/1"
@@ -35,10 +35,17 @@ def test_get_pipeline_status(mock_urlopen, mock_env):
 def test_list_mr_pipelines(mock_urlopen, mock_env):
     mock_urlopen.return_value = build_mock_response([{"id": 1, "status": "success"}])
     cfg = load_config()
-    res = list_mr_pipelines("group/project", "1", cfg)
+    res = list_mr_pipelines("group/project", 1, cfg)
     assert len(res) == 1
     req = mock_urlopen.call_args[0][0]
     assert (
         req.full_url
         == "https://gitlab.example.com/api/v4/projects/group%2Fproject/merge_requests/1/pipelines?per_page=100"
     )
+
+
+def test_list_mr_pipelines_limit(mock_urlopen, mock_env):
+    mock_urlopen.return_value = build_mock_response([{"id": 1}, {"id": 2}])
+    cfg = load_config()
+    res = list_mr_pipelines("group/project", 1, cfg, limit=2)
+    assert len(res) == 2

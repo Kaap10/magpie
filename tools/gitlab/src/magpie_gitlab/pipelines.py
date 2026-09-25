@@ -22,11 +22,16 @@ from typing import Any
 from .client import GitLabConfig, get_json, get_paged_json, quote_path
 
 
-def get_pipeline_status(project: str, pipeline_id: str, config: GitLabConfig) -> Any:
-    url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/pipelines/{pipeline_id}"
+def get_pipeline_status(project: str, pipeline_id: int | str, config: GitLabConfig) -> Any:
+    url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/pipelines/{quote_path(str(pipeline_id))}"
     return get_json(url, config)
 
 
-def list_mr_pipelines(project: str, mr_iid: str, config: GitLabConfig) -> Any:
-    url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/merge_requests/{mr_iid}/pipelines"
-    return get_paged_json(url, config)
+def list_mr_pipelines(
+    project: str,
+    mr_iid: int | str,
+    config: GitLabConfig,
+    limit: int | None = None,
+) -> list[Any]:
+    url = f"{config.instance_url}/api/v4/projects/{quote_path(project)}/merge_requests/{quote_path(str(mr_iid))}/pipelines"
+    return get_paged_json(url, config, limit=limit)

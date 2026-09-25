@@ -37,10 +37,17 @@ def test_list_issues(mock_urlopen, mock_env):
     )
 
 
+def test_list_issues_limit(mock_urlopen, mock_env):
+    mock_urlopen.return_value = build_mock_response([{"id": 1}, {"id": 2}])
+    cfg = load_config()
+    res = list_issues("group/project", cfg, limit=2)
+    assert len(res) == 2
+
+
 def test_get_issue(mock_urlopen, mock_env):
     mock_urlopen.return_value = build_mock_response({"id": 1, "title": "Issue 1"})
     cfg = load_config()
-    res = get_issue("group/project", "1", cfg)
+    res = get_issue("group/project", 1, cfg)
     assert res["id"] == 1
 
     req = mock_urlopen.call_args[0][0]

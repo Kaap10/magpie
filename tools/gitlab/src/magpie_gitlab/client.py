@@ -18,7 +18,9 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -82,10 +84,12 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         if orig.scheme == "https" and dest.scheme != "https":
             raise GitLabError("Redirect blocked: HTTPS-to-HTTP downgrade is forbidden")
 
-        # Deny cross-origin host redirect
-        if orig.hostname != dest.hostname:
+        # Deny cross-origin redirect (scheme, hostname, port)
+        orig_origin = (orig.scheme, orig.hostname, orig.port)
+        dest_origin = (dest.scheme, dest.hostname, dest.port)
+        if orig_origin != dest_origin:
             raise GitLabError(
-                f"Redirect blocked: cross-origin redirect from {orig.hostname} to {dest.hostname} is forbidden"
+                f"Redirect blocked: cross-origin redirect from {orig_origin} to {dest_origin} is forbidden"
             )
 
         return super().redirect_request(req, fp, code, msg, headers, resolved_dest)
@@ -152,13 +156,25 @@ def _auth_headers(config: GitLabConfig) -> dict[str, str]:
     headers: dict[str, str] = {"Accept": "application/json"}
     if not config.token:
         return headers
-    scheme = config.auth_scheme.lower()
-    if config.token_type == "job_token" or scheme in ("job-token", "job_token"):
-        headers["JOB-TOKEN"] = config.token
-    elif config.token.startswith("glpat-") or scheme in ("private-token", "privatetoken"):
-        headers["PRIVATE-TOKEN"] = config.token
+
+    if config.auth_scheme:
+        scheme = config.auth_scheme.strip().lower()
+        if scheme in ("private-token", "privatetoken"):
+            headers["PRIVATE-TOKEN"] = config.token
+        elif scheme == "bearer":
+            headers["Authorization"] = f"Bearer {config.token}"
+        elif scheme in ("job-token", "job_token"):
+            headers["JOB-TOKEN"] = config.token
+        else:
+            raise GitLabError(f"Unsupported GITLAB_AUTH_SCHEME: '{config.auth_scheme}'")
     else:
-        headers["Authorization"] = f"Bearer {config.token}"
+        if config.token_type == "job_token":
+            headers["JOB-TOKEN"] = config.token
+        elif config.token.startswith("glpat-"):
+            headers["PRIVATE-TOKEN"] = config.token
+        else:
+            headers["Authorization"] = f"Bearer {config.token}"
+
     return headers
 
 
@@ -187,15 +203,21 @@ def get_json(url: str, config: GitLabConfig) -> Any:
 def get_paged_json(
     url: str,
     config: GitLabConfig,
+    limit: int | None = None,
     max_pages: int | None = DEFAULT_MAX_PAGES,
 ) -> list[Any]:
-    """Fetch a paginated JSON collection, following ``X-Next-Page`` up to ``max_pages``."""
+    """Fetch a paginated JSON collection, following ``X-Next-Page`` up to ``limit`` or ``max_pages``."""
     validate_instance_url(url)
     headers = _auth_headers(config)
     items: list[Any] = []
     separator = "&" if "?" in url else "?"
     current_url: str | None = f"{url}{separator}per_page=100" if "per_page=" not in url else url
     pages_fetched = 0
+
+    target_pages: int | None = max_pages
+    if limit is not None:
+        pages_needed = max(1, math.ceil(limit / 100))
+        target_pages = min(pages_needed, max_pages) if max_pages is not None else pages_needed
 
     opener = _build_opener()
     while current_url:
@@ -206,15 +228,32 @@ def get_paged_json(
                 if isinstance(data, list):
                     items.extend(data)
                 else:
-                    # Non-list response -- return as single-element list.
-                    return [data]
+                    if not items:
+                        return [data]
+                    raise GitLabError("Unexpected non-list response during pagination")
 
                 pages_fetched += 1
-                if max_pages is not None and pages_fetched >= max_pages:
+                next_page = response.headers.get("X-Next-Page") if hasattr(response, "headers") else None
+                has_more = isinstance(next_page, str) and bool(next_page.strip())
+
+                if limit is not None and len(items) >= limit:
+                    items = items[:limit]
+                    if has_more:
+                        print(
+                            f"[magpie-gitlab] Note: Results capped at {len(items)} items; use --limit to fetch more.",
+                            file=sys.stderr,
+                        )
                     break
 
-                next_page = response.headers.get("X-Next-Page") if hasattr(response, "headers") else None
-                if isinstance(next_page, str) and next_page.strip():
+                if target_pages is not None and pages_fetched >= target_pages:
+                    if has_more and limit is None:
+                        print(
+                            f"[magpie-gitlab] Note: Results capped at {len(items)} items ({pages_fetched} pages); use --limit to fetch more.",
+                            file=sys.stderr,
+                        )
+                    break
+
+                if has_more and isinstance(next_page, str):
                     parsed = urllib.parse.urlparse(current_url)
                     query = urllib.parse.parse_qs(parsed.query)
                     query["page"] = [next_page.strip()]
