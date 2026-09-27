@@ -31,6 +31,7 @@ capability:
   - capability:resolve
 surface_hash: sha256:2a6de2a57fe22095
 license: Apache-2.0
+measured_tokens: 12915
 ---
 
 <!-- Placeholder convention (see AGENTS.md#placeholder-convention-used-in-skill-files):
@@ -251,7 +252,8 @@ tracker only to discover you cannot push the branch.
     [`<project-config>/fix-workflow.md`](../../../../<project-config>/fix-workflow.md#toolchain)
     (your project's toolchain is whatever `fix-workflow.md` declares)
     and
-    [`<upstream>/contributing-docs`](https://github.com/<upstream>/blob/main/contributing-docs/README.md).
+    the project's contributing docs (`<upstream_contributing_docs_url>` in
+    [`<project-config>/project.md`](../../../../<project-config>/project.md)).
 - **Outbound HTTPS** to the project's package registries (from
   `release_process.artifact_registries` in
   [`<project-config>/project.md`](../../../../<project-config>/project.md))
@@ -697,16 +699,16 @@ Write out the exact `--body` the skill will pass to
 
 - a brief description of the user-visible change,
 - the test plan (markdown checklist),
-- the standard Gen-AI disclosure block per
-  [`<upstream>/contributing-docs/05_pull_requests.rst`](https://github.com/<upstream>/blob/main/contributing-docs/05_pull_requests.rst#gen-ai-assisted-contributions):
+- the Gen-AI disclosure block the project's contributing docs
+  (`<upstream_contributing_docs_url>`) ask for; if they define none,
+  use this one:
 
   ```markdown
   ##### Was generative AI tooling used to co-author this PR?
 
   - [X] Yes — <agent> (<model>)
 
-  Generated-by: <agent> (<model>) following the guidelines at
-  https://github.com/<upstream>/blob/main/contributing-docs/05_pull_requests.rst#gen-ai-assisted-contributions
+  Generated-by: <agent> (<model>)
   ```
 
   Fill in `<agent>` and `<model>` with the actual agent and model
@@ -834,8 +836,8 @@ After the user confirms the diff:
 
 1. Stage only the intentional changes (`git add <paths>` — never
    `git add -A` or `git add .`).
-2. Commit with the agreed message from 5c, ending in the
-   `Generated-by:` trailer (not `Co-Authored-By:`), per
+2. Commit with the agreed message from 5c, adding the trailer the repository's commit-attribution convention names, resolved per [`commit-attribution.md`](../../../../docs/setup/commit-attribution.md)
+   (`Generated-by:` by default), with `git commit --trailer`, per
    [`AGENTS.md`](../../../../AGENTS.md).
 3. Rebase onto the latest upstream base one more time in case
    something landed while you were working:
@@ -1157,4 +1159,4 @@ Print a short recap:
 - [`README.md`](../../../../README.md) — canonical process description, especially steps 7–9 (implementing the fix).
 - [`AGENTS.md`](../../../../AGENTS.md) — repo-wide rules (confidentiality, commit trailers, tone, CVE linking).
 - [`<upstream>/AGENTS.md`](https://github.com/<upstream>/blob/main/AGENTS.md) — parent conventions this skill defers to.
-- [`<upstream>/contributing-docs/05_pull_requests.rst`](https://github.com/<upstream>/blob/main/contributing-docs/05_pull_requests.rst) — public PR conventions and Gen-AI disclosure block.
+- `<upstream_contributing_docs_url>` (from [`<project-config>/project.md`](../../../../<project-config>/project.md)) — the project's public PR conventions and Gen-AI disclosure rules.

@@ -28,6 +28,7 @@ argument-hint: "[--tool <name>] [--report <path>] [--finding <id>]"
 capability: capability:fix
 surface_hash: sha256:9e749aa429ac8777
 license: Apache-2.0
+measured_tokens: 6151
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0
@@ -200,7 +201,7 @@ proposal is non-blocking.
   (`--tool <name>`), or a single finding ID (`--finding <id>`).
 - **`<upstream>` working tree clean** (or `--allow-dirty` set).
 - **Audit tool invocable** per
-  [`<project-config>/runtime-invocation.md`](../../../../projects/_template/runtime-invocation.md).
+  [`<project-config>/runtime-invocation.md`](../../../magpie-setup/templates/runtime-invocation.md).
 - **No security-class findings** in the batch (see Golden rule 6).
 
 ---
@@ -397,7 +398,8 @@ Write the commit message per the project's convention:
 - **Body** — one paragraph: which tool, how many findings, the
   rules addressed, and a one-sentence summary of the fix strategy.
   No security language.
-- **Trailer** — `Generated-by: <tool-name>` per the
+- **Trailer** — the trailer the repository's commit-attribution convention names, resolved per [`commit-attribution.md`](../../../../docs/setup/commit-attribution.md) (`Generated-by: <tool-name>` by default),
+  added with `git commit --trailer "<trailer>"` per the
   [`AGENTS.md` → *Commit and PR conventions*](../../../../AGENTS.md#commit-and-pr-conventions).
   The trailer is the contributor's call on their own commit; the
   skill does not add it to anyone else's commit.
@@ -576,9 +578,9 @@ Without `--draft-pr`, this step is skipped entirely.
 
 - [`AGENTS.md`](../../../../AGENTS.md) — placeholder conventions,
   trailer policy, *"what not to do"* list.
-- [`<project-config>/fix-workflow.md`](../../../../projects/_template/fix-workflow.md) —
+- [`<project-config>/fix-workflow.md`](../../../magpie-setup/templates/fix-workflow.md) —
   branch-name pattern, commit-trailer convention.
-- [`<project-config>/runtime-invocation.md`](../../../../projects/_template/runtime-invocation.md) —
+- [`<project-config>/runtime-invocation.md`](../../../magpie-setup/templates/runtime-invocation.md) —
   tool invocation.
 - [`issue-fix-workflow`](../../../magpie-issue/skills/fix-workflow/SKILL.md) —
   sibling; use for issue-tracker-originated work items.

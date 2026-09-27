@@ -94,6 +94,43 @@ def test_baseline_asks_on_gh_writes_not_on_reads(baseline: dict[str, Any]) -> No
     assert "Bash(gh pr view *)" in baseline["permissions"]["allow"]
 
 
+VETTED_OP_READ = "~/.claude/magpie/vetted-ops vetted-op-read *"
+
+
+@pytest.mark.parametrize("form", ["uv run --project", "uvx --from"])
+def test_baseline_allows_and_excludes_every_vetted_op_read_form(baseline: dict[str, Any], form: str) -> None:
+    # Skills invoke the read dispatcher with `uv run --project`, read-only
+    # gatherer agents with `uvx --from`. A rule for only one form leaves every
+    # call in the other form prompting (a bulk sync makes hundreds of them) or
+    # failing inside the sandbox, where it cannot reach gh or the network.
+    assert f"{form} {VETTED_OP_READ}" in baseline["sandbox"]["excludedCommands"]
+    assert f"Bash({form} {VETTED_OP_READ})" in baseline["permissions"]["allow"]
+
+
+def test_baseline_never_allows_the_vetted_op_write_dispatcher(baseline: dict[str, Any]) -> None:
+    # `--caller` is an argv string the caller picks, so an allow on the write
+    # dispatcher would grant the whole catalogue. It stays on ask.
+    write = VETTED_OP_READ.replace("vetted-op-read", "vetted-op")
+    for form in ("uv run --project", "uvx --from"):
+        assert f"Bash({form} {write})" not in baseline["permissions"]["allow"]
+
+
+def test_baseline_names_the_fixed_vetted_ops_path_not_a_versioned_glob(baseline: dict[str, Any]) -> None:
+    # A `*` where the plugin version sits also matches spaces, so it would
+    # approve, and run unsandboxed, a command with extra uv options spliced in.
+    rules = baseline["sandbox"]["excludedCommands"] + baseline["permissions"]["allow"]
+    assert not [r for r in rules if "magpie-vetted-ops/*" in r]
+    assert "Edit(~/.claude/magpie/**)" in baseline["permissions"]["deny"]
+
+
+def test_mid_rule_wildcard_in_allow_is_an_invariant_error(baseline: dict[str, Any]) -> None:
+    weakened = copy.deepcopy(baseline)
+    rule = "Bash(uvx --from ~/.claude/plugins/cache/x/*/tools/vetted-ops vetted-op-read *)"
+    weakened["permissions"]["allow"].append(rule)
+    errors = check_invariants(weakened)
+    assert any(rule in e for e in errors), errors
+
+
 def test_catch_all_gh_ask_rule_is_an_invariant_error(baseline: dict[str, Any]) -> None:
     weakened = copy.deepcopy(baseline)
     weakened["permissions"]["ask"].append("Bash(gh *)")
@@ -189,6 +226,18 @@ def test_invariant_allow_read_rejects_credential_paths(baseline: dict[str, Any],
     settings["sandbox"]["filesystem"]["allowRead"].append(forbidden)
     errors = check_invariants(settings)
     assert any("allowRead" in e and forbidden.rstrip("/") in e for e in errors)
+
+
+def test_baseline_allows_docker_desktop_cli_without_credentials(baseline: dict[str, Any]) -> None:
+    # Docker Desktop installs `docker` and its compose/buildx plugins under
+    # ~/.docker; without these the CLI cannot even start inside the sandbox.
+    allow_read = baseline["sandbox"]["filesystem"]["allowRead"]
+    assert {"~/.docker/bin/", "~/.docker/cli-plugins/"} <= set(allow_read)
+    assert not [
+        p for p in allow_read if p.rstrip("/") in ("~/.docker", "~/.docker/contexts", "~/.docker/config.json")
+    ]
+    assert "Read(~/.docker/**)" in baseline["permissions"]["deny"]
+    assert check_invariants(baseline) == []
 
 
 @pytest.mark.parametrize(

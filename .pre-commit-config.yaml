@@ -187,7 +187,7 @@ repos:
   # .gitignore inside `.venv`, so a synced workspace stays out of the
   # walk: it covers the same files the list did.
   - repo: https://github.com/crate-ci/typos
-    rev: v1.50.1
+    rev: v1.50.2
     hooks:
       - id: typos
         name: typos
@@ -307,7 +307,7 @@ repos:
         name: symlink-lint (release archive)
         language: system
         entry: python3 tools/symlink-lint/src/symlink_lint/__init__.py --archive
-        files: ^(\.gitattributes|\.(agents|claude|github|kiro)/skills/.*|skills/.*|plugins/magpie-[^/]+/skills/.*|projects/_template/.*)$
+        files: ^(\.gitattributes|\.(agents|claude|github|kiro)/skills/.*|skills/.*|plugins/magpie-[^/]+/skills/.*|plugins/magpie-setup/templates/.*)$
         types_or: [symlink, file]
         pass_filenames: false
   # Marketplace-plugin consistency guard. Validates that every plugin is
@@ -375,6 +375,19 @@ repos:
         entry: python3 tools/dev/skill-surface-hash.py --fix
         files: ^(skills/[^/]+/[^/]+\.md|plugins/magpie-[^/]+/skills/[^/]+/[^/]+\.md)$
         pass_filenames: false
+  # The isolated-setup fingerprint shipped inside the pre-flight checker.
+  # A marketplace install has no framework source to hash, so the checker
+  # compares against this constant to notice that an upgrade changed the
+  # secure-setup files and propose `setup-isolated-setup-update`. `files:`
+  # mirrors `SOURCES` in `setup_preflight/isolated.py`.
+  - repo: local
+    hooks:
+      - id: isolated-setup-fingerprint
+        name: isolated-setup-fingerprint (secure-setup fingerprint in setup-preflight)
+        language: system
+        entry: env PYTHONPATH=tools/setup-preflight/src python3 -m setup_preflight.isolated write-constant
+        files: ^(\.claude/settings\.json|tools/agent-guard/src/.*|tools/agent-isolation/.*|tools/container-gateway/src/.*|plugins/magpie-setup/skills/setup/setup_preflight/isolated(_fingerprint)?\.py)$
+        pass_filenames: false
   # Cross-file near-duplicate prose gate: fails on a paragraph pasted from
   # one scoped file into another instead of being pulled into a shared
   # block. Wired only over the setup-family surface the shared-block
@@ -400,10 +413,10 @@ repos:
   - repo: local
     hooks:
       - id: skill-token-count
-        name: Check measured skill tokens in docs/mode-economics.md
+        name: Check measured_tokens stamps in SKILL.md frontmatter
         language: system
         entry: uv run --project tools/skill-token-count skill-token-count --check
-        files: ^(skills/.*/SKILL\.md|plugins/magpie-[^/]+/skills/.*/SKILL\.md|tools/dev/preflight-block\.md|tools/skill-token-count/.*|docs/mode-economics\.md|uv\.lock|\.pre-commit-config\.yaml)$
+        files: ^(skills/.*/SKILL\.md|plugins/magpie-[^/]+/skills/.*/SKILL\.md|tools/dev/preflight-block\.md|tools/skill-token-count/.*|uv\.lock|\.pre-commit-config\.yaml)$
         pass_filenames: false
   # Quick-start screenshot set. Three lists have to agree — the harnesses
   # `capture-screenshot.sh` offers, the ecosystem manifests that make a harness
@@ -467,7 +480,7 @@ repos:
         name: check-skill-config (family config tables vs requires_config)
         language: system
         entry: python3 tools/dev/check-skill-config.py --fix
-        files: ^(skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/.*|projects/_template/.*|docs/[^/]+/README\.md|tools/dev/check-skill-config\.py)$
+        files: ^(skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/.*|plugins/magpie-setup/templates/.*|docs/[^/]+/README\.md|tools/dev/check-skill-config\.py)$
         pass_filenames: false
       # The animated wizard runs derive from the same frontmatter, so they move
       # when it moves. Regenerated here rather than only checked, for the same
@@ -476,7 +489,7 @@ repos:
         name: render-wizard (animated setup + per-family config runs)
         language: system
         entry: python3 tools/dev/render-wizard.py
-        files: ^(skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/.*/SKILL\.md|projects/_template/.*|tools/dev/(render-wizard|check-skill-config)\.py)$
+        files: ^(skills/[^/]+/SKILL\.md|plugins/magpie-[^/]+/skills/.*/SKILL\.md|plugins/magpie-setup/templates/.*|tools/dev/(render-wizard|check-skill-config)\.py)$
         pass_filenames: false
   # something else.
   - repo: local
@@ -513,6 +526,17 @@ repos:
         language: system
         entry: tools/dev/check-workspace-members.py
         files: ^((tools/[^/]+(/[^/]+)?|ai-tutors|skills)/pyproject\.toml|pyproject\.toml|.*/tests?/.*\.py|.*/test_[^/]+\.py|.*_test\.py)$
+        pass_filenames: false
+  # Tool-capability PR labels. `.github/labeler.yml` is generated from every
+  # tool README's `**Capability:**` line; regenerate it whenever a README or
+  # the generator changes, so a new tool is labelled with no hand-edit.
+  - repo: local
+    hooks:
+      - id: generate-labeler-config
+        name: generate-labeler-config (tool READMEs -> .github/labeler.yml)
+        language: system
+        entry: tools/dev/generate-labeler-config.py
+        files: ^(tools/[^/]+/README\.md|\.github/labeler\.yml|tools/dev/generate-labeler-config\.py)$
         pass_filenames: false
   # Workspace-level static checks. Iterate over every uv-workspace
   # member declared in the root `pyproject.toml`'s

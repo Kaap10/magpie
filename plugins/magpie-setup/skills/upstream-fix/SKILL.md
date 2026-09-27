@@ -19,6 +19,7 @@ argument-hint: "[quirk description]"
 capability: capability:platform
 surface_hash: sha256:30b1a0e51c6e8fa9
 license: Apache-2.0
+measured_tokens: 5335
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0
@@ -189,7 +190,7 @@ Do this **once per quirk**, in `<framework-clone>`:
 3. Run `prek run --all-files` (or `--files <changed>`) and fix anything it flags.
    Never bypass with `--no-verify`.
 4. Show the user `git diff` and get explicit confirmation before committing.
-5. Commit with a Conventional-Commits prefix (`fix(<area>): …`) and a `Generated-by: <agent name and version>` trailer;
+5. Commit with a Conventional-Commits prefix (`fix(<area>): …`) and add the framework's `Generated-by: <agent name and version>` trailer with `git commit -F <file> --trailer "Generated-by: …"`;
    the framework's [no-`Co-Authored-By`](../../../../AGENTS.md) hook rejects AI co-authorship.
 6. Push to the fork: `git push <fork-remote> fix/<short-description>`.
    - **Fork-push gotcha.** If the push is rejected for a `workflow` scope the token lacks, the fork's `main` is stale and the branch carries historical `.github/workflows/` changes.
@@ -310,7 +311,7 @@ Every `apache/magpie#NNN` reference in the recap is a clickable link.
 - **Propose → confirm → apply.** Nothing is cloned, committed, pushed, PR'd, or commented without explicit confirmation.
 - **`--body-file` only.** Never `gh … --body "$(…)"` or `--title '<attacker-influenced>'`; PR/issue text goes through a tempfile.
   Quirk text in a PR body is agent-authored, but keep the tempfile discipline uniform.
-- **`Generated-by:` trailer, never `Co-Authored-By:`.** The framework's commit hook rejects AI co-authorship.
+- **`Generated-by:` trailer via `--trailer`, never `Co-Authored-By:`.** It is the framework repository's own convention ([`commit-attribution.md`](../../../../docs/setup/commit-attribution.md)), whatever the adopter uses; the framework's commit hook rejects AI co-authorship.
 - **Never `git push --force`** to a branch that already has a PR; never delete the branch mid-review.
 
 ## Silencing the session-end offer

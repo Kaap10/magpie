@@ -5,24 +5,24 @@ name: pre-first-pr-check
 family: pr-management
 mode: Pairing
 description: |
-  Run a newcomer-focused pre-flight checklist on a local branch before opening a pull
-  request. Checks CONTRIBUTING conventions, SPDX headers on new files, commit-message
-  shape (including the Generated-by: trailer for AI-assisted work), and the placeholder
-  convention — then returns a structured checklist report. Read-only; no state changes,
-  no PR, no external writes.
+  Run a newcomer-focused pre-flight checklist on a local branch before
+  opening a PR. Checks CONTRIBUTING conventions, SPDX headers on new files,
+  commit-message shape (including the Generated-by: trailer for AI-assisted
+  work), and the placeholder convention — then returns a structured
+  checklist report. Read-only; no state changes, no PR, no external writes.
 when_to_use: |
-  Invoke when a contributor says "am I ready to open a PR?", "check my branch before I
-  push", "is my commit message correct?", "do I need a Generated-by trailer?", or any
-  variation on wanting a newcomer-friendly pre-flight check before their first (or any)
-  pull request. This skill focuses on contribution mechanics: file headers, commit
-  format, and placeholder hygiene — the things first-time contributors most often miss.
-  Skip when the goal is a deep correctness/security review of the diff itself — use
-  pairing-self-review for that. Skip when a PR is already open — use
-  pr-management-code-review for in-flight PR review.
+  Invoke on "am I ready to open a PR?", "check my branch before I push",
+  "is my commit message correct?", or "do I need a Generated-by trailer?".
+  Focuses on contribution mechanics — file headers, commit format, and
+  placeholder hygiene, the things first-time contributors most often miss.
+  Skip for deep correctness/security review of the diff — use
+  pairing-self-review. Skip when a PR is already open — use
+  pr-management-code-review.
 argument-hint: "[base:<ref>] [path:<glob>]"
 capability: capability:review
 surface_hash: sha256:70f8fcdaa24d9a4e
 license: Apache-2.0
+measured_tokens: 3467
 ---
 <!-- SPDX-License-Identifier: Apache-2.0
      https://www.apache.org/licenses/LICENSE-2.0 -->
@@ -175,15 +175,21 @@ Every commit on the branch must satisfy all three rules:
    A conventional-commits prefix (`feat:`, `fix:`, `docs:`, `chore:`, etc.) is
    acceptable as long as the remainder of the subject is imperative.
 
-2. **No `Co-Authored-By:` for an AI agent** — the commit must not carry a trailer of the
+Rules 2 and 3 follow the project's commit-attribution convention, resolved per
+[`commit-attribution.md`](../../../../docs/setup/commit-attribution.md);
+the default is `generated-by`.
+
+2. **No `Co-Authored-By:` for an AI agent** — unless the convention is
+   `co-authored-by`, the commit must not carry a trailer of the
    form `Co-Authored-By: Claude`, `Co-Authored-By: GPT`, `Co-Authored-By: Copilot`, or
    any equivalent that attributes authorship to an AI model or agent.
    Using `Co-Authored-By:` for a *human* co-author is fine.
    See [`AGENTS.md` § Commit and PR conventions](../../../../AGENTS.md#commit-and-pr-conventions).
 
-3. **`Generated-by:` trailer when AI-assisted** — any commit that was substantially
-   written or edited by an AI agent must carry a `Generated-by:` trailer naming the
-   agent, e.g. `Generated-by: Claude Code (Opus 4.7)`. If the contributor indicates
+3. **The convention's trailer when AI-assisted** — any commit that was substantially
+   written or edited by an AI agent must carry the trailer the convention names, e.g.
+   `Generated-by: Claude Code (Opus 4.7)` by default; under `none`, no trailer is
+   expected. If the contributor indicates
    the commit was hand-written, no trailer is required; if there is any uncertainty,
    add the trailer (it is opt-in and costs nothing).
 

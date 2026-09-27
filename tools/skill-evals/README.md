@@ -11,7 +11,7 @@ Behavioral eval harness for Apache Magpie skills. Each eval suite tests a skill 
 
 Suites are currently implemented for:
 
-- **setup** — 88 cases across 22 steps (step-verify-drift, step-overrides-surface, step-override-bypass, step-m3-baseline-pick, step-m4-install-gates, step-m5-no-repo-offer, step-adopt-settings-merge, verify-default-set, uninstall-default-set, lock-marketplace-parse, adopt-write-floor, setup-prefill-from-floor, preflight-floor, upgrade-adoption-split, verify-floor, adopt-review-process, step-reconcile, step-verify, step-config-stamp, step-config-adversarial, step-adopt-stamp, step-upgrade-stamp)
+- **setup** — 92 cases across 23 steps (step-verify-drift, step-overrides-surface, step-override-bypass, step-m3-baseline-pick, step-m4-install-gates, step-m5-no-repo-offer, step-adopt-settings-merge, verify-default-set, uninstall-default-set, lock-marketplace-parse, adopt-write-floor, setup-prefill-from-floor, preflight-floor, upgrade-adoption-split, verify-floor, adopt-review-process, step-reconcile, step-verify, step-config-stamp, step-config-adversarial, step-adopt-stamp, step-upgrade-stamp)
 - **setup-isolated-setup-install** — 14 cases across 4 steps (runtime-routing, step-snapshot-drift, step-scope-confirm, step-hardware-key)
 - **setup-privacy-llm** — 6 cases across 2 steps (step-1-resolve, step-4-gate)
 - **setup-shared-config-sync** — 12 cases across 2 steps (step-3-decide-action, step-5-draft-commit)
@@ -39,7 +39,7 @@ Suites are currently implemented for:
 - **setup-isolated-setup-update** — 15 cases across 4 steps (runtime-routing, step-snapshot-drift, step-tool-freshness, step-after-report)
 - **setup-isolated-setup-doctor** — 24 cases across 3 steps (runtime-routing, interpret-probes, after-report)
 - **contributor-activity-sweep** — 12 cases across 3 steps (step-0-resolve-inputs, step-1-classify-reviews, step-2-render)
-- **optimize-skill** — 5 cases across 1 step (step-diagnose)
+- **optimize-skill** — 7 cases across 1 step (step-diagnose)
 - **committer-onboarding** — 27 cases across 4 steps (step-0-validate-vote, step-1-icla-comms, step-2-checklist, step-3-completion-summary)
 - **ci-runner-audit** — 6 cases across 2 steps (step-scope-selection, step-reporting)
 - **setup-status** — 18 cases across 5 steps (step-0-preflight, step-1-command, step-2-present, step-3-adjust-decision)
@@ -54,8 +54,8 @@ Suites are currently implemented for:
 - **security-model-prepare** — 9 cases across 2 steps (step-1-consent-gate, step-4-provenance); consent before the first repo write, and the four provenance tags with no hedge variants
 - **security-model-update** — 15 cases across 3 steps (step-1-disposition-map, step-2-kn-entry-rules, step-3-regression-gate); the precedence-promotion trap, the four known-non-finding entry rules, and the blocking regression gate
 - **audit-finding-fix** — 12 cases across 4 suites (step-2-parse-findings, step-5-scope-check, step-6-compose-commit, step-7-handback)
-- **contributor-nomination** — 21 cases across 4 suites (step-0-resolve-inputs, step-3-gather-signal, step-4-assess, step-5-render)
-- **contributor-to-committer** — 13 cases across 3 suites (step-0-resolve-inputs, step-4-map-thresholds, step-5-render-brief)
+- **contributor-nomination** — 22 cases across 4 suites (step-0-resolve-inputs, step-3-gather-signal, step-4-assess, step-5-render)
+- **contributor-to-committer** — 17 cases across 4 suites (step-0-resolve-inputs, step-2a-discount-automated, step-4-map-thresholds, step-5-render-brief)
 - **dependency-audit** — 8 cases across 2 suites (step-findings-report, step-scope-selection)
 - **dependency-license-audit** — 19 cases across 4 suites (step-license-classification, step-license-normalization, step-license-report, step-scope-selection)
 - **flaky-test-triage** — 10 cases across 3 suites (step-classify, step-reporting, step-scope-and-config)

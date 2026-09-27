@@ -17,6 +17,7 @@ when_to_use: >-
 capability: capability:platform
 surface_hash: sha256:eb1b228a501f2772
 license: Apache-2.0
+measured_tokens: 4937
 ---
 
 <!-- Placeholder convention (see AGENTS.md#placeholder-convention-used-in-skill-files):
@@ -114,7 +115,12 @@ Drift severity:
   user already has a project `.claude/settings.json` or a
   user-scope `~/.claude/settings.json`, the skill *diffs* the
   desired merge against the existing file and asks for explicit
-  approval before writing. Re-installs / partial-state recoveries
+  approval before writing. The merge carries the framework's
+  `permissions.allow` set (the read-only reads: `gh` reads, the
+  vetted-ops read dispatcher, archive / mailbox / roster MCP reads,
+  registry `WebFetch` hosts) alongside `deny` and `ask` — leaving it
+  out makes every skill read prompt. Only read-only entries belong in
+  `allow`. Re-installs / partial-state recoveries
   are common — the skill must not blow away an unrelated
   pre-existing hook or `permissions.ask` rule. The desired merge
   **includes the agent-guard `hooks.PreToolUse` entry** (matcher
@@ -185,7 +191,8 @@ permission-rule / sandbox / prompt-injection fixes. The manifest's
 declares a `min_version` **floor**, not a pin. Because this install is
 driven from Claude Code, apply the same hard gate
 `setup-isolated-setup-verify` check 5 applies: read the running
-version (`claude --version`) and, if it is **below** `min_version`,
+version (`command claude --version`, which skips an
+`alias claude=claude-iso`) and, if it is **below** `min_version`,
 **hard-fail** — stop the install, tell the operator to upgrade to
 `@latest`, and have them re-run. The secure setup must not be stood up
 on a below-floor runtime.
@@ -232,10 +239,11 @@ writes structurally.
 ```jsonc
 "permissions": {
   "allow": [
-    "Bash(uv run --project ~/.claude/plugins/cache/apache-magpie/magpie-vetted-ops/*/tools/vetted-ops vetted-op-read *)"
+    "Bash(uv run --project ~/.claude/magpie/vetted-ops vetted-op-read *)",
+    "Bash(uvx --from ~/.claude/magpie/vetted-ops vetted-op-read *)"
   ],
   "ask": [
-    "Bash(uv run --project ~/.claude/plugins/cache/apache-magpie/magpie-vetted-ops/*/tools/vetted-ops vetted-op *)"
+    "Bash(uv run --project ~/.claude/magpie/vetted-ops vetted-op *)"
   ],
   "deny": [
     // `Edit(path)` is the path rule for every file-writing tool — Write and
@@ -245,11 +253,30 @@ writes structurally.
     //
     // the operation catalogue — the read `allow` rests on its shape
     "Edit(~/.claude/plugins/cache/apache-magpie/magpie-vetted-ops/**)",
+    // the fixed path the rules name, which points into that catalogue
+    "Edit(~/.claude/magpie/**)",
     // the policy naming which caller may run which operation
     "Edit(.apache-magpie-overrides/tools/vetted-ops/**)"
   ]
 }
 ```
+
+Allow **both** invocation forms, and add both to
+`sandbox.excludedCommands` (`"uv run --project ~/.claude/magpie/vetted-ops vetted-op-read *"` and
+`"uvx --from ~/.claude/magpie/vetted-ops vetted-op-read *"`). Skills document `uv run --project`; read-only
+gatherer agents use `uvx --from`, because `uv run` in the plugin cache
+needs to write a venv there. A rule for only one form leaves every call
+in the other form prompting.
+
+The rules name the fixed path `~/.claude/magpie/vetted-ops`, never the
+versioned plugin-cache directory. The plugin's `SessionStart` hook points
+that path at the installed version every session, so an upgrade needs no
+rule change. **Never write a rule with `*` in place of the plugin
+version.** A `*` also matches spaces, so it approves — and, in
+`excludedCommands`, runs unsandboxed — a command with extra `uv` options
+spliced in at that position (`--with <any package>`, a second `--from`).
+If an adopter's settings still carry the versioned `*` form, replace it
+with the fixed path.
 
 Tell the operator plainly what this buys and what it does not:
 
@@ -357,8 +384,22 @@ Suggest two follow-up routines the user can wire later:
 - `setup-isolated-setup-update` — periodic check for framework
   updates, pinned-tool upgrade candidates, and drift between the
   installed user-scope copies and the framework's
-  source-of-truth. Recommend a per-Claude-Code-upgrade or
-  monthly cadence, whichever comes first.
+  source-of-truth. The pre-flight of every skill proposes it for them
+  once the install is recorded (below): after an upgrade that changes
+  the secure-setup files, and weekly otherwise.
+
+**Record the install** so that pre-flight knows the isolated setup is
+used on this machine and what it was installed against:
+
+```bash
+PYTHONPATH=.apache-magpie-local python3 -m setup_preflight.isolated record-update
+```
+
+It writes the `isolated_setup` block of the gitignored
+`.apache-magpie-local/reconciled.json` and nothing else. Skip it when
+`.apache-magpie-local/setup_preflight/` does not exist — say that
+`/magpie-setup config` installs the checker, and that the reminders start
+once it is there.
 
 **Always propose shared-config sync once the install lands.**
 Regardless of whether the operator already maintains the

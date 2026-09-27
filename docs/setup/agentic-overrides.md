@@ -52,7 +52,7 @@ rule, carry both kinds of adopter-side content:
 - **Configuration** — facts about the project a skill reads: the
   upstream repo, the tracker, the committers team, the release
   trains. Scaffolded from
-  [`projects/_template/`](../../projects/_template/README.md), and
+  [`projects/_template/`](../../plugins/magpie-setup/templates/README.md), and
   what `<project-config>` resolves to.
 - **Overrides** — deliberate changes to how a skill behaves,
   named after the skill they modify.
@@ -91,6 +91,12 @@ other from the project. For an override, the local file's instructions
 are applied first and the committed file's are also applied unless the
 local one says to skip it. Neither directory is required to exist; a
 skill that finds neither proceeds with framework defaults.
+
+One file is the exception: `commit-attribution.toml`. Which trailer an
+agent-assisted commit carries is project policy, so the committed copy
+wins whenever it sets a convention, and the local copy applies only
+where the project leaves the choice open — see
+[`commit-attribution.md`](commit-attribution.md#how-the-convention-is-resolved).
 
 The consequence worth knowing: **once the project commits a file you
 also hold locally, yours keeps winning.** `/magpie-setup verify`

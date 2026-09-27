@@ -4,7 +4,7 @@
 # Stale sweeps
 
 The stale-sweep phase runs after the interactive triage is
-done (Step 5 in [`SKILL.md`](SKILL.md)). Its job is to clear
+done (Step 5, below). Its job is to clear
 four categories of PRs that have gone silent:
 
 1. **Stale drafts** — drafts that haven't moved in weeks; either
@@ -31,6 +31,48 @@ mandatory for `stale` runs (which skip the interactive triage
 entirely). Both paths go through the same rules below.
 
 ---
+
+## Step 5 — Stale sweeps
+
+Pagination is finished — Step 1 already walked every page of
+the main candidate set. After the maintainer has worked
+through every interactive group from Step 3 (or supplied
+`triage stale`), run the stale sweeps from
+[`stale-sweeps.md`](stale-sweeps.md):
+
+- close stale drafts older than 7 days with no author reply
+  after triage comment, or older than 2 weeks with no activity
+- convert non-draft PRs with >4 weeks of no activity to draft
+- convert workflow-approval PRs with >4 weeks of no activity
+  to draft
+- on PRs labeled `ready for maintainer review` that have gone
+  quiet ≥ 7 days, re-classify live and act by *whose court the
+  ball is in*: keep the label when the next move is a
+  maintainer's (review, merge, workflow approval, CI rerun,
+  branch update); strip it (with an audit marker, plus the
+  author-facing action in the same pass) only when the next
+  move is the author's (conflict, code fix, unresolved threads,
+  readiness confirmation). See
+  [`stale-sweeps.md#sweep-4--stale-ready-for-review-label`](stale-sweeps.md#sweep-4--stale-ready-for-review-label).
+- on PRs holding a pending author-confirmation request
+  (first leg of row 14c) whose author has been silent ≥ 7
+  days, propose plain `ping` to escalate. See
+  [`stale-sweeps.md#sweep-5--stale-author-confirm-request`](stale-sweeps.md#sweep-5--stale-author-confirm-request).
+
+Each sweep that needs a different candidate set than the main
+fetch (e.g. Sweep 4, which queries `label:"ready for
+maintainer review"` instead of excluding it) runs its own
+full-pagination loop using the same pattern as Step 1 — walk
+every page until `hasNextPage=false`, accumulate into a single
+list, classify in one pass, then emit a single group via the
+interaction loop. The maintainer confirms the group before any
+PR is touched. Per-sweep candidate sets are typically small
+(stale candidates concentrate around the back of the queue),
+so the additional fetch loops cost little.
+
+See
+[`fetch-and-batch.md#search-query-construction`](fetch-and-batch.md#search-query-construction)
+for how each sweep's selector translates into a search query.
 
 ## Inputs
 
@@ -323,7 +365,7 @@ sort:updated-asc
 ```
 
 The label name comes from
-[`<project-config>/pr-management-config.md → ready_for_maintainer_review_label`](../../../../projects/_template/pr-management-config.md)
+[`<project-config>/pr-management-config.md → ready_for_maintainer_review_label`](../../../magpie-setup/templates/pr-management-config.md)
 — do not hard-code the string.
 
 ### Entry condition
@@ -356,7 +398,7 @@ Every "maintainer" test in this sweep — and the
 `last_maintainer_comment_at` / F5a / F5b signals it shares with
 [`classify-and-act.md`](classify-and-act.md#maintainer-activity) —
 means **a member of the `committers_team`** (see
-[`<project-config>/pr-management-config.md`](../../../../projects/_template/pr-management-config.md))
+[`<project-config>/pr-management-config.md`](../../../magpie-setup/templates/pr-management-config.md))
 **or** an account with repo permission `write`/`maintain`/`admin` —
 **not** `authorAssociation ∈ {COLLABORATOR, MEMBER, OWNER}` alone.
 GitHub returns `COLLABORATOR` for any triage/read collaborator, so
@@ -459,7 +501,7 @@ and the *next move*. When the author-facing action is itself a comment
 (`ping` / `request-author-confirmation`), fold it into the **same**
 comment rather than posting twice; a quality-flag `comment`/`draft`
 keeps its own
-[`triage_feedback_channel`](../../../../projects/_template/pr-management-config.md)
+[`triage_feedback_channel`](../../../magpie-setup/templates/pr-management-config.md)
 body and the audit marker accompanies it.
 
 ### Persistent bitrot — hand back, do not close

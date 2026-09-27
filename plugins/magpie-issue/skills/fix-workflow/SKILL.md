@@ -25,6 +25,7 @@ when_to_use: |
 capability: capability:fix
 surface_hash: sha256:3ccf080bbb094dad
 license: Apache-2.0
+measured_tokens: 7157
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0
@@ -247,9 +248,9 @@ proposal is non-blocking.
   [`issue-triage`](../triage/SKILL.md) first.
 - **`<upstream>` working tree clean** (or `--allow-dirty` set).
 - **Runtime invocable** per
-  [`<project-config>/runtime-invocation.md`](../../../../projects/_template/runtime-invocation.md).
+  [`<project-config>/runtime-invocation.md`](../../../magpie-setup/templates/runtime-invocation.md).
 - **Branch convention** documented in
-  [`<project-config>/fix-workflow.md`](../../../../projects/_template/fix-workflow.md)
+  [`<project-config>/fix-workflow.md`](../../../magpie-setup/templates/fix-workflow.md)
   — fork name, branch-name pattern, commit-trailer convention.
 
 ---
@@ -430,15 +431,15 @@ shapes:
 - **Body** — a short paragraph explaining the cause (not just
   the symptom) and the chosen fix shape. One paragraph; not a
   novel.
-- **Trailers** — AI-assisted commits use a `Generated-by: <tool>`
-  trailer (e.g. `Generated-by: <tool-name>`), never
-  `Co-Authored-By:` with an agent as co-author — per
-  [`AGENTS.md` → *Commit and PR conventions*](../../../../AGENTS.md#commit-and-pr-conventions)
+- **Trailers** — AI-assisted commits carry the trailer the project's
+  commit-attribution convention names (`Generated-by:` by default;
+  `Assisted-by:`, `Co-authored-by:`, none or a custom wording where the
+  project chose one), resolved per
+  [`commit-attribution.md`](../../../../docs/setup/commit-attribution.md)
   and the [ASF Generative Tooling guidance](https://www.apache.org/legal/generative-tooling.html).
-  Including the tool name is a recommended practice per the policy;
-  the project's `<project-config>/fix-workflow.md` may specify a
-  preferred format. The trailer is the *contributor's* call on their
-  own commit; the skill does not add it to anyone else's commit.
+  Add it with `git commit --trailer "<trailer>"`, not in the message
+  body. The trailer is the *contributor's* call on their own commit;
+  the skill does not add it to anyone else's commit.
 - **Security language scrub** — before finalising the commit body,
   confirm no line references the security nature of the change
   (e.g. *"fixes CVE"*, *"security fix"*, *"patches
@@ -624,10 +625,10 @@ hand-back artefact is the terminal output.
 
 - [`AGENTS.md`](../../../../AGENTS.md) — placeholder conventions,
   trailer policy, *"what not to do"* list.
-- [`<project-config>/fix-workflow.md`](../../../../projects/_template/fix-workflow.md) —
+- [`<project-config>/fix-workflow.md`](../../../magpie-setup/templates/fix-workflow.md) —
   branch-name pattern, commit-trailer convention, sibling-repo
   handling.
-- [`<project-config>/runtime-invocation.md`](../../../../projects/_template/runtime-invocation.md) —
+- [`<project-config>/runtime-invocation.md`](../../../magpie-setup/templates/runtime-invocation.md) —
   build prerequisite + test invocation.
 - [`issue-triage`](../triage/SKILL.md) — predecessor;
   produces the classification.

@@ -71,6 +71,7 @@
     - [Direct Bash verification](#direct-bash-verification)
     - [Via a Claude Code prompt](#via-a-claude-code-prompt-1)
   - [Keeping the setup updated](#keeping-the-setup-updated)
+    - [Automatic reminders from the pre-flight](#automatic-reminders-from-the-pre-flight)
     - [Direct steps](#direct-steps)
     - [Via a Claude Code prompt](#via-a-claude-code-prompt-2)
   - [What a session looks like](#what-a-session-looks-like)
@@ -495,8 +496,13 @@ below, annotated.
     // ~/.claude). Only its single-line, installed-plugin form is excluded;
     // it keeps its permission prompt (no `allow`), and the plugin cache is
     // `Edit`-denied below. See the isolated-setup-install skill, Step R.
+    // The vetted-ops READ dispatcher calls `gh` and the network, so it runs
+    // outside the sandbox too — in both invocation forms the skills and the
+    // read-only gatherer agents use (`uv run --project` and `uvx --from`).
     "excludedCommands": [
       "gh *",
+      "uv run --project ~/.claude/magpie/vetted-ops vetted-op-read *",
+      "uvx --from ~/.claude/magpie/vetted-ops vetted-op-read *",
       "uvx --from ~/.claude/plugins/cache/apache-magpie/magpie-adversarial-review/*/tools/adversarial-review adversarial-review *"
     ],
     // The `lychee` link-check hook runs in OFFLINE mode (`offline =
@@ -521,6 +527,8 @@ below, annotated.
         "~/.cache/",                  // dev tool caches (uv HTTP cache, prek logs, ruff/mypy caches, and prek's own rustup + CARGO_HOME for the `lychee` rust hook)
         "~/.local/share/uv/",         // uv's tool venvs (prek, etc.)
         "~/.local/bin/",              // uv-installed tool entry points
+        "~/.docker/bin/",             // Docker Desktop's `docker` CLI (macOS); the rest of ~/.docker stays denied
+        "~/.docker/cli-plugins/",     // `docker compose` / `docker buildx` plugin binaries
         "~/.config/apache-magpie/",  // Gmail OAuth refresh token (oauth-draft tool)
         "~/.gnupg/",                  // gpg keyring reads (needed for signing, not sufficient on Linux — see sandbox-troubleshooting.md)
         "/run/user/*/gnupg/",         // gpg-agent socket dir (see "agent appears unreachable" in sandbox-troubleshooting.md)
@@ -630,8 +638,33 @@ below, annotated.
       // (`vetted-op`) is deliberately NOT here — it is in `ask` below.
       // Allowlisting it on the strength of a read-only *caller name* would
       // grant the whole catalogue, because --caller is chosen by the caller.
-      // The version segment is globbed: the plugin cache is versioned per install.
-      "Bash(uv run --project ~/.claude/plugins/cache/apache-magpie/magpie-vetted-ops/*/tools/vetted-ops vetted-op-read *)"
+      // The rules name the fixed path ~/.claude/magpie/vetted-ops, which the
+      // plugin's SessionStart hook points at the installed version. Never glob
+      // the version in the plugin-cache path instead: a `*` also matches
+      // spaces, so it would approve (and, excluded, run unsandboxed) a command
+      // with extra `uv` options spliced in at that position.
+      "Bash(uv run --project ~/.claude/magpie/vetted-ops vetted-op-read *)",
+      "Bash(uvx --from ~/.claude/magpie/vetted-ops vetted-op-read *)",   // same dispatcher, the form bulk gatherer agents use
+      // Read-only MCP tools the security skills call on every sync / import /
+      // triage run. Without these, each archive or mailbox read prompts, and a
+      // bulk sync fans out into hundreds of prompts. Write tools stay off this
+      // list (drafts, logins, label/thread mutations keep their prompt), with
+      // one exception: gmail-plaintext `create_draft` only creates an unsent
+      // draft the operator reviews in Gmail.
+      "mcp__ponymail__search_list", "mcp__ponymail__get_thread", "mcp__ponymail__get_email",
+      "mcp__ponymail__get_source", "mcp__ponymail__list_lists", "mcp__ponymail__list_restrictions",
+      "mcp__ponymail__auth_status",
+      "mcp__claude_ai_Gmail__search_threads", "mcp__claude_ai_Gmail__get_thread",
+      "mcp__claude_ai_Gmail__get_message", "mcp__claude_ai_Gmail__list_drafts", "mcp__claude_ai_Gmail__get_draft",
+      "mcp__gmail-plaintext__create_draft", "mcp__gmail-plaintext__check_auth",
+      "mcp__apache-projects__get_committee", "mcp__apache-projects__get_group_members",
+      "mcp__apache-projects__get_person", "mcp__apache-projects__search_people",
+      "mcp__apache-projects__project_stats", "mcp__apache-projects__get_releases",
+      "mcp__apache-projects__get_repositories", "mcp__apache-projects__list_committees",
+      "mcp__apache-projects__search_projects",
+      // Read-only fetches of public registries the skills consult: cve.org
+      // publication state, PyPI release detection, the public ASF list archive.
+      "WebFetch(domain:cveawg.mitre.org)", "WebFetch(domain:pypi.org)", "WebFetch(domain:lists.apache.org)"
     ],
     "deny": [
       "Read(~/.aws/**)", "Read(~/.ssh/**)", "Read(~/.netrc)",
@@ -658,6 +691,7 @@ below, annotated.
       // every file-writing tool (Write and NotebookEdit included), and a
       // `Write(path)` rule is not matched by the file permission check at all.
       "Edit(~/.claude/plugins/cache/apache-magpie/magpie-vetted-ops/**)",
+      "Edit(~/.claude/magpie/**)",
       "Edit(.apache-magpie-overrides/tools/vetted-ops/**)",
       // The adversarial-review tool runs unsandboxed (excludedCommands above), so
       // the code it runs must not be editable by the agent that calls it.
@@ -665,7 +699,7 @@ below, annotated.
     ],
     "ask": [
       "Bash(git push *)",                        // including --force / --force-with-lease variants
-      "Bash(uv run --project ~/.claude/plugins/cache/apache-magpie/magpie-vetted-ops/*/tools/vetted-ops vetted-op *)",  // the vetted-ops WRITE dispatcher: bounded in shape, but still a remote mutation, so it keeps a confirmation
+      "Bash(uv run --project ~/.claude/magpie/vetted-ops vetted-op *)",  // the vetted-ops WRITE dispatcher: bounded in shape, but still a remote mutation, so it keeps a confirmation
       // gh WRITE subcommands, listed one by one. Claude Code evaluates deny,
       // then ask, then allow, and "a matching ask rule prompts even when a
       // more specific allow rule also matches the same call" — so a catch-all
@@ -1436,7 +1470,9 @@ lives in [`tools/agent-guard`](../../tools/agent-guard/README.md) and
 ships two **bundled** (universal `git` hygiene) guards:
 
 - **commit-trailer** — never let a `git commit` carry a
-  `Co-Authored-By:` trailer (use `Generated-by:`).
+  `Co-Authored-By:` trailer, unless the repository's
+  [commit-attribution convention](commit-attribution.md) is
+  `co-authored-by` (the default is `Generated-by:`).
 - **empty-rebase** — never force-push a branch with no commits over
   its base (an empty push to a PR head auto-closes it and revokes
   write).
@@ -2964,8 +3000,13 @@ Then walk through:
 
 2. **Project `.claude/settings.json`.** Read
    `<magpie>/.claude/settings.json` and copy its
-   `sandbox`, `permissions.deny`, and `permissions.ask` blocks
-   into this repo's `.claude/settings.json`. If a project
+   `sandbox`, `permissions.allow`, `permissions.deny`, and
+   `permissions.ask` blocks into this repo's
+   `.claude/settings.json`. `permissions.allow` is the read-only
+   set (read-only `gh`, the vetted-ops read dispatcher, archive /
+   mailbox / roster MCP reads) — without it every read the skills
+   make prompts, and a bulk sync prompts hundreds of times. Copy
+   only read-only entries; never add a write rule to `allow`. If a project
    settings.json already exists, surface a diff of the merged
    result first and ask me to approve before writing.
 
@@ -3145,10 +3186,13 @@ below and report ✓ done / ✗ missing / ⚠ partial, with the evidence
      is ✗ and worth stopping for: it grants every operation in
      the catalogue, because the operation's caller name is chosen
      by whoever runs the command.
-   - `permissions.deny` denies `Edit` on both
+   - `permissions.deny` denies `Edit` on
      `~/.claude/plugins/cache/apache-magpie/magpie-vetted-ops/**`
-     (the catalogue) and
+     (the catalogue), `~/.claude/magpie/**` (the fixed path the
+     rules name) and
      `.apache-magpie-overrides/tools/vetted-ops/**` (the policy).
+   - No `vetted-op` rule names the versioned plugin-cache path with
+     a `*`; the rules name `~/.claude/magpie/vetted-ops`.
      One `Edit` rule per surface is the whole coverage — it binds
      every file-editing tool. A `Write(…)` rule sitting next to it
      is dead weight the file permission check never consults;
@@ -3252,6 +3296,35 @@ any user-scope copies of helper scripts you installed under
 `~/.claude/scripts/` or `~/.claude/agent-isolation/`. Keeping them
 synchronised is a periodic operation, not a one-time install.
 
+### Automatic reminders from the pre-flight
+
+You do not have to remember to check.
+Every Magpie skill's pre-flight proposes `/magpie-setup:isolated-setup-update` when the isolated setup is used on this machine:
+
+- **After an upgrade that changed the secure-setup files.**
+  The pre-flight fingerprints the files an install copies or mirrors: `tools/agent-isolation/`, `tools/agent-guard/src/`, `tools/container-gateway/src/` and the dogfooded `.claude/settings.json`.
+  Documentation is not included, so a reworded page does not trigger it.
+  If the fingerprint differs from the one recorded at the last update run, the first skill you run after the upgrade proposes the update, once per change.
+- **Weekly otherwise**, counted from the last update run or the last reminder.
+  The pinned sandbox tools and the agent harness move upstream even when Magpie does not.
+
+"Used on this machine" means `isolated-setup-install` or `isolated-setup-update` has recorded a run here, or the project's `.claude/settings*.json` enables the sandbox.
+The reminder is a one- or two-line suggestion.
+It never runs the update by itself and never blocks the skill you asked for.
+
+**Changing the frequency.**
+Set `isolated_setup_update_interval_days` under `setup:` in `.apache-magpie-local/project.md` (personal) or `.apache-magpie-overrides/project.md` (project-wide); the personal file wins.
+The default is `7`.
+`0` turns the timer off but still reports changes that come with an upgrade.
+To turn both off on a machine that does not use the isolated setup, set `"isolated_setup": {"enabled": false}` in `.apache-magpie-local/reconciled.json`.
+
+**Running it now.**
+Invoke the skill directly at any time: `/magpie-setup:isolated-setup-update` on a marketplace install, `/magpie-setup-isolated-setup-update` on a pinned snapshot.
+The pre-flight state is recorded when the run finishes, so a manual run also resets the timer.
+
+On a marketplace install, the pre-flight checker in `.apache-magpie-local/` sees a new fingerprint once `/magpie-setup upgrade` has refreshed it.
+The upgrade prompt after each plugin update tells you to run that.
+
 ### Direct steps
 
 1. **Framework checkout.** From your `magpie` clone,
@@ -3353,7 +3426,12 @@ anything — I will decide what to apply:
    `mcp/<server>/` dir, plus the
    `github.com/apache/comdev/compare/<sha>...main` link. These
    servers track `main` by design — no manifest bump, no cooldown.
-5. Re-run `cat ~/.aws/credentials`, `echo $AWS_ACCESS_KEY_ID`,
+5. Diff my project `.claude/settings.json` `permissions.allow`
+   against the framework's. List every read-only entry I am
+   missing (new vetted-ops read forms, MCP read tools, WebFetch
+   hosts) — each one is a prompt I am paying on every run — and
+   any entry I have that is not read-only. Do not merge.
+6. Re-run `cat ~/.aws/credentials`, `echo $AWS_ACCESS_KEY_ID`,
    `curl https://example.com` and confirm each is still denied.
    Note any newly-allowed call as a regression to investigate.
 ```

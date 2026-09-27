@@ -46,7 +46,7 @@ The string is also accepted in an HTML-comment form left by the legacy
 The marker is a **single point of failure** — rename the link text in the
 comment template and this detector silently stops counting. Adopters can
 customise the URL the link points to via
-[`<project-config>/pr-management-triage-comment-templates.md`](../../../../projects/_template/pr-management-triage-comment-templates.md)'s
+[`<project-config>/pr-management-triage-comment-templates.md`](../../../magpie-setup/templates/pr-management-triage-comment-templates.md)'s
 `quality_criteria_url`, but the link **text** must remain `Pull Request
 quality criteria` verbatim.
 
@@ -282,7 +282,7 @@ Splitting them lets the maintainer focus stale-sweep / ping efforts on the high-
 
 - Both predicates rely on `pr.comments(last:10)` — older outstanding comments on chatty PRs may be missed. Lower-bound numbers.
 - The footer-substring match (`AI-assisted triage tool`) applies to the **comment
-  channel** only and is configurable per [`<project-config>/pr-management-config.md`](../../../../projects/_template/pr-management-config.md)'s `ai_attribution_substring`. The **body-fold channel** is detected structurally by the `pr-triage-fold` block (always AI-drafted) and does not depend on this substring.
+  channel** only and is configurable per [`<project-config>/pr-management-config.md`](../../../magpie-setup/templates/pr-management-config.md)'s `ai_attribution_substring`. The **body-fold channel** is detected structurally by the `pr-triage-fold` block (always AI-drafted) and does not depend on this substring.
 
 ---
 
@@ -376,7 +376,7 @@ not gate any mutation. This keeps the action-flow conservatism while letting
 the dashboard surface the fuller picture.
 
 For the configurable AI-attribution detection substring, adopters can override
-[`<project-config>/pr-management-config.md`](../../../../projects/_template/pr-management-config.md)'s
+[`<project-config>/pr-management-config.md`](../../../magpie-setup/templates/pr-management-config.md)'s
 `ai_attribution_substring` field; the framework defaults to
 `AI-assisted triage tool`. That substring is the **comment-channel** signal and
 is a single point of failure — keep it identical between the comment templates and
@@ -403,7 +403,7 @@ own count keeps the contributor backlog signal clean.
 
 Adopters with project-specific bots not on this list — e.g. a release-bot or
 a CI-helper bot — should extend the `is_bot` match via
-[`<project-config>/pr-management-config.md`](../../../../projects/_template/pr-management-config.md)'s
+[`<project-config>/pr-management-config.md`](../../../magpie-setup/templates/pr-management-config.md)'s
 `bot_logins` setting (a list of additional logins to recognise; the framework
 defaults always apply).
 
@@ -453,3 +453,9 @@ The first-match-wins ordering matters: a ready-for-review PR that's also a stale
 The stats run must produce the same numbers when invoked twice on the same cached state. Keep the classification pure (no time-dependent randomness) and anchor age-bucket cutoffs to `<now>` captured at fetch start, not at render time. Otherwise a slow run drifts PRs across buckets between fetch and render.
 
 This applies to `pressure_weight` too — the `7d` / `28d` thresholds are computed from the same `<now>` as the age buckets, so a PR that's exactly on a bucket boundary scores deterministically across re-runs of the same fetch.
+
+---
+
+## Golden rules
+
+**Golden rule 9 — `is_engaged` requires the FULL engagement schema.** The open-PRs GraphQL query MUST include `reviewThreads`, `latestReviews`, and `timelineItems` (for `LABELED_EVENT`/`READY_FOR_REVIEW_EVENT`/`CONVERT_TO_DRAFT_EVENT`). The `is_engaged` predicate in [`classify.md`](classify.md) counts ALL of these as maintainer engagement; omitting any of them under-counts engagement and over-counts untriaged — concretely, a maintainer who left only a line-level review comment (no submitted review, no issue comment) would otherwise show as "no engagement" and that PR would be misclassified as untriaged. The implication: don't trim the open-PRs query to "save complexity points" — the missing fields are load-bearing. (Earlier iterations of [`fetch.md`](fetch.md) suggested `reviewThreads` was not needed for stats; that was a spec bug and has been corrected.)
