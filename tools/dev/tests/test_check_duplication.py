@@ -105,7 +105,11 @@ def test_identical_text_inside_generated_regions_is_invisible() -> None:
     live tree so the test tracks the real marker text, not a hand-written
     stand-in."""
     block = None
-    for pattern in ("skills/*/SKILL.md", "plugins/magpie-*/skills/*/SKILL.md", "plugins/magpie-*/skills/*/*.md"):
+    for pattern in (
+        "skills/*/SKILL.md",
+        "plugins/magpie-*/skills/*/SKILL.md",
+        "plugins/magpie-*/skills/*/*.md",
+    ):
         for path in REPO.glob(pattern):
             try:
                 match = MOD.PREFLIGHT_RE.search(path.read_text(encoding="utf-8"))
