@@ -32,6 +32,13 @@ contract:change-request:
               - 'tools/jira-patch/**'
               - 'tools/mail-patch/**'
 
+contract:chat:
+  - any:
+      - changed-files:
+          - any-glob-to-any-file:
+              - 'tools/chat/**'
+              - 'tools/chat-slack/**'
+
 contract:cve-authority:
   - any:
       - changed-files:
@@ -123,6 +130,7 @@ substrate:analytics:
   - any:
       - changed-files:
           - any-glob-to-any-file:
+              - 'tools/contributor-metrics/**'
               - 'tools/dashboard-generator/**'
               - 'tools/pr-management-stats/**'
               - 'tools/preflight-audit/**'

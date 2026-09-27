@@ -80,7 +80,7 @@ every install; the other eight are opt-in (see
 | `family:repo-health` | opt-in | Read-only repository audits and their follow-up fixes: `ci-runner-audit`, `workflow-security-audit`, `dependency-audit`, `dependency-license-audit`, `license-compliance-audit`, `flaky-test-triage`, `audit-finding-fix` ([`docs/repo-health/`](repo-health/README.md)) |
 | `family:pairing` | opt-in | `pairing-self-review`, `pairing-multi-agent-review` ([`docs/pairing/`](pairing/README.md)) |
 | `family:mentoring` | opt-in | `mentoring-welcome`, `newcomer-issue-explainer`, `good-first-issue-author`, `good-first-issue-sweep` ([`docs/mentoring/`](mentoring/README.md)) |
-| `family:contributor-growth` | opt-in | The path-to-committer track: `contributor-activity-sweep`, `contributor-sentiment`, `contributor-to-committer`, `contributor-nomination`, `committer-onboarding`, `onboarding-concierge` ([`docs/contributor-growth/`](contributor-growth/README.md)) |
+| `family:contributor-growth` | opt-in | The path-to-committer track: `contributor-activity-sweep`, `contributor-sentiment`, `contributor-to-committer`, `contributor-nomination`, `contributor-calibrate`, `contributor-candidate-screen`, `committer-onboarding`, `onboarding-concierge` ([`docs/contributor-growth/`](contributor-growth/README.md)) |
 
 Three further `family:*` labels cover parts of the repository that are
 **not** a skill family. They exist only as issue / PR labels and never
@@ -133,6 +133,7 @@ framework substrate:
 | `contract:source-control` | contract | Branch / commit / diff / push (VCS). |
 | `contract:change-request` | contract | Proposed-change review + merge gate (pull request / merge request / Gerrit change). |
 | `contract:mail-archive` | contract | Mailing-list / forum archive reads. |
+| `contract:chat` | contract | Project chat reads — public channels only (Slack, Discord). Read-only; never posts. |
 | `contract:mail-source` | contract | Inbound-mail ingestion (mbox / IMAP / …). |
 | `contract:mail-create` | contract | Outbound mail composition. Always produces an editable draft; sending is a separate human-approved step on that draft (draft mode = default and the only mode implemented today; send mode declared but unimplemented — no autonomous send). |
 | `contract:cve-authority` | contract | CVE allocation / record management / publication. |
@@ -276,6 +277,8 @@ Capabilities for every skill currently in
 | `security-tracker-stats-dashboard` | `capability:stats` |
 | `contributor-nomination` | `capability:stats` |
 | `contributor-to-committer` | `capability:stats` |
+| `contributor-calibrate` | `capability:stats` |
+| `contributor-candidate-screen` | `capability:stats` |
 | `contributor-activity-sweep` | `capability:stats` |
 | `contributor-sentiment` | `capability:stats` *(measures contributor-sentiment signals — thread tone, time-to-first-reply, first-PR retention, reviewer load — and produces the gate report for experimental→stable advancement)* |
 | `committer-onboarding` | `capability:resolve` + `capability:triage` *(post-vote onboarding close-out — resolve — after validating the vote result in pre-flight — triage)* |
@@ -329,6 +332,8 @@ or a contract-free mix of substrates (e.g. `tools/spec-inventory` is
 | [`tools/gmail`](../tools/gmail/) | `contract:mail-source` + `contract:mail-create` + `contract:mail-archive` | Gmail API substrate — inbound report intake (`mail-source`), thread / archive reads (`mail-archive`), plus outbound courtesy-reply drafting (`mail-create`); read + draft only, never sends |
 | [`tools/jira`](../tools/jira/) | `contract:tracker` | JIRA REST substrate (read-only today; write subcommands tracked in [#301](https://github.com/apache/magpie/issues/301)) |
 | [`tools/jira-patch`](../tools/jira-patch/) | `contract:change-request` | JIRA-patch change-request backend: patches attached to JIRA issues as the proposal, reviewed via JIRA comments, landed via `contract:source-control` (`svn patch` + `svn commit`). Composes `tools/jira/` (REST) + `tools/asf-svn/` (land). Implements the `tools/change-request/` contract |
+| [`tools/chat`](../tools/chat/) | `contract:chat` | Adapter contract for project chat (Slack, Discord): public-channel reads for community signals. Pure interface spec. |
+| [`tools/chat-slack`](../tools/chat-slack/) | `contract:chat` | Slack adapter for the `tools/chat/` contract, over the Slack MCP; public channels only, never posts. |
 | [`tools/mail-archive`](../tools/mail-archive/) | `contract:mail-archive` | Adapter contract for public mail-archive backends (PonyMail, Hyperkitty, Discourse, Google Groups, GitHub Discussions). Pure interface spec. |
 | [`tools/mail-patch`](../tools/mail-patch/) | `contract:change-request` | `[PATCH]`-mail change-request backend: a `[PATCH]` thread on `dev@` as the proposal, reviewed via drafted replies (`contract:mail-create`), read via `contract:mail-archive`, landed via `contract:source-control` (`svn patch` + `svn commit`). Implements the `tools/change-request/` contract |
 | [`tools/mail-source`](../tools/mail-source/) | `contract:mail-source` | Mail-source backend abstraction (mbox / IMAP / Mailman 3) feeding a uniform inbound thread/message view to the intake pipeline |
@@ -339,6 +344,7 @@ or a contract-free mix of substrates (e.g. `tools/spec-inventory` is
 | [`tools/permission-audit`](../tools/permission-audit/) | `substrate:sandbox` | Audit + atomically edit Claude Code `permissions.allow[]` entries; backs `/magpie-setup verify --apply-permission-audit` (check 8d) |
 | [`tools/adversarial-review`](../tools/adversarial-review/) | `substrate:review` | Runs other models' CLIs (Codex, Copilot, Gemini, Claude) read-only over a change before its PR is created, and merges their findings into one advisory JSON report |
 | [`tools/vetted-ops`](../tools/vetted-ops/) | `substrate:sandbox` | Fixed, policy-scoped forge operations — a closed catalogue whose parameters can never become commands or flags, so one `allow` entry replaces the wildcard Layer 3 `ask` rules |
+| [`tools/contributor-metrics`](../tools/contributor-metrics/) | `substrate:analytics` | Deterministic contributor activity counts, per-area shares and automated-work weighting for the contributor-growth skills |
 | [`tools/pr-management-stats`](../tools/pr-management-stats/) | `substrate:analytics` | PR-backlog analytics engine |
 | [`tools/preflight-audit`](../tools/preflight-audit/) | `substrate:analytics` | Dry-run the bulk-mode pre-flight classifier; measure skip-rate before / after any rule edit in the security-issue-sync skill |
 | [`tools/privacy-llm`](../tools/privacy-llm/) | `substrate:privacy` | Privacy-LLM PII-scrubbing gate |
@@ -382,13 +388,14 @@ separate axis — it is classified by the capability its *wrapping tool*
 provides; the MCP is just the transport, interchangeable with a CLI or
 REST backend behind the same contract. A skill never names an MCP
 server — it targets the capability, and the tool routes to whichever
-backend the adopter wired in. The framework consumes four:
+backend the adopter wired in. The framework consumes five:
 
 | MCP server | Tool prefix | Wrapped by | Capability provided | Organization |
 |---|---|---|---|---|
 | GitHub MCP | `mcp__github__*` | [`tools/github`](../tools/github/) | `contract:tracker` + `contract:source-control` + `contract:change-request` | — |
 | Gmail MCP (claude.ai) | `mcp__claude_ai_Gmail__*` | [`tools/gmail`](../tools/gmail/) | `contract:mail-source` + `contract:mail-create` + `contract:mail-archive` | — |
 | PonyMail MCP (`apache/comdev`) | `mcp__ponymail__*` | [`tools/ponymail`](../tools/ponymail/) | `contract:mail-archive` + `contract:mail-source` | ASF |
+| Slack MCP (claude.ai) | `mcp__claude_ai_Slack__*` | [`tools/chat-slack`](../tools/chat-slack/) | `contract:chat` | — |
 | apache-projects MCP (`apache/comdev`) | `mcp__apache-projects__*` | [`tools/apache-projects`](../tools/apache-projects/) | `contract:project-metadata` | ASF |
 
 Each wrapping tool declares this relationship in its own README with an
