@@ -27,6 +27,17 @@ from .merge_requests import get_mr, get_mr_commits, get_mr_diff, list_mrs
 from .pipelines import get_pipeline_status, list_mr_pipelines
 
 
+def positive_int(value: str) -> int:
+    """argparse type for ``--limit``: a negative value would slice items off the end."""
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid int value: {value!r}") from None
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {n}")
+    return n
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="GitLab CLI for Magpie")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -47,7 +58,7 @@ def main() -> int:
         choices=["opened", "closed", "all"],
         default="opened",
     )
-    issue_list.add_argument("--limit", type=int, default=None)
+    issue_list.add_argument("--limit", type=positive_int, default=None)
     issue_get = issue_subs.add_parser("get")
     issue_get.add_argument("project")
     issue_get.add_argument("issue_iid", type=int)
@@ -62,22 +73,22 @@ def main() -> int:
         choices=["opened", "closed", "locked", "merged", "all"],
         default="opened",
     )
-    mr_list.add_argument("--limit", type=int, default=None)
+    mr_list.add_argument("--limit", type=positive_int, default=None)
     mr_get = mr_subs.add_parser("get")
     mr_get.add_argument("project")
     mr_get.add_argument("mr_iid", type=int)
     mr_diff = mr_subs.add_parser("diff")
     mr_diff.add_argument("project")
     mr_diff.add_argument("mr_iid", type=int)
-    mr_diff.add_argument("--limit", type=int, default=None)
+    mr_diff.add_argument("--limit", type=positive_int, default=None)
     mr_commits = mr_subs.add_parser("commits")
     mr_commits.add_argument("project")
     mr_commits.add_argument("mr_iid", type=int)
-    mr_commits.add_argument("--limit", type=int, default=None)
+    mr_commits.add_argument("--limit", type=positive_int, default=None)
     mr_pipelines = mr_subs.add_parser("pipelines")
     mr_pipelines.add_argument("project")
     mr_pipelines.add_argument("mr_iid", type=int)
-    mr_pipelines.add_argument("--limit", type=int, default=None)
+    mr_pipelines.add_argument("--limit", type=positive_int, default=None)
 
     # pipeline
     pipe_p = subparsers.add_parser("pipeline")

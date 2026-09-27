@@ -109,6 +109,15 @@ def test_cli_issue_list_limit(mock_urlopen, mock_env, monkeypatch, capsys):
     assert len(res) == 2
 
 
+@pytest.mark.parametrize("limit", ["0", "-5", "abc"])
+def test_cli_limit_below_one_fails(monkeypatch, limit):
+    """A negative --limit would silently slice items off the end; reject it."""
+    monkeypatch.setattr("sys.argv", ["magpie-gitlab", "issue", "list", "group/project", "--limit", limit])
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+    assert exc_info.value.code != 0
+
+
 def test_cli_issue_get_invalid_id_type_fails(monkeypatch):
     """Passing a non-integer for an ID positional must fail argument parsing."""
     monkeypatch.setattr("sys.argv", ["magpie-gitlab", "issue", "get", "group/project", "notanint"])
