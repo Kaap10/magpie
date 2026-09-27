@@ -118,7 +118,7 @@ def load_config() -> GitLabConfig:
 
     if gitlab_token:
         token = gitlab_token
-        token_type = "bearer"
+        token_type = "private-token" if token.startswith("glpat-") else "bearer"
     elif ci_job_token:
         token = ci_job_token
         token_type = "job_token"
@@ -141,12 +141,6 @@ def load_config() -> GitLabConfig:
 # ---------------------------------------------------------------------------
 
 
-def require(value: str | None, name: str) -> str:
-    if not value:
-        raise GitLabError(f"{name} is required")
-    return value
-
-
 def quote_path(value: str) -> str:
     return urllib.parse.quote(value, safe="")
 
@@ -163,7 +157,7 @@ def _auth_headers(config: GitLabConfig) -> dict[str, str]:
             headers["PRIVATE-TOKEN"] = config.token
         elif scheme == "bearer":
             headers["Authorization"] = f"Bearer {config.token}"
-        elif scheme in ("job-token", "job_token"):
+        elif scheme in ("job-token", "job_token", "jobtoken"):
             headers["JOB-TOKEN"] = config.token
         else:
             raise GitLabError(f"Unsupported GITLAB_AUTH_SCHEME: '{config.auth_scheme}'")
@@ -216,8 +210,7 @@ def get_paged_json(
 
     target_pages: int | None = max_pages
     if limit is not None:
-        pages_needed = max(1, math.ceil(limit / 100))
-        target_pages = min(pages_needed, max_pages) if max_pages is not None else pages_needed
+        target_pages = max(1, math.ceil(limit / 100))
 
     opener = _build_opener()
     while current_url:
@@ -233,16 +226,11 @@ def get_paged_json(
                     raise GitLabError("Unexpected non-list response during pagination")
 
                 pages_fetched += 1
-                next_page = response.headers.get("X-Next-Page") if hasattr(response, "headers") else None
+                next_page = response.headers.get("X-Next-Page")
                 has_more = isinstance(next_page, str) and bool(next_page.strip())
 
                 if limit is not None and len(items) >= limit:
                     items = items[:limit]
-                    if has_more:
-                        print(
-                            f"[magpie-gitlab] Note: Results capped at {len(items)} items; use --limit to fetch more.",
-                            file=sys.stderr,
-                        )
                     break
 
                 if target_pages is not None and pages_fetched >= target_pages:

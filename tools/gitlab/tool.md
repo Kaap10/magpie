@@ -23,6 +23,7 @@ Operations catalogue mapping for GitLab tracker, source control, and merge reque
 | Read repository metadata | `magpie-gitlab repo get <project>` |
 | Read issue body | `magpie-gitlab issue get <project> <issue_iid>` |
 | List issues | `magpie-gitlab issue list <project>` |
+| List MRs | `magpie-gitlab mr list <project>` |
 | Read MR | `magpie-gitlab mr get <project> <mr_iid>` |
 | MR Diff | `magpie-gitlab mr diff <project> <mr_iid>` |
 | MR Commits | `magpie-gitlab mr commits <project> <mr_iid>` |

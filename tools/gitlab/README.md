@@ -23,17 +23,15 @@
 
 **Vendor:** GitLab
 
-GitLab forge, issue tracker, and merge request bridge for Apache Magpie.
-Provides 100% offline-tested, deterministic API access to GitLab instances,
-following strict vendor-neutrality rules.
+Read-only client for the GitLab REST API v4.
 
 This bridge implements a `partial` read-only foundation for repository
 metadata context under `contract:source-control`, issue listing and fetching
 under `contract:tracker`, and merge request discovery, diffs, commits, and
-CI pipeline status under `contract:change-request`. Partial adapters may
-implement named contract verbs, but they do not satisfy the complete contract
-and must not be advertised as complete/selectable backends. Write operations
-and issue/MR mutations remain out of scope for this foundation.
+CI pipeline status under `contract:change-request`.
+Partial adapters may implement named contract verbs, but they do not satisfy
+the complete contract and must not be advertised as complete/selectable backends.
+Write operations and issue/MR mutations remain out of scope for this foundation.
 
 ## Prerequisites
 
@@ -49,7 +47,7 @@ and issue/MR mutations remain out of scope for this foundation.
 
 ## Configuration
 
-Set `GITLAB_TOKEN` in your environment (or `user.md`):
+Set `GITLAB_TOKEN` in your environment:
 
 ```bash
 export GITLAB_TOKEN="glpat-..."

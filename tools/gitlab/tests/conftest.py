@@ -61,4 +61,6 @@ def build_mock_response(
 @pytest.fixture
 def mock_env(monkeypatch):
     monkeypatch.setenv("GITLAB_TOKEN", "glpat-test123")
+    monkeypatch.delenv("GITLAB_AUTH_SCHEME", raising=False)
+    monkeypatch.delenv("CI_JOB_TOKEN", raising=False)
     monkeypatch.setenv("GITLAB_INSTANCE_URL", "https://gitlab.example.com")

@@ -34,7 +34,6 @@ from magpie_gitlab.client import (
     get_project,
     load_config,
     quote_path,
-    require,
 )
 
 from .conftest import build_mock_response
@@ -128,20 +127,12 @@ def test_load_config_custom(mock_env):
 
 
 # ---------------------------------------------------------------------------
-# quote_path / require
+# quote_path
 # ---------------------------------------------------------------------------
 
 
 def test_quote_path():
     assert quote_path("group/project") == "group%2Fproject"
-
-
-def test_require():
-    assert require("val", "VAR") == "val"
-    with pytest.raises(GitLabError, match="VAR is required"):
-        require(None, "VAR")
-    with pytest.raises(GitLabError, match="VAR is required"):
-        require("", "VAR")
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +256,16 @@ def test_auth_headers_explicit_scheme_job_token():
     assert headers.get("JOB-TOKEN") == "custom-job-tok"
 
 
+def test_auth_headers_explicit_scheme_jobtoken_no_hyphen():
+    cfg = GitLabConfig(
+        token="custom-job-tok",
+        instance_url="https://gitlab.example.com",
+        auth_scheme="JobToken",
+    )
+    headers = _auth_headers(cfg)
+    assert headers.get("JOB-TOKEN") == "custom-job-tok"
+
+
 def test_auth_headers_invalid_scheme_raises():
     cfg = GitLabConfig(
         token="token",
@@ -357,7 +358,7 @@ def test_get_paged_json_with_limit_fewer_than_page(mock_urlopen, mock_env, capsy
     assert len(items) == 5
     assert mock_urlopen.call_count == 1
     err = capsys.readouterr().err
-    assert "Results capped at 5 items; use --limit to fetch more." in err
+    assert err == ""
 
 
 def test_get_paged_json_with_limit_multi_page(mock_urlopen, mock_env):
@@ -387,6 +388,23 @@ def test_get_paged_json_non_list_subsequent_raises(mock_urlopen, mock_env):
     cfg = load_config()
     with pytest.raises(GitLabError, match="Unexpected non-list response"):
         get_paged_json("https://gitlab.example.com/api/v4/projects/test/issues", cfg)
+
+
+def test_get_paged_json_limit_gt_1000(mock_urlopen, mock_env):
+    """Limit > 1000 should bypass the max_pages=10 default and fetch required pages."""
+    pages = []
+    # limit=1050 means we need 11 pages (100 items per page).
+    for i in range(1, 12):
+        next_page = str(i + 1) if i < 11 else ""
+        pages.append(build_mock_response([{"id": j} for j in range(100)], headers={"X-Next-Page": next_page}))
+
+    mock_urlopen.side_effect = pages
+
+    cfg = load_config()
+    # default max_pages is 10, but limit=1050 should override target_pages to 11
+    items = get_paged_json("https://gitlab.example.com/api/v4/projects/test/issues", cfg, limit=1050)
+    assert len(items) == 1050
+    assert mock_urlopen.call_count == 11
 
 
 # ---------------------------------------------------------------------------
