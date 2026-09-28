@@ -7,28 +7,19 @@ mode: Triage
 requires_config:
   - project.md
 description: |
-  Triage a security scanner's multi-finding output (read via a
-  pluggable scan-format adapter) and turn findings into security work
-  only after a complete operator-reviewed triage. Reads the scan's
-  finding index plus its per-finding evidence; buckets each finding by
-  disposition; applies only the operator's confirmed per-entry
-  decisions. Publishes the report as a gist and can open a report-back
-  PR.
+  Triage a security scanner's multi-finding output (via a scan-format
+  adapter; ASVS is the reference), bucket each finding, and apply only
+  the operator's confirmed decisions. Publishes the report as a gist
+  and can open a report-back PR.
 when_to_use: |
-  Invoke when a security team member says "import the scan",
-  "triage the <scanner> findings for <repo/component>", "import
-  scan results from <issue>", or hands one or more paths / tree-URLs
-  to scan report folders. The reference adapter is ASVS, but the flow is
-  scanner-agnostic via `tools/scan-format/`. Skip for a single
-  human-authored inbound report (use `security-issue-import`), a
-  single markdown findings file with no per-finding evidence split
-  (use `security-issue-import-from-md`), or a public PR to anchor on
-  (`security-issue-import-from-pr`).
+  "import the scan", "triage the <scanner> findings", or given scan
+  report folders. A single report goes to `security-issue-import`, a
+  single markdown file to `-from-md`.
 argument-hint: "[scan-source ...]  (one or more GitHub issues and/or report folders)"
 capability: capability:intake
 surface_hash: sha256:3aa895ba2115c1d9
 license: Apache-2.0
-measured_tokens: 5562
+measured_tokens: 5515
 ---
 
 <!-- Placeholder convention (see AGENTS.md#placeholder-convention-used-in-skill-files):
@@ -231,6 +222,12 @@ mapping in Step B.
 
 ## Step B — Triage every finding (mandatory; reuse the existing machinery)
 
+**Fetch the open-tracker list once, before the per-finding loop**, and
+reuse it for every finding's Step 2a semantic sweep (one bounded
+`gh issue list --limit <N>` call, with the capped-list warning that step
+gives).
+Only the searches keyed on a finding's own tokens run per finding.
+
 For **each** finding, **first read its full evidence entry**, then run
 the full triage analysis — do **not** invent a parallel taxonomy; reuse:
 
@@ -245,7 +242,8 @@ the full triage analysis — do **not** invent a parallel taxonomy; reuse:
   [`<project-config>/canned-responses.md`](../../../magpie-setup/templates/canned-responses.md)),
   and a cross-check against recently-closed-invalid trackers;
 - the [`security-issue-import` Step 2a](../issue-import/SKILL.md)
-  fuzzy-dup search against existing trackers;
+  fuzzy-dup search against existing trackers (its semantic sweep reads
+  the open-tracker list fetched above);
 - a **fix-already-public** check — and, because a scan is pinned to a
   specific commit, also check whether the finding was **already fixed on
   the default branch since the scan's commit** (the scan ages quickly;
