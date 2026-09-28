@@ -17,7 +17,7 @@ source: >
   (config Step 3c, verify 8i, isolated-setup-install Step R).
 acceptance:
   - The tool runs only installed reviewer CLIs (codex, copilot, gemini,
-    claude), each in its own read-only headless mode, and skips the model
+    grok, claude), each in its own read-only headless mode, and skips the model
     running the harness unless told otherwise.
   - A reviewer's input is limited by construction to the diff, the changed
     files, and the PR title and body as they will be posted; no option
