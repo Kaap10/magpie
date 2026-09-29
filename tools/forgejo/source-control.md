@@ -1,28 +1,29 @@
+<!-- SPDX-License-Identifier: Apache-2.0
+     https://www.apache.org/licenses/LICENSE-2.0 -->
+
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [GitHub — source-control (VCS) capability](#github--source-control-vcs-capability)
+- [Forgejo / Gitea — source-control (VCS) capability](#forgejo--gitea--source-control-vcs-capability)
   - [What the skills require](#what-the-skills-require)
   - [Distributed-VCS assumptions](#distributed-vcs-assumptions)
   - [When to replace this capability](#when-to-replace-this-capability)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-<!-- SPDX-License-Identifier: Apache-2.0
-     https://www.apache.org/licenses/LICENSE-2.0 -->
-
-# GitHub — source-control (VCS) capability
+# Forgejo / Gitea — source-control (VCS) capability
 
 Shared reference for the **version-control operations** the skills run
-against a local working copy of the project's source. On the GitHub
+against a local working copy of the project's source. On the Forgejo
 tool this capability is backed by **Git** (`git` + `git worktree`),
-which is GitHub's native VCS.
+which is Forgejo/Gitea's native VCS.
 
 This is a *distinct* capability from the tracker / project-board
 surface documented in [`operations.md`](operations.md): those recipes
-talk to the GitHub API over `gh`; the recipes here operate on a local
+talk to the Forgejo API over `tea` / `curl`; the recipes here operate on a local
 checkout with the `git` binary and never touch the network except for
-explicit `fetch` / `push`. A project can in principle pair GitHub's
+explicit `fetch` / `push`. A project can in principle pair Forgejo's
 tracker with a different VCS, or a different forge with Git — see
 [*When to replace this capability*](#when-to-replace-this-capability).
 
@@ -83,16 +84,18 @@ when the VCS changes; only the bindings in the tool doc do.
 Tracked VCS bridges that implement this capability against a non-Git
 backend:
 
-- Mercurial (Hg) — apache/magpie#601
+- Mercurial (Hg) — apache/magpie#601 (generic VCS binding;
+  [`tools/vcs/`](../vcs/))
 - Apache Subversion (SVN) — apache/magpie#602 (generic VCS binding);
   [`tools/asf-svn/`](../asf-svn/) packages the full ASF SVN surface
   (source control + `dist.apache.org` release distribution +
   authorization) for ASF projects
 - Jujutsu (jj) — apache/magpie#603
-- Fossil — apache/magpie#604
+- Fossil — [`tools/fossil/`](../fossil/)
 - Perforce / Helix Core — apache/magpie#605
 
 Forge bridges that pair a non-GitHub forge with this capability live
-alongside the tracker bridges ([`tools/forgejo/`](../forgejo/), GitLab #305,
-Bitbucket #606, SourceHut #607 — the last also exercising the Hg
-binding).
+alongside the tracker bridges ([`tools/gitlab/`](../gitlab/),
+[`tools/bitbucket/`](../bitbucket/), [`tools/sourcehut/`](../sourcehut/) —
+the last also exercising the Hg binding), and the Git reference in
+[`tools/github/source-control.md`](../github/source-control.md).
