@@ -570,9 +570,9 @@ generated block below.
 
 | Capability contract | Neutral? | Class | Backends today | Basis |
 |---|---|---|---|---|
-| `contract:tracker` | ✅ | vendor-backed | Atlassian, Fossil, GitHub, SourceHut | 4 backend vendors: Atlassian, Fossil, GitHub, SourceHut; partial foundation, not counted: bitbucket, gitlab |
-| `contract:source-control` | ✅ | vendor-backed | Fossil, Git, GitHub, SourceHut, Subversion | 5 backend vendors: Fossil, Git, GitHub, SourceHut, Subversion; partial foundation, not counted: gitlab |
-| `contract:change-request` | ✅ | vendor-backed | Atlassian, GitHub, email | 3 backend vendors: Atlassian, GitHub, email; partial foundation, not counted: bitbucket, gitlab |
+| `contract:tracker` | ✅ | vendor-backed | Atlassian, Fossil, GitHub, SourceHut | 4 backend vendors: Atlassian, Fossil, GitHub, SourceHut; partial foundation, not counted: bitbucket, forgejo, gitlab |
+| `contract:source-control` | ✅ | vendor-backed | Fossil, Git, GitHub, SourceHut, Subversion | 5 backend vendors: Fossil, Git, GitHub, SourceHut, Subversion; partial foundation, not counted: forgejo, gitlab |
+| `contract:change-request` | ✅ | vendor-backed | Atlassian, GitHub, email | 3 backend vendors: Atlassian, GitHub, email; partial foundation, not counted: bitbucket, forgejo, gitlab |
 | `contract:mail-archive` | ✅ | vendor-backed | ASF, Google, SourceHut | 3 backend vendors: ASF, Google, SourceHut |
 | `contract:chat` | ❌ | vendor-backed | Slack | only 1 backend vendor (Slack); needs 1 more |
 | `contract:mail-source` | ✅ | vendor-backed | ASF, Google, Maildir | 3 backend vendors: ASF, Google, Maildir |
