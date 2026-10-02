@@ -8,28 +8,19 @@ requires_config:
   - contributor-sentiment-config.md
   - project.md
 description: |
-  Measures contributor-sentiment signals on <upstream> over a
-  configurable window: thread tone (first-response classification),
-  time-to-first-reply (median hours), first-PR retention
-  (second-PR rate), and reviewer load (Gini coefficient). Compares
-  each signal against a pre-adoption baseline and produces a
-  structured gate report used to decide whether a skill family is
-  ready to advance from experimental to stable.
+  Measure contributor-sentiment signals on `<upstream>` over a window:
+  thread tone, time-to-first-reply, first-PR retention, and reviewer load.
+  Compares signals against baseline to generate a mode promotion gate report.
 when_to_use: |
-  Invoke after at least two release cycles of Magpie use when a
-  maintainer says "run the sentiment evaluation", "is the project
-  healthier", "generate the promotion evidence", "contributor
-  sentiment report", or "are we ready to graduate to stable". Also
-  invoke when RFC-AI-0004 Principle 1 gate evidence is required for
-  Agentic Autonomous consideration.
-  Skip when no baseline period is available (brand-new project) and
-  the user only wants a current snapshot — note the limitation and
-  proceed with snapshot-only output.
+  Invoke when asked to "run the sentiment evaluation", "is the project healthier",
+  "generate the promotion evidence", "contributor sentiment report", or
+  "are we ready to graduate to stable", or when RFC-AI-0004 gate evidence is needed.
+  Skip when no baseline is available for a new project (use snapshot-only).
 argument-hint: "[window:Nm] [baseline:YYYY-MM-DD..YYYY-MM-DD]"
 capability: capability:stats
 surface_hash: sha256:c325db1d99634a51
 license: Apache-2.0
-measured_tokens: 4720
+measured_tokens: 4627
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0
