@@ -24,7 +24,7 @@
 # IMPORTANT — symlinks in the archive. The committed agent-view dirs are
 # regenerable adoption wiring, not source. `.agents/skills/*` are the
 # canonical view (single-hop symlinks straight to the real `skills/*`),
-# and the relay dirs `.claude/skills/`, `.github/skills/`, `.kiro/skills/`
+# and the relay dirs `.claude/skills/`, `.github/skills/`, `.kiro/skills/`, `.grok/skills/`
 # just chain through `.agents/skills/*`. A safe extractor (ATR's upload
 # validator) rejects a symlink whose target is itself a symlink (the
 # relay chain reads as a target "outside" the entry) — so the relay dirs
@@ -64,6 +64,7 @@
 .claude/skills/     export-ignore
 .github/skills/     export-ignore
 .kiro/skills/       export-ignore
+.grok/skills/       export-ignore
 
 # CI / bot config only. The rest of `.github/` (ISSUE_TEMPLATE,
 # PULL_REQUEST_TEMPLATE.md) is referenced by shipped skills, so it stays.

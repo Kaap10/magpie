@@ -29,6 +29,8 @@ logs
 !/.claude/skills/magpie-*
 .kiro/skills/*
 !/.kiro/skills/magpie-*
+.grok/skills/*
+!/.grok/skills/magpie-*
 .github/skills/*
 !/.github/skills/magpie-*
 

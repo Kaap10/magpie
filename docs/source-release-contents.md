@@ -65,7 +65,7 @@ source consumer never needs:
 - **Editor metadata:** `.idea/`.
 - **CI / bot config:** `.github/workflows/`, `.github/dependabot.yml`.
 - **Relay symlink dirs:** `.claude/skills/`, `.github/skills/`,
-  `.kiro/skills/` (the symlink-chaining views described above).
+  `.kiro/skills/`, `.grok/skills/` (the symlink-chaining views described above).
 
 [`.gitattributes`](../.gitattributes) is the authoritative list and
 carries the per-entry rationale.

@@ -81,6 +81,7 @@ AGENT_SKILL_DIRS: tuple[str, ...] = (
     ".windsurf/skills",
     ".goose/skills",
     ".kiro/skills",
+    ".grok/skills",
 )
 
 # The framework's own skill tree, present when the repository is the framework

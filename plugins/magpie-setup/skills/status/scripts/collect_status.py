@@ -47,7 +47,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# The agent-target registry is owned by skills/setup/agents.md
+# The agent-target registry is owned by plugins/magpie-setup/skills/setup/agents.md
 # ("## The registry") — the single source of truth. At runtime the
 # collector PARSES that table (see load_agent_targets), so adding a
 # vendor row there automatically flows into this dashboard with no
