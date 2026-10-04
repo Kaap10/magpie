@@ -27,4 +27,15 @@ stderr explanation otherwise.
 Skills shell out to this command at Step 0 (pre-flight) when they
 may read ``<private-list>`` content. The contract is documented
 in ``tools/privacy-llm/wiring.md``.
+
+:func:`check_endpoint` is the runtime counterpart for a single
+outbound endpoint, used by tools that make their own LLM calls.
 """
+
+from checker.check import Verdict, check_endpoint, check_stack
+
+__all__ = [
+    "Verdict",
+    "check_endpoint",
+    "check_stack",
+]
