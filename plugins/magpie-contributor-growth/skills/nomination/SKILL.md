@@ -23,7 +23,7 @@ argument-hint: "<github-handle> [window:Nm] [target:committer|pmc]"
 capability: capability:stats
 surface_hash: sha256:ce38f115ea57c59b
 license: Apache-2.0
-measured_tokens: 4788
+measured_tokens: 4802
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0
@@ -343,13 +343,13 @@ When the run was handed off from `contributor-to-committer`, reuse that skill's 
 Write the confirmed classes to `<scratch>/classes.json` and the settings to `<scratch>/weights.json`, and run `contributor-metrics score --items <scratch>/items.json --classes <scratch>/classes.json --weights <scratch>/weights.json --area-prefix <area_label_prefix> --out <scratch>/metrics.json`; resolve `area_label_prefix` from `contributor-nomination-config.md`, default `area:`.
 Every count below is then the adjusted count from `metrics.json`, with the raw count kept alongside it:
 
-- **GitHub breadth**: which areas have meaningful signal, with each area's share of merged PRs and reviews from `metrics.json.areas`
+- **GitHub breadth**: which areas have meaningful signal and which are thin or absent, with each area's share of merged PRs and reviews from `metrics.json.areas`
 - **Off-GitHub breadth**: maintainer-reported signal across tracks
 - **Activity timeline**: month-by-month GitHub breakdown across `<window>`
 - **Quality signals**: PR merge rate, substantive review depth
 - **Threshold freshness**: when the thresholds carry `calibrated_on` older than 12 months, or `calibrated_window_months` differs from `<window>`, say so in one line and suggest `contributor-calibrate`
 - **Automated and low-signal contributions**: discounted items, pushback penalties (negative signal, not disqualification)
-- **Community interaction**: qualitative assessment of working relationships and tone
+- **Community interaction**: qualitative assessment of working relationships, tone, behaviour under feedback, and any concerns
 - **Off-GitHub compensation**: contextual note where off-GitHub work explains lower GitHub counts
 
 ---
