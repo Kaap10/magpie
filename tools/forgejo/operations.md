@@ -118,7 +118,6 @@ Apply every add + remove in **one** call so the change lands as a single audit-t
 ### Edit — assignees
 
 ```bash
-tea issues edit <N> --repo <tracker> --add-assignees @me
 tea issues edit <N> --repo <tracker> --add-assignees <handle>
 ```
 
@@ -127,7 +126,7 @@ tea issues edit <N> --repo <tracker> --add-assignees <handle>
 Because `tea issues edit` does not support a `--description-file` flag (only inline `-d, --description string`, which violates the rule against passing bodies as quoted arguments), issue body edits use the REST API PATCH endpoint.
 Write the edited body to `<scratch>/issue-body.json` as a JSON payload using the Write tool:
 
-*Write tool call:* `file_path: <scratch>/issue-body.json`, `content: {"body": "<edited body>"}`
+*Write tool call:* `file_path: <scratch>/issue-body.json`, `content: {"body": "<edited body>"}` — the body is multi-line text, so write properly escaped JSON (quotes, backslashes and newlines escaped).
 
 Then apply the update:
 
@@ -207,7 +206,7 @@ Opening a public PR is irreversible. In GitHub workflows, `--web` is load-bearin
    `$FORGEJO_HOST/<upstream>/compare/<base-branch>...<user>:<branch>`
 2. Or, if creating via API, display the scrubbed title, body, and Gen-AI disclosure to the user and obtain explicit interactive confirmation before executing:
 
-*Write tool call:* `file_path: <scratch>/pr-payload.json`, `content: {"title": "<scrubbed title>", "body": "<body>", "head": "<user>:<branch>", "base": "<base-branch>"}`
+*Write tool call:* `file_path: <scratch>/pr-payload.json`, `content: {"title": "<scrubbed title>", "body": "<body>", "head": "<user>:<branch>", "base": "<base-branch>"}` — write properly escaped JSON (quotes, backslashes and newlines escaped).
 
 ```bash
 curl -fsS -X POST -H "Authorization: token $TEA_TOKEN" \
