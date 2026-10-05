@@ -92,6 +92,15 @@ def _effective_port(parsed: urllib.parse.ParseResult) -> int | None:
 
 
 @dataclass(frozen=True)
+class WriteResponse:
+    """Metadata and optional JSON body from one guarded write request."""
+
+    status: int
+    location: str | None
+    body: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
 class BitbucketConfig:
     """Environment-derived Bitbucket bridge configuration."""
 
@@ -189,14 +198,14 @@ def get_json(url: str, config: BitbucketConfig) -> dict[str, Any]:
         raise BitbucketError(f"Failed to parse JSON response from {url}") from exc
 
 
-def write_request(
+def write_request_with_metadata(
     url: str,
     config: BitbucketConfig,
     *,
     method: str,
     payload: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
-    """Execute one guarded Bitbucket mutation and parse an optional JSON response."""
+) -> WriteResponse:
+    """Execute one guarded Bitbucket mutation and retain response metadata."""
     _require_https(url)
 
     data = None
@@ -223,13 +232,19 @@ def write_request(
     try:
         with opener.open(request, timeout=DEFAULT_TIMEOUT_SECONDS) as response:
             body = response.read().decode("utf-8")
-            if not body.strip():
-                return None
+            parsed: dict[str, Any] | None = None
 
-            parsed = json.loads(body)
-            if not isinstance(parsed, dict):
-                raise BitbucketError(f"Expected JSON object from {url}")
-            return parsed
+            if body.strip():
+                decoded = json.loads(body)
+                if not isinstance(decoded, dict):
+                    raise BitbucketError(f"Expected JSON object from {url}")
+                parsed = decoded
+
+            return WriteResponse(
+                status=response.status,
+                location=response.headers.get("Location"),
+                body=parsed,
+            )
     except BitbucketError:
         raise
     except urllib.error.HTTPError as exc:
@@ -243,6 +258,22 @@ def write_request(
         ) from exc
     except json.JSONDecodeError as exc:
         raise BitbucketError(f"Failed to parse JSON response from {url}") from exc
+
+
+def write_request(
+    url: str,
+    config: BitbucketConfig,
+    *,
+    method: str,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Execute one guarded Bitbucket mutation and parse an optional JSON response."""
+    return write_request_with_metadata(
+        url,
+        config,
+        method=method,
+        payload=payload,
+    ).body
 
 
 def post_json(
