@@ -137,7 +137,7 @@ Contributors and maintainers should evaluate proposed mod implementations agains
 |---|---|---|
 | **Embedding Skill Workflow Logic in a Mod** | Violates vendor neutrality; breaks execution on Gemini CLI, Codex, and Cursor. | Keep workflow steps in the skill's markdown; use the mod only for presentational enhancement. |
 | **Replacing Capability Tools with Unsandboxed Mod Calls** | Bypasses sandbox security and breaks backend interchangeability. | Implement backend functionality as a tool adapter under `tools/<name>/` fulfilling a capability contract. |
-| **Silent Tool Call Approvals** | Bypasses the human-in-the-loop safety principle ([`PRINCIPLES.md` §3](../PRINCIPLES.md#3-human-in-the-loop-at-every-state-change)). | Always require explicit maintainer confirmation before executing state-changing operations. |
+| **Silent Tool Call Approvals** | Bypasses the human-in-the-loop safety principle ([`PRINCIPLES.md` §7](../PRINCIPLES.md#7-the-human-is-always-in-the-loop-until-they-choose-otherwise)). | Always require explicit maintainer confirmation before executing state-changing operations. |
 | **Unvetted Network Egress** | Violates data residency and sandbox egress controls. | Restrict mod network calls; route external fetches through vetted tool adapters. |
 
 ## Starting points across skill families
