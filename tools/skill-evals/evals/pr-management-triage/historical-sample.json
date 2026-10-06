@@ -1,0 +1,2005 @@
+[
+  {
+    "number": 1068,
+    "title": "chore(deps-dev): bump the python-deps group across 9 directories with 2 updates",
+    "author": "dependabot",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "FAILURE",
+    "failed_checks": [
+      "prek"
+    ],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "dependencies",
+      "python:uv"
+    ],
+    "commit_messages": [
+      "chore(deps-dev): bump the python-deps group across 9 directories with 2 updates"
+    ],
+    "body": "Updates the requirements on [prek](https://github.com/j178/prek) and [ruff](https://github.com/astral-sh/ruff) to permit the latest version. Updates `prek` from 0.4.10 to 0.4.11 Updates `ruff` from 0.15.22 to 0.16.0",
+    "createdAt": "2026-08-04T09:31:10Z",
+    "closedAt": "2026-08-11T09:38:02Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "CI failure detected (1 failed checks)"
+  },
+  {
+    "number": 1083,
+    "title": "chore(deps-dev): bump the python-deps group across 9 directories with 3 updates",
+    "author": "dependabot",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "FAILURE",
+    "failed_checks": [
+      "prek",
+      "pytest (oauth-draft)",
+      "tests-ok"
+    ],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "dependencies",
+      "python:uv"
+    ],
+    "commit_messages": [
+      "chore(deps-dev): bump the python-deps group across 9 directories with 3 updates"
+    ],
+    "body": "Updates the requirements on [prek](https://github.com/j178/prek), [ruff](https://github.com/astral-sh/ruff) and [mcp](https://github.com/modelcontextprotocol/python-sdk) to permit the latest version. Updates `prek` from 0.4.10 to 0.4.13 Updates `ruff` from 0.15.22 to 0.16.2",
+    "createdAt": "2026-08-11T09:38:37Z",
+    "closedAt": "2026-08-17T23:01:41Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "CI failure detected (3 failed checks)"
+  },
+  {
+    "number": 1102,
+    "title": "chore(deps): bump apache/infrastructure-actions/allowlist-check from 4e9c961f587f72b170874b6f5cd4ac15f7f26eb8 to bc817c8e9ad7d8216aab74223e32ea391e233b2c in the github-actions group",
+    "author": "dependabot",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "dependencies",
+      "github_actions"
+    ],
+    "commit_messages": [
+      "chore(deps): bump apache/infrastructure-actions/allowlist-check"
+    ],
+    "body": "Bumps the github-actions group with 1 update: [apache/infrastructure-actions/allowlist-check](https://github.com/apache/infrastructure-actions). Updates `apache/infrastructure-actions/allowlist-check` from 4e9c961f587f72b170874b6f5cd4ac15f7f26eb8 to bc817c8e9ad7d8216aab74223e32ea391e233b2c...",
+    "createdAt": "2026-08-18T10:40:36Z",
+    "closedAt": "2026-08-25T09:46:29Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1103,
+    "title": "chore(deps-dev): bump the python-deps group across 9 directories with 3 updates",
+    "author": "dependabot",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "FAILURE",
+    "failed_checks": [
+      "prek",
+      "pytest (oauth-draft)",
+      "tests-ok"
+    ],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "dependencies",
+      "python:uv"
+    ],
+    "commit_messages": [
+      "Merge branch 'main' into dependabot/uv/python-deps-758d868e1c"
+    ],
+    "body": "Updates the requirements on [prek](https://github.com/j178/prek), [ruff](https://github.com/astral-sh/ruff) and [mcp](https://github.com/modelcontextprotocol/python-sdk) to permit the latest version. Updates `prek` from 0.4.10 to 0.4.13 Updates `ruff` from 0.15.22 to 0.16.2",
+    "createdAt": "2026-08-18T10:44:45Z",
+    "closedAt": "2026-08-25T10:21:28Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "CI failure detected (3 failed checks)"
+  },
+  {
+    "number": 1136,
+    "title": "docs(rfc): update RFC-AI-0002 status to Implemented",
+    "author": "Aryansinghparmar2321",
+    "authorAssociation": "NONE",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "docs(rfc): update RFC-AI-0002 status to Implemented"
+    ],
+    "body": "## Summary - Updates RFC-AI-0002 (Secure Agents setup) status from \"Draft\" to \"Implemented\". - Refreshes the last updated date. The secure-agent setup is fully operational and shipped across multi-agent harnesses.",
+    "createdAt": "2026-08-31T18:25:56Z",
+    "closedAt": "2026-09-01T15:48:08Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1140,
+    "title": "docs(adapters): reclassify Fossil, add Gmail to mail-source registry",
+    "author": "Arnxvvv",
+    "authorAssociation": "NONE",
+    "statusCheckRollup": "UNKNOWN",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": false,
+    "labels": [],
+    "commit_messages": [
+      "docs(adapters): reclassify Fossil, add Gmail to mail-source registry"
+    ],
+    "body": "## Summary - **Reclassify Fossil:** Removed Fossil from the `tools/vcs` (VCS adapter) shipping list in `docs/adapters/registry.md`. Fossil is implemented as a forge bridge under `tools/fossil/` (alongside Bitbucket and SourceHut) and is already correctly listed in the Forge/tracker row. - **Add G...",
+    "createdAt": "2026-09-01T06:22:09Z",
+    "closedAt": "2026-09-01T06:23:10Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1153,
+    "title": "Add multi-SKIP case to gfi-sweep",
+    "author": "harshit01-creator",
+    "authorAssociation": "NONE",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "Add multi-SKIP case to gfi-sweep"
+    ],
+    "body": "## Summary - ## Type of change",
+    "createdAt": "2026-09-06T12:05:07Z",
+    "closedAt": "2026-09-07T22:57:27Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1157,
+    "title": "Clarify ATR beta status and hybrid mode in runbook",
+    "author": "dave2wave",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": true,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "Clarify ATR beta status and hybrid mode in runbook"
+    ],
+    "body": "Updated release management instructions to reflect ATR's beta status and clarify hybrid mode. ## Summary - ATR is now Beta software and this playbook must be updated.",
+    "createdAt": "2026-09-08T00:33:55Z",
+    "closedAt": "2026-09-09T00:24:47Z",
+    "ground_truth_label": "stale_draft",
+    "ground_truth_reason": "Draft PR closed without merge"
+  },
+  {
+    "number": 1210,
+    "title": "chore: bump dev version to 0.2.0.dev202609131707",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "chore: bump dev version to 0.2.0.dev202609131707"
+    ],
+    "body": "Moves the dev stamp so adopters' `claude plugin update` picks up the work merged since `0.2.0.dev202609110041` \u2014 eleven PRs, including the Gemini CLI runtime (#1199) and setup lifecycle (#1205), the Cursor (#1204) and local-LLM",
+    "createdAt": "2026-09-13T17:11:53Z",
+    "closedAt": "2026-09-13T17:56:47Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "Merge conflict detected (mergeable == CONFLICTING)"
+  },
+  {
+    "number": 1238,
+    "title": "chore: bump dev version to 0.2.0.dev202609152034",
+    "author": "github-actions",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "FAILURE",
+    "failed_checks": [
+      "Analyze (python)",
+      "prek",
+      "rat",
+      "list-workspace-members",
+      "Analyze (actions)",
+      "pytest (${{ matrix.project.name }})",
+      "tests-ok"
+    ],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "chore: bump dev version to 0.2.0.dev202609152034"
+    ],
+    "body": "Moves the dev stamp to `0.2.0.dev202609152034` so adopters' `claude plugin update` picks up the work merged since the previous stamp. The marketplace is served from `main` and the update check compares version strings, so a frozen suffix is a",
+    "createdAt": "2026-09-15T20:39:26Z",
+    "closedAt": "2026-09-16T08:33:26Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "CI failure detected (7 failed checks)"
+  },
+  {
+    "number": 1242,
+    "title": "docs: clarify introductory guides with practical examples",
+    "author": "johnslavik",
+    "authorAssociation": "COLLABORATOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 1,
+    "isDraft": true,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "docs: clarify introductory guides with practical examples"
+    ],
+    "body": "Make the README and onboarding guides easier to use as reference documentation. Replace promotional phrasing and repetition with direct explanations, practical examples, and expected outcomes while preserving illustrations and workflow safeguards. Documentation only; no skill or runtime changes. ...",
+    "createdAt": "2026-09-15T22:49:24Z",
+    "closedAt": null,
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "Merge conflict detected (mergeable == CONFLICTING)"
+  },
+  {
+    "number": 1243,
+    "title": "chore: bump dev version to 0.2.0.dev202609160820",
+    "author": "github-actions",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "chore: bump dev version to 0.2.0.dev202609160820"
+    ],
+    "body": "Moves the dev stamp to `0.2.0.dev202609160820` so adopters' `claude plugin update` picks up the work merged since the previous stamp. The marketplace is served from `main` and the update check compares version strings, so a frozen suffix is a",
+    "createdAt": "2026-09-16T08:24:06Z",
+    "closedAt": "2026-09-16T10:20:41Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1312,
+    "title": "chore: bump dev version to 0.2.0.dev202609210239",
+    "author": "github-actions",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "UNKNOWN",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": true,
+    "commits_behind": 0,
+    "real_ci_ran": false,
+    "labels": [],
+    "commit_messages": [
+      "chore: bump dev version to 0.2.0.dev202609210239"
+    ],
+    "body": "Moves the dev stamp to `0.2.0.dev202609210239` so adopters' `claude plugin update` picks up the work merged since the previous stamp. The marketplace is served from `main` and the update check compares version strings, so a frozen suffix is a",
+    "createdAt": "2026-09-21T02:40:00Z",
+    "closedAt": "2026-09-21T07:36:41Z",
+    "ground_truth_label": "stale_draft",
+    "ground_truth_reason": "Draft PR closed without merge"
+  },
+  {
+    "number": 1356,
+    "title": "docs: add Amazon Q Developer CLI harness integration (#320)",
+    "author": "Kaap10",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "fix: sync skill counts in vendor-neutrality for CI"
+    ],
+    "body": "## Summary - Implemented the Amazon Q Developer CLI harness integration via the JSON Wrapper Pattern (`~/.aws/amazonq/agents/magpie.json`), as the CLI does not parse Markdown natively. - Added an illustrative, least-privilege JSON configuration schema scoped strictly to framework CLI commands (`u...",
+    "createdAt": "2026-09-23T07:48:20Z",
+    "closedAt": "2026-09-23T17:03:14Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1366,
+    "title": "feat(adversarial-review): other models' adversarial review, as a tool and substrate plugin",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "FAILURE",
+    "failed_checks": [
+      "pytest (agent-isolation)",
+      "tests-ok"
+    ],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:tools",
+      "capability:review"
+    ],
+    "commit_messages": [
+      "fix(adversarial-review): address the whole-branch review"
+    ],
+    "body": "## Summary - Adds `tools/adversarial-review`, a stdlib-only CLI. It runs other models' CLIs (Codex, Copilot, Gemini, Claude) read-only over a change and prints their findings as one advisory JSON report, de-duplicated across reviewers. `detect` reports which CLIs are installed and which harness i...",
+    "createdAt": "2026-09-24T10:12:47Z",
+    "closedAt": "2026-09-24T11:16:39Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "CI failure detected (2 failed checks)"
+  },
+  {
+    "number": 1380,
+    "title": "perf(pairing): trim pairing family skills without changing behaviour",
+    "author": "onlyarnav",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 0,
+    "isDraft": true,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "perf(pairing): trim pairing family skills without changing behaviour (#1352)"
+    ],
+    "body": "## Summary - Apply the `optimize-skill` recipe to the `pairing` family, without changing what any skill does: 7,274 \u2192 6,752 body tokens across the two skills (\u22127.2%, \u2212522 tokens). - Trim both skills' always-on frontmatter under the 200-token budget:",
+    "createdAt": "2026-09-25T14:14:50Z",
+    "closedAt": "2026-09-26T13:56:28Z",
+    "ground_truth_label": "stale_draft",
+    "ground_truth_reason": "Draft PR closed without merge"
+  },
+  {
+    "number": 1388,
+    "title": "feat(cve-tool-vulnogram): get the token through browser approval",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 0,
+    "isDraft": true,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "contract:cve-authority"
+    ],
+    "commit_messages": [
+      "feat(cve-tool-vulnogram): get the token through browser approval"
+    ],
+    "body": "## Summary - `vulnogram-api-setup --pmc [--scope read|write]` gets the Vulnogram token through the browser instead of a copy-paste. It listens on a random `127.0.0.1` port, opens `/users/token/authorize`, and after the operator logs in (MFA included) and approves, receives a one-time code on the ...",
+    "createdAt": "2026-09-25T19:35:49Z",
+    "closedAt": null,
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "Merge conflict detected (mergeable == CONFLICTING)"
+  },
+  {
+    "number": 1403,
+    "title": "feat(pr-management-triage): opt-in pre-filter using typed_decision.choice()",
+    "author": "onlyarnav",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 3,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:pr-management",
+      "capability:triage"
+    ],
+    "commit_messages": [
+      "feat(pr-management-triage): opt-in pre-filter using typed_decision.choice()"
+    ],
+    "body": "### Summary Adds an opt-in advisory pre-filter pass to `pr-management-triage` using `typed_decision.choice()` from the typed decision contract introduced in #1402. Relates to #1370",
+    "createdAt": "2026-09-26T16:25:59Z",
+    "closedAt": null,
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "3 unresolved review threads"
+  },
+  {
+    "number": 1433,
+    "title": "chore(claude): ask only for write-shaped gh api calls",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "chore(claude): ask only for write-shaped gh api calls"
+    ],
+    "body": "## Summary - Replace the blanket `Bash(gh api *)` ask rule with rules that match `gh api`'s write flags only: `-X`/`--method`, `-f`/`-F`/`--field`/`--raw-field` (any of which makes gh default to POST), and `--input`. Each flag has two forms, one for the flag first and one for the flag after the p...",
+    "createdAt": "2026-09-27T17:50:04Z",
+    "closedAt": "2026-09-27T18:21:29Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "Merge conflict detected (mergeable == CONFLICTING)"
+  },
+  {
+    "number": 1438,
+    "title": "perf(security): trim the always-on descriptions of the security-model skills",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "refactor(security): trim the always-on descriptions of the security-model skills"
+    ],
+    "body": "Fourth of a four-PR stack for the **security** family (#1344). ## Summary - `description` + `when_to_use` load in every session, for every installed skill. The three `security-model-*` skills spent ~250\u2013323 tokens there, against the 200-token budget. Most of it was rationale the body already covered...",
+    "createdAt": "2026-09-27T20:58:15Z",
+    "closedAt": "2026-09-27T23:38:21Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "Merge conflict detected (mergeable == CONFLICTING)"
+  },
+  {
+    "number": 1440,
+    "title": "ci(zizmor): run on every pull request, so stacked PRs get the required check",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:ci"
+    ],
+    "commit_messages": [
+      "ci(zizmor): run on every pull request, so stacked PRs get the required check"
+    ],
+    "body": "## Summary - zizmor's `pull_request` trigger filtered on `branches: [main]`, and that filter matches the PR's **base** branch. A stacked PR is based on the branch of the PR below it, so zizmor never ran there. Because `zizmor` is a required status check in `.asf.yaml`, such a PR sat on \"Expected ...",
+    "createdAt": "2026-09-27T23:31:06Z",
+    "closedAt": "2026-09-27T23:32:15Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1441,
+    "title": "fix(tools/gitlab): address review follow-up on pagination docstring, short pages, and issue template",
+    "author": "Kaap10",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:tools",
+      "contract:tracker",
+      "contract:source-control",
+      "contract:change-request"
+    ],
+    "commit_messages": [
+      "docs(tools/gitlab): restore the doctoc-generated TOC title in issue-template.md"
+    ],
+    "body": "Addresses the two non-blocking follow-up observations from maintainer review in PR #1369: ### 1. `tools/gitlab/issue-template.md` - Moved the `SPDX-License-Identifier` header above the doctoc Table of Contents block to conform to standard ASF file layout across the repository.",
+    "createdAt": "2026-09-28T03:10:43Z",
+    "closedAt": "2026-09-28T06:56:27Z",
+    "ground_truth_label": "author_confirmed_ready",
+    "ground_truth_reason": "Author confirmed PR is ready for maintainer review"
+  },
+  {
+    "number": 1442,
+    "title": "fix(github-rollup): find and write rollups for any tracker, and add amend-latest and fold",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security",
+      "family:tools",
+      "contract:tracker",
+      "contract:source-control",
+      "contract:change-request",
+      "substrate:analytics"
+    ],
+    "commit_messages": [
+      "fix(github-rollup): find and write rollups for any tracker, and add amend-latest and fold"
+    ],
+    "body": "Sixth PR in the **security** family stack (#1344). It prepares the rollup tooling that the next layer moves the skills onto. ## Summary - **Project-agnostic marker.** `github-rollup` only recognised a rollup whose first line began with ` status rollup v `.",
+    "createdAt": "2026-09-28T06:38:57Z",
+    "closedAt": "2026-09-28T07:29:16Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "Merge conflict detected (mergeable == CONFLICTING)"
+  },
+  {
+    "number": 1443,
+    "title": "perf(security): fetch once per run instead of once per item",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security",
+      "substrate:analytics"
+    ],
+    "commit_messages": [
+      "perf(security): bring the remaining security skills under the always-on budget (#1447)"
+    ],
+    "body": "Seventh PR in the **security** family stack (#1344): the optimize-skill *fetch-upfront* pass. ## Summary The security skills re-ran the same reads per candidate, per tracker or per finding. They now fetch each shared set once per run and reuse it. The set of items processed and the per-item decisions...",
+    "createdAt": "2026-09-28T07:52:03Z",
+    "closedAt": "2026-09-28T09:41:53Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1444,
+    "title": "fix(security): correct defects found while optimizing the security skills",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security",
+      "family:tools",
+      "contract:tracker",
+      "contract:source-control",
+      "contract:change-request",
+      "substrate:analytics",
+      "substrate:action-guard"
+    ],
+    "commit_messages": [
+      "fix(github-rollup): find and write rollups for any tracker, and add amend-latest and fold (#1442)"
+    ],
+    "body": "Follow-up to the **security** family optimization (#1344, after #1435\u2013#1438, which only moved bytes, tightened descriptions, or pointed at shared recipes). This PR has two commits: 1. **fix(security)**: defects found along the way, which change behaviour. 2. **fix(github-rollup)**: reviewed as #1...",
+    "createdAt": "2026-09-28T07:53:54Z",
+    "closedAt": "2026-09-28T08:56:42Z",
+    "ground_truth_label": "security_language_signal",
+    "ground_truth_reason": "Matches security pattern 'security fix'"
+  },
+  {
+    "number": 1446,
+    "title": "feat(tools/adversarial-review): add grok reviewer backend",
+    "author": "liwenjie200543",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "substrate:privacy",
+      "substrate:review"
+    ],
+    "commit_messages": [
+      "fix(tools/adversarial-review): make the grok reviewer read-only by allowlist"
+    ],
+    "body": "## Summary - Adds a `grok` reviewer backend to `tools/adversarial-review`, per the reviewer-backend slice of #1416: `grok --permission-mode plan --output-format",
+    "createdAt": "2026-09-28T08:00:17Z",
+    "closedAt": "2026-09-28T10:29:01Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1447,
+    "title": "perf(security): bring the remaining security skills under the always-on budget",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "perf(security): bring the remaining security skills under the always-on budget"
+    ],
+    "body": "Stacked on the P6 batching PR. Part of the **security** family optimization (#1344). ## Summary `description` + `when_to_use` load in every session, for every installed skill, whether it runs or not. The budget is 200 tokens per skill. Eight security skills were over it. Each now states its purpose...",
+    "createdAt": "2026-09-28T08:11:44Z",
+    "closedAt": "2026-09-28T08:56:30Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "Merge conflict detected (mergeable == CONFLICTING)"
+  },
+  {
+    "number": 1448,
+    "title": "feat(vetted-ops): tracker rollup and body-field writes through a sandbox-exempt entry point",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security",
+      "family:setup",
+      "family:tools"
+    ],
+    "commit_messages": [
+      "feat(vetted-ops): tracker rollup and body-field writes through a sandbox-exempt entry point"
+    ],
+    "body": "Stacked on the frontmatter PR. Part of the **security** family optimization (#1344). It is the prerequisite for moving the skills' rollup and body-field writes out of agent context. ## Why Under the secure setup, `gh` only escapes the sandbox as a plain command or through the vetted-ops dispatcher...",
+    "createdAt": "2026-09-28T08:56:17Z",
+    "closedAt": "2026-09-28T09:42:12Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1449,
+    "title": "perf(security): skip obvious no-ops before any per-item model work",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "perf(security): skip obvious no-ops before any per-item model work"
+    ],
+    "body": "Stacked on the vetted-ops PR. Part of the **security** family optimization (#1344): the optimize-skill *pre-flight classifier* pass. ## Summary A deterministic check now drops items the full pass would also no-op, before any body read or model classification runs. It follows the pattern of sync b...",
+    "createdAt": "2026-09-28T08:59:20Z",
+    "closedAt": "2026-09-28T10:01:19Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1450,
+    "title": "feat(contributor-growth): map contributors' GitHub handles to Slack, Discord, and social media",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "feat(contributor-growth): map contributors' GitHub handles to Slack, Discord, and social media"
+    ],
+    "body": "## Summary - New `contributor-identity-map` skill maps any contributor's GitHub handle to their Slack, Discord, Matrix, mailing-list, and social-media handles. It works for everyone from a first-time PR author to a PMC member, so skills can invite, mention, or find people on the channels the project...",
+    "createdAt": "2026-09-28T09:00:08Z",
+    "closedAt": "2026-09-28T09:07:29Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1451,
+    "title": "perf(security): write rollups and body fields without loading them into context",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security",
+      "family:tools",
+      "contract:tracker",
+      "substrate:sandbox"
+    ],
+    "commit_messages": [
+      "perf(security): write rollups and body fields without loading them into context"
+    ],
+    "body": "Stacked on the P7 pre-filter PR; the last layer of the **security** family optimization (#1344). It is the optimize-skill *out-of-context* pass, built on the `vetted-op-tracker` procedures added two PRs below. ## Summary Skills used to read the whole rollup comment or issue body into context to a...",
+    "createdAt": "2026-09-28T09:40:55Z",
+    "closedAt": "2026-09-28T10:01:20Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "Merge conflict detected (mergeable == CONFLICTING)"
+  },
+  {
+    "number": 1452,
+    "title": "Sync specs with contributed functionality",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "docs(spec-loop): sync specs with contributed functionality"
+    ],
+    "body": "## Summary - Brings `tools/spec-loop/specs/` back in line with everything merged to `main` since the last sync marker. The previous marker (`bcd8b7f2`) was 65 commits behind `main`, up to and including #1451.",
+    "createdAt": "2026-09-28T10:19:06Z",
+    "closedAt": "2026-09-28T10:23:55Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1453,
+    "title": "fix(security): make the last sandbox-hostile gh calls plain, and fit the review block to PR imports",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security",
+      "family:repo-health"
+    ],
+    "commit_messages": [
+      "fix(security): make the last sandbox-hostile gh calls plain, and fit the review block to PR imports"
+    ],
+    "body": "Follow-ups from the security-family optimization (#1344). ## Summary - **workflow-security-audit** passed `--gh-token \"$(gh auth token)\"` to zizmor. Under the secure setup a `gh` inside `$(\u2026)` stays sandboxed, cannot read its credentials, and fails. zizmor reads its token from `GH_TOKEN` / `GITHUB_TOKEN`...",
+    "createdAt": "2026-09-28T10:20:26Z",
+    "closedAt": "2026-09-28T10:24:30Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1454,
+    "title": "docs(spec-loop): sync specs with #1453",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "docs(spec-loop): sync specs with #1453"
+    ],
+    "body": "## Summary - Brings the specs up to date with #1453, the only commit merged since the last sync (#1452). `tools/spec-loop/.last-sync` now points at `77884f5c`.",
+    "createdAt": "2026-09-28T10:32:46Z",
+    "closedAt": "2026-09-28T10:43:31Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1455,
+    "title": "fix(vetted-ops): call only the installed copy, and stop excluding the in-repo one",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:setup",
+      "family:tools",
+      "contract:cve-authority",
+      "contract:security-cross-ref",
+      "substrate:sandbox"
+    ],
+    "commit_messages": [
+      "fix(vetted-ops): call only the installed copy, and stop excluding the in-repo one"
+    ],
+    "body": "Follow-up from the security-family optimization (#1344). ## Summary - **Recipes called a copy no rule covers.** The `tools/osv` and `tools/cve-org` recipes, and `security-issue-sync`'s cve.org check, called `uv run --project /tools/vetted-ops vetted-op-read`. Every permission rule and sandbox exception...",
+    "createdAt": "2026-09-28T10:42:34Z",
+    "closedAt": "2026-09-28T15:21:34Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1456,
+    "title": "feat(pr-triage): check backport PRs are direct cherry-picks of fixes",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "docs(spec-loop): record the pr-triage backport check in the PR management spec"
+    ],
+    "body": "## Summary - Projects that maintain release branches by cherry-picking get backport PRs mostly from bots, which pre-filters F1/F2 drop. So triage never checked whether a backport is exactly what landed on the default branch, or whether a release branch should take it at all. A feature, deprecation...",
+    "createdAt": "2026-09-28T15:18:20Z",
+    "closedAt": "2026-09-28T15:26:22Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1457,
+    "title": "perf(security-issue-import-from-pr): wording pass, with a vetted-ops PR read",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security",
+      "family:tools",
+      "substrate:sandbox"
+    ],
+    "commit_messages": [
+      "docs(optimize-skill): record the style rules learned in the first wording pass"
+    ],
+    "body": "First skill of the security-family wording pass (#1344): the optimize-skill *rewrite* pass, done paragraph by paragraph with the maintainer on `security-issue-import-from-pr`. ## Summary - **Wording.** One sentence per line, restated rationale cut, and links to the source (AGENTS.md, the `security-issue-fix`...",
+    "createdAt": "2026-09-28T21:41:19Z",
+    "closedAt": "2026-09-28T22:27:56Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1458,
+    "title": "perf(security-issue-import): wording pass with the maintainer",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "perf(security-issue-import): wording pass with the maintainer"
+    ],
+    "body": "Second skill of the security-family wording pass (#1344): the optimize-skill *rewrite* pass on `security-issue-import`, done paragraph by paragraph with the maintainer, using the style rules learned on `security-issue-import-from-pr`. ## Summary - **Golden rules.** Every command form and trigger ...",
+    "createdAt": "2026-09-28T22:17:32Z",
+    "closedAt": "2026-09-28T22:27:24Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1459,
+    "title": "perf(security-issue-triage): wording pass with the maintainer",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "perf(security-issue-triage): wording pass with the maintainer"
+    ],
+    "body": "Third skill of the security-family wording pass (#1344): the optimize-skill *rewrite* pass on `security-issue-triage`, with the maintainer and the style rules learned on the import skills. ## Summary - **Golden rules 1\u20137** keep every rule. The link and external-content rules point at AGENTS.md, a...",
+    "createdAt": "2026-09-28T22:21:49Z",
+    "closedAt": "2026-09-28T22:27:34Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1460,
+    "title": "perf(security-issue-sync): wording pass",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "perf(security-issue-sync): wording pass"
+    ],
+    "body": "Security-family wording pass (#1344): the optimize-skill *rewrite* pass, applied with the style rules the maintainer set while rewriting import-from-pr, import and triage paragraph by paragraph. Those rules are one sentence per line, restated rationale cut, pointers to the source instead of copies...",
+    "createdAt": "2026-09-28T22:54:10Z",
+    "closedAt": "2026-09-28T22:57:51Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1461,
+    "title": "perf(security-issue-invalidate): wording pass",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "perf(security-issue-invalidate): wording pass"
+    ],
+    "body": "Security-family wording pass (#1344): the optimize-skill *rewrite* pass, applied with the style rules the maintainer set while rewriting import-from-pr, import and triage paragraph by paragraph. Those rules are one sentence per line, restated rationale cut, pointers to the source instead of copies...",
+    "createdAt": "2026-09-28T22:54:46Z",
+    "closedAt": "2026-09-28T22:58:10Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1462,
+    "title": "perf(security): wording pass on cve-allocate and issue-deduplicate",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "perf(security): wording pass on cve-allocate and issue-deduplicate"
+    ],
+    "body": "Security-family wording pass (#1344): the optimize-skill *rewrite* pass, applied with the style rules the maintainer set while rewriting import-from-pr, import and triage paragraph by paragraph. Those rules are one sentence per line, restated rationale cut, pointers to the source instead of copies...",
+    "createdAt": "2026-09-28T22:54:59Z",
+    "closedAt": "2026-09-28T23:20:24Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1463,
+    "title": "perf(security): wording pass on issue-fix and import-via-forwarder",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "perf(security): wording pass on issue-fix and import-via-forwarder"
+    ],
+    "body": "Security-family wording pass (#1344): the optimize-skill *rewrite* pass, applied with the style rules the maintainer set while rewriting import-from-pr, import and triage paragraph by paragraph. Those rules are one sentence per line, restated rationale cut, pointers to the source instead of copies...",
+    "createdAt": "2026-09-28T22:55:13Z",
+    "closedAt": "2026-09-28T23:01:16Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1464,
+    "title": "perf(security): wording pass on import-from-md, import-from-scan, the model skills and the stats dashboard",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "perf(security): wording pass on import-from-md, import-from-scan, the model skills and the stats dashboard"
+    ],
+    "body": "Security-family wording pass (#1344): the optimize-skill *rewrite* pass, applied with the style rules the maintainer set while rewriting import-from-pr, import and triage paragraph by paragraph. Those rules are one sentence per line, restated rationale cut, pointers to the source instead of copies...",
+    "createdAt": "2026-09-28T22:55:31Z",
+    "closedAt": "2026-09-28T23:01:26Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1465,
+    "title": "fix(security): plain gh keyword searches, and two stale or contradictory references",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security"
+    ],
+    "commit_messages": [
+      "fix(security): plain gh keyword searches, and two stale or contradictory references"
+    ],
+    "body": "Follow-ups from the security-family optimization (#1344). ## Summary - **Plain `gh` keyword searches.** security-issue-import Steps 2a, 2b and 2c, and import-from-md Step 2, ran `KW=$(tr -cd \u2026 `. The rule now covers only ` ` references in the draft.",
+    "createdAt": "2026-09-28T23:39:47Z",
+    "closedAt": "2026-09-28T23:43:01Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1466,
+    "title": "feat(tools/mail-source/imap): land the concrete CLI for the IMAP stub",
+    "author": "liwenjie200543",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "contract:mail-source"
+    ],
+    "commit_messages": [
+      "fix(imap): drop the unused _QUOTED regex; docstring bodies for the protocol stubs"
+    ],
+    "body": "Implements the mail-source contract's IMAP adapter per `tools/mail-source/imap/README.md`, closing #303. ## What changed",
+    "createdAt": "2026-09-29T03:24:55Z",
+    "closedAt": "2026-10-02T04:16:57Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1467,
+    "title": "perf(repo-health): trim the family's skills without changing behaviour",
+    "author": "liwenjie200543",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "style(repo-health): drop the duplicated '## <Title>' headings in the dependency-license-audit companions"
+    ],
+    "body": "Apply the #1342 setup-family recipe to the **repo-health** family (#1349), as previously applied to setup (#1353), pr-management (#1390), and issue (#1400).",
+    "createdAt": "2026-09-29T03:31:49Z",
+    "closedAt": "2026-10-02T05:19:14Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1468,
+    "title": "fix(skill-evals): security eval fixtures that failed correct answers, and the triage suite's old taxonomy",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:security",
+      "family:tools"
+    ],
+    "commit_messages": [
+      "fix(skill-evals): security eval fixtures that failed correct answers, and the triage suite's old taxonomy"
+    ],
+    "body": "Follow-ups from the security-family optimization (#1344): eval fixtures that failed correct answers, and the triage suite's outdated taxonomy. ## Fixture fixes | eval | problem | fix |",
+    "createdAt": "2026-09-29T04:46:33Z",
+    "closedAt": "2026-09-29T05:20:34Z",
+    "ground_truth_label": "security_language_signal",
+    "ground_truth_reason": "Matches security pattern 'security fix'"
+  },
+  {
+    "number": 1469,
+    "title": "feat(tools/forgejo): add Forgejo/Gitea adapter bridge (#310)",
+    "author": "Kaap10",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 9,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "contract:tracker",
+      "contract:source-control",
+      "contract:change-request"
+    ],
+    "commit_messages": [
+      "feat(tools/forgejo): add Forgejo/Gitea adapter bridge (#310)"
+    ],
+    "body": "## Summary - Add `tools/forgejo/` adapter satisfying `contract:tracker`, `contract:source-control`, and `contract:change-request` with **`Coverage: partial`** for Forgejo / Gitea instances. - Document `tea` CLI operational recipes with direct REST API fallbacks, including paginated security-team ...",
+    "createdAt": "2026-09-29T05:19:39Z",
+    "closedAt": null,
+    "ground_truth_label": "author_confirmed_ready",
+    "ground_truth_reason": "Author confirmed PR is ready for maintainer review"
+  },
+  {
+    "number": 1470,
+    "title": "refactor(skills): drop the Snapshot drift sections the pre-flight check already covers",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "family:pr-management",
+      "family:setup",
+      "family:issue"
+    ],
+    "commit_messages": [
+      "refactor(skills): drop the Snapshot drift sections the pre-flight check already covers"
+    ],
+    "body": "Framework-wide follow-up to #1435. ## Summary #1435 removed the hand-written **Snapshot drift** sections from the security skills. The same prose remained in 37 other skills and sibling files, across the pr-management, release-management, issue, contributor-growth, repo-health, pairing, setup and...",
+    "createdAt": "2026-09-29T05:22:44Z",
+    "closedAt": "2026-09-29T05:33:41Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1471,
+    "title": "feat(bitbucket): add guarded cloud PR merge",
+    "author": "KatalKavya96",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 5,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "contract:tracker",
+      "contract:change-request"
+    ],
+    "commit_messages": [
+      "fix(bitbucket): align cloud merge with land contract"
+    ],
+    "body": "## Summary - Adds guarded Bitbucket Cloud pull-request merge support via `magpie-bitbucket pr merge --strategy {merge,squash,rebase}`. - Maps the Cloud merge path onto the change-request `land(id, strategy) -> landed_ref` contract shape, including extraction of the resulting merge commit when available...",
+    "createdAt": "2026-09-29T08:45:11Z",
+    "closedAt": null,
+    "ground_truth_label": "stale_review",
+    "ground_truth_reason": "Review requested changes and author updated"
+  },
+  {
+    "number": 1472,
+    "title": "chore(deps): bump https://github.com/DavidAnson/markdownlint-cli2 from v0.23.2 to 0.23.3 in the pre-commit-hooks group",
+    "author": "dependabot",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "dependencies",
+      "pre_commit"
+    ],
+    "commit_messages": [
+      "chore(deps): bump https://github.com/DavidAnson/markdownlint-cli2"
+    ],
+    "body": "Bumps the pre-commit-hooks group with 1 update: [https://github.com/DavidAnson/markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2). Updates `https://github.com/DavidAnson/markdownlint-cli2` from v0.23.2 to 0.23.3...",
+    "createdAt": "2026-09-29T09:19:09Z",
+    "closedAt": "2026-10-02T04:53:55Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1473,
+    "title": "chore(deps): bump astral-sh/setup-uv from 10.1.0 to 10.2.0 in the github-actions group",
+    "author": "dependabot",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "dependencies",
+      "github_actions"
+    ],
+    "commit_messages": [
+      "chore(deps): bump astral-sh/setup-uv in the github-actions group"
+    ],
+    "body": "Bumps the github-actions group with 1 update: [astral-sh/setup-uv](https://github.com/astral-sh/setup-uv). Updates `astral-sh/setup-uv` from 10.1.0 to 10.2.0...",
+    "createdAt": "2026-09-29T09:21:40Z",
+    "closedAt": "2026-10-02T04:54:26Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1474,
+    "title": "feat(tools/mail-source): add Mailman 3 / Hyperkitty archive backend",
+    "author": "oscerd",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 2,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "contract:mail-source"
+    ],
+    "commit_messages": [
+      "feat(tools/mail-source): add Mailman 3 / Hyperkitty archive backend"
+    ],
+    "body": "## Summary - Adds `tools/mail-source/mailman3/`, a read-only mail-source backend for Mailman 3 archives served by Hyperkitty. Hyperkitty exposes a JSON API, so the adapter is a README of `curl` recipes with nothing to install: `list_recent_threads`, `read_thread` and `thread_url`, keyed by the ro...",
+    "createdAt": "2026-09-29T11:12:57Z",
+    "closedAt": null,
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "2 unresolved review threads"
+  },
+  {
+    "number": 1475,
+    "title": "perf(pairing): trim always-on frontmatter and dedupe body prose",
+    "author": "liwenjie200543",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "perf(pairing): trim always-on frontmatter and dedupe body prose"
+    ],
+    "body": "## Summary - Applies the #1342 setup-family optimization recipe to the pairing skill family (#1352). Both pairing skills were over the 200-token always-on budget \u2014 `description` + `when_to_use` are paid in every session, for every skill, invoked or not. - **pairing-multi-agent-review**: always-on...",
+    "createdAt": "2026-09-29T15:39:07Z",
+    "closedAt": "2026-10-02T04:34:30Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1476,
+    "title": "fix(evals): resolve the four remaining eval failures",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "fix(evals): resolve the four remaining eval failures"
+    ],
+    "body": "Fixes the four eval failures left over from the security-family optimization (#1344). ## Summary - **issue-deduplicate step-0 case-3.** With a single argument there is no duplicate, so the expected value is `null`, and the output spec allows `null`.",
+    "createdAt": "2026-09-29T21:48:26Z",
+    "closedAt": "2026-09-29T22:33:54Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1477,
+    "title": "chore(deps): bump pyjwt from 2.13.0 to 2.15.0",
+    "author": "dependabot",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "dependencies",
+      "python:uv"
+    ],
+    "commit_messages": [
+      "chore(deps): bump pyjwt from 2.13.0 to 2.15.0"
+    ],
+    "body": "Bumps [pyjwt](https://github.com/jpadilla/pyjwt) from 2.13.0 to 2.15.0.",
+    "createdAt": "2026-10-01T03:53:56Z",
+    "closedAt": "2026-10-02T04:54:55Z",
+    "ground_truth_label": "security_language_signal",
+    "ground_truth_reason": "Matches security pattern 'security fix'"
+  },
+  {
+    "number": 1478,
+    "title": "chore(deps): bump urllib3 from 2.7.0 to 2.8.0",
+    "author": "dependabot",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "dependencies",
+      "python:uv"
+    ],
+    "commit_messages": [
+      "chore(deps): bump urllib3 from 2.7.0 to 2.8.0"
+    ],
+    "body": "Bumps [urllib3](https://github.com/urllib3/urllib3) from 2.7.0 to 2.8.0...",
+    "createdAt": "2026-10-01T03:54:00Z",
+    "closedAt": "2026-10-02T04:55:44Z",
+    "ground_truth_label": "security_language_signal",
+    "ground_truth_reason": "Matches security pattern 'security fix'"
+  },
+  {
+    "number": 1479,
+    "title": "fix(pr-management-triage): suppress already-acted-on PRs with unchanged head SHA",
+    "author": "liwenjie200543",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "substrate:framework-dev"
+    ],
+    "commit_messages": [
+      "fix(pr-management-triage): suppress already-acted-on PRs with unchanged head SHA"
+    ],
+    "body": "## Summary - Implement the remaining acceptance criterion of #77: a PR already taken to a terminal action earlier in the same session is **silently suppressed** on re-encounter \u2014 no queue entry, no progress line, no prompt. - The suppression is head-SHA aware, per the resolution proposed on the i...",
+    "createdAt": "2026-10-01T06:04:59Z",
+    "closedAt": "2026-10-02T04:09:36Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1480,
+    "title": "perf(mentoring): trim author skill routing metadata",
+    "author": "anbv29",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "perf(mentoring): trim author skill routing metadata"
+    ],
+    "body": "## Summary Shortened the description and invocation guidance for `good-first-issue-author` by removing details already covered in the skill body. The existing trigger phrases, scope restrictions, and confirmation requirements are preserved. The always-on estimate drops from 273 to 168 tokens, below...",
+    "createdAt": "2026-10-01T08:35:22Z",
+    "closedAt": "2026-10-02T04:05:07Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1481,
+    "title": "perf(contributor-growth): trim onboarding-concierge routing metadata",
+    "author": "Kaap10",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "docs(marketplace): sync contributor-growth always-on token estimate to ~0.7k"
+    ],
+    "body": "## Summary - Trims the always-on frontmatter (`description` and `when_to_use`) for `onboarding-concierge` following the #1342 recipe. - Drops always-on frontmatter estimate from ~267\u2013275 tokens down to ~133 tokens ($\\le 200$ budget) by removing prose duplication already covered in the skill body.",
+    "createdAt": "2026-10-02T04:17:58Z",
+    "closedAt": "2026-10-02T05:12:24Z",
+    "ground_truth_label": "author_confirmed_ready",
+    "ground_truth_reason": "Author confirmed PR is ready for maintainer review"
+  },
+  {
+    "number": 1482,
+    "title": "perf(contributor-growth): trim sentiment skill routing metadata",
+    "author": "Kaap10",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "Merge branch 'main' into perf/contributor-growth-sentiment"
+    ],
+    "body": "## Summary - Trims the always-on frontmatter (`description` and `when_to_use`) for `sentiment` following the #1342 recipe. - Drops always-on frontmatter estimate from ~241 tokens down to ~131 tokens ($\\le 200$ budget) by removing prose duplication.",
+    "createdAt": "2026-10-02T04:41:33Z",
+    "closedAt": "2026-10-02T05:20:38Z",
+    "ground_truth_label": "author_confirmed_ready",
+    "ground_truth_reason": "Author confirmed PR is ready for maintainer review"
+  },
+  {
+    "number": 1483,
+    "title": "perf(contributor-growth): trim activity-sweep skill routing metadata",
+    "author": "Kaap10",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 2,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "perf(contributor-growth): trim activity-sweep skill routing metadata"
+    ],
+    "body": "## Summary - Trims always-on frontmatter (`description` and `when_to_use`) for `activity-sweep` following the #1342 recipe. - Tightens always-on frontmatter to ~110 tokens (strictly $\\le 200$ budget) while keeping full routing accuracy.",
+    "createdAt": "2026-10-02T06:11:56Z",
+    "closedAt": null,
+    "ground_truth_label": "author_confirmed_ready",
+    "ground_truth_reason": "Author confirmed PR is ready for maintainer review"
+  },
+  {
+    "number": 1484,
+    "title": "feat(chat-discord): implement contract:chat Discord adapter specification",
+    "author": "onlyarnav",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "UNKNOWN",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "CONFLICTING",
+    "unresolved_threads": 4,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": false,
+    "labels": [],
+    "commit_messages": [
+      "docs(chat-discord): refine setup, bot permissions, and search operations"
+    ],
+    "body": "\ufeffPart 1 of 2 in the `contract:chat` Discord adapter stack (next: #1485). ## Summary - Implements the Discord adapter specification for `contract:chat` under `tools/chat-discord/README.md`.",
+    "createdAt": "2026-10-02T06:19:02Z",
+    "closedAt": null,
+    "ground_truth_label": "stale_review",
+    "ground_truth_reason": "Review requested changes and author updated"
+  },
+  {
+    "number": 1485,
+    "title": "docs(chat): integrate Discord adapter into registry, taxonomy, and project template",
+    "author": "onlyarnav",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 3,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "contract:chat"
+    ],
+    "commit_messages": [
+      "docs(chat): address maintainer review feedback on adapter registry, specs, and scorer test"
+    ],
+    "body": "\ufeffPart 2 of 2 in the `contract:chat` Discord adapter stack. Depends on #1484. Closes #1421. ## Summary - Promotes `discord` from placeholder to shipping adapter under `contract:chat`:",
+    "createdAt": "2026-10-02T06:22:41Z",
+    "closedAt": null,
+    "ground_truth_label": "stale_review",
+    "ground_truth_reason": "Review requested changes and author updated"
+  },
+  {
+    "number": 1486,
+    "title": "feat(vendor-neutrality): mark contract:chat vendor neutral with Discord adapter",
+    "author": "onlyarnav",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 1,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "substrate:analytics",
+      "substrate:framework-dev"
+    ],
+    "commit_messages": [
+      "feat(vendor-neutrality): mark contract:chat vendor neutral with Discord adapter"
+    ],
+    "body": "Part 3 of 3 in the `contract:chat` Discord adapter stack. Depends on #1485. ## Summary - Regenerates vendor-neutrality scoring via `tools/vendor-neutrality-score`:",
+    "createdAt": "2026-10-02T06:26:14Z",
+    "closedAt": "2026-10-03T23:35:29Z",
+    "ground_truth_label": "deterministic_flag",
+    "ground_truth_reason": "1 unresolved review threads"
+  },
+  {
+    "number": 1487,
+    "title": "perf(contributor-growth): trim contributor-to-committer body budget",
+    "author": "Kaap10",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 2,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "perf(contributor-growth): trim contributor-to-committer body budget"
+    ],
+    "body": "## Summary - Trim `contributor-to-committer` skill body budget from 5,741 down to 4,632 tokens (-19.3%, saving 1,109 tokens) to comply with the 5,000-token body budget. - Extracts Step 5 output layout and rendering templates byte-for-byte into companion file `render-brief.md`.",
+    "createdAt": "2026-10-02T07:45:36Z",
+    "closedAt": null,
+    "ground_truth_label": "author_confirmed_ready",
+    "ground_truth_reason": "Author confirmed PR is ready for maintainer review"
+  },
+  {
+    "number": 1488,
+    "title": "feat(setup): recognize Grok as a universal skill reader",
+    "author": "KatalKavya96",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "fixup: wire Grok through its own .grok/skills relay"
+    ],
+    "body": "## Summary - Recognize Grok as a reader of Magpie's canonical `.agents/skills/` universal skill path instead of introducing a Grok-specific skill target. - Keep setup install/upgrade guidance, status rendering, fallback metadata, and setup-status fixtures aligned with the updated universal reader...",
+    "createdAt": "2026-10-02T08:22:27Z",
+    "closedAt": "2026-10-03T23:09:57Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1489,
+    "title": "perf(contributor-growth): trim nomination body budget",
+    "author": "Kaap10",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 7,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "perf(contributor-growth): trim nomination body budget"
+    ],
+    "body": "## Summary - Trim `nomination` skill body budget from 5,610 down to 4,781 tokens (-14.8%, saving 829 tokens) to comply with the 5,000-token body ceiling (#1348). - Streamlines fetch stream documentation and step prose while strictly preserving all scoring contracts, config resolution, hand-off re...",
+    "createdAt": "2026-10-02T13:07:38Z",
+    "closedAt": null,
+    "ground_truth_label": "author_confirmed_ready",
+    "ground_truth_reason": "Author confirmed PR is ready for maintainer review"
+  },
+  {
+    "number": 1494,
+    "title": "fix(tools/fossil, tools/vcs): detect Fossil checkouts by .fslckout",
+    "author": "dpol1",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "contract:tracker",
+      "contract:source-control"
+    ],
+    "commit_messages": [
+      "fix(tools/fossil, tools/vcs): detect Fossil checkouts by .fslckout"
+    ],
+    "body": "## Summary - `tools/vcs` (`FossilBackend.detect()`) and `tools/fossil` (`find_repo_db()`) looked for a checkout file named `.fslckg`. Fossil never writes that name: its [glossary](https://fossil-scm.org/home/doc/tip/www/glossary.md) says the checkout database \"is in the `.fslckout` file on POSIX ...",
+    "createdAt": "2026-10-02T15:03:25Z",
+    "closedAt": "2026-10-03T19:39:44Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1496,
+    "title": "chore: gitignore .apache-magpie-local/",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "chore: gitignore .apache-magpie-local/"
+    ],
+    "body": "`.apache-magpie-local/` is the personal, gitignored per-user layer (AGENTS.md), but this repo ignored it only through each clone's `.git/info/exclude`. The container-gateway log under `run/` got into two commits (#1456, #1458), and every eval run modified it. ## Summary - Add `/.apache-magpie-local/`...",
+    "createdAt": "2026-10-03T19:28:33Z",
+    "closedAt": "2026-10-03T19:30:16Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1498,
+    "title": "perf(security-issue-import): wording pass on the sibling files",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "perf(security-issue-import): wording pass on the sibling files"
+    ],
+    "body": "Wording pass on the six sibling files of `security-issue-import` (#1344 follow-up), with the style rules the maintainer approved for the skill's `SKILL.md`. ## Summary - `screening-and-proposal.md`, `apply.md`, `duplicate-search.md`, `candidate-listing.md`, `existing-tracker-dedup.md`, `fix-already-in-progress.md`...",
+    "createdAt": "2026-10-03T21:37:35Z",
+    "closedAt": "2026-10-03T21:39:38Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1499,
+    "title": "perf(security-import): move the tracker body templates into siblings",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "perf(security-import): move the tracker body templates into siblings"
+    ],
+    "body": "Moves the tracker issue-body templates of `security-issue-import-from-md` and `security-issue-import-from-pr` into a `tracker-body-template.md` sibling each (#1344 follow-up). ## Summary - Each heredoc block moves byte-identically (checked with `cmp`) and is linked from the step that writes the b...",
+    "createdAt": "2026-10-03T21:38:01Z",
+    "closedAt": "2026-10-03T21:40:12Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1500,
+    "title": "perf(security-issue-sync): wording pass on the sibling files, with evals",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "test(security-issue-sync): evals for the sibling sections without coverage"
+    ],
+    "body": "Wording pass on the sibling files of `security-issue-sync`, plus evals for the sections that had none (#1344 follow-up). ## Summary - **Wording.** `gather.md`, `signals-to-actions.md`, `apply-and-push.md`, `bulk-mode.md` and `github-advisory.md` get the style rules the maintainer approved for the...",
+    "createdAt": "2026-10-03T23:17:58Z",
+    "closedAt": "2026-10-03T23:26:40Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1501,
+    "title": "fix(security-issue-sync): settle three ambiguous bulk and push rules",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "fix(security-issue-sync): settle three ambiguous bulk and push rules"
+    ],
+    "body": "Settles the three ambiguous rules that the new evals in #1500 surfaced (#1344 follow-up). ## Summary - **Step 5b, `not-configured` session probe.** The text said both \"skip silently\" and that the only acceptable deferral raises an explicit blocker.",
+    "createdAt": "2026-10-03T23:34:38Z",
+    "closedAt": "2026-10-03T23:46:28Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1502,
+    "title": "fix(release-management): pass PR and comment bodies through a file",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "fix(release-management): pass PR and comment bodies through a file"
+    ],
+    "body": "Behaviour fix ahead of the release-management optimization ([#1345](https://github.com/apache/magpie/issues/1345)). ## Summary `release-announce-draft`, `release-audit-report` and `release-rc-cut` told the agent to post with an inline `--body \" \"`.",
+    "createdAt": "2026-10-04T00:07:30Z",
+    "closedAt": "2026-10-04T00:10:18Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1503,
+    "title": "fix(skill-evals): align code-review footer fixtures with the contributing-guide link",
+    "author": "potiuk",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [],
+    "commit_messages": [
+      "fix(skill-evals): align code-review footer fixtures with the contributing-guide link"
+    ],
+    "body": "## Summary - #1407 replaced the Airflow-specific `contributing-docs/05_pull_requests.rst` link in the `pr-management-code-review` AI-attribution footer with `[Contributing guide]( )`, but the step-7b attribution eval was left behind: its grader prompt still said the footer ends with the Airflow p...",
+    "createdAt": "2026-10-04T01:17:00Z",
+    "closedAt": "2026-10-04T01:31:32Z",
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1505,
+    "title": "feat(tools): add asf-nexus and wire Nexus staging check into verify-rc",
+    "author": "liwenjie200543",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "substrate:analytics",
+      "substrate:sandbox",
+      "substrate:framework-dev",
+      "substrate:release"
+    ],
+    "commit_messages": [
+      "feat(tools): add asf-nexus and wire Nexus staging check into verify-rc"
+    ],
+    "body": "## Summary - Add `tools/asf-nexus`, a doc-only, read-only adapter implementing blocking check 4 agreed on in #1173: verify the Nexus staging repository at `repository.apache.org` is `closed` (not `open`), that its coordinates and version match the RC under vote, and that every artefact carries it...",
+    "createdAt": "2026-10-04T05:38:24Z",
+    "closedAt": null,
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1506,
+    "title": "feat(tools): add informational JVM checks 5-7 to maven-artifact-verify",
+    "author": "liwenjie200543",
+    "authorAssociation": "CONTRIBUTOR",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "substrate:framework-dev",
+      "substrate:release"
+    ],
+    "commit_messages": [
+      "fix(tools): link the asf-nexus reference by PR number until it lands"
+    ],
+    "body": "## Summary - Implement the informational checks 5\u20137 of #1173 in `maven-artifact-verify`, reported under a new `observations` section that **never changes `status`** \u2014 the issue's \"signals for a human reviewer, not a gate\" boundary, applied throughout: - **Check 5 \u2014 timestamp reproducibility signal...",
+    "createdAt": "2026-10-04T06:23:32Z",
+    "closedAt": null,
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  },
+  {
+    "number": 1507,
+    "title": "fix(agent-guard): re-exec under Python 3.11+ when python3 is older",
+    "author": "shahar1",
+    "authorAssociation": "MEMBER",
+    "statusCheckRollup": "SUCCESS",
+    "failed_checks": [],
+    "recent_main_failures": [],
+    "mergeable": "MERGEABLE",
+    "unresolved_threads": 0,
+    "isDraft": false,
+    "commits_behind": 0,
+    "real_ci_ran": true,
+    "labels": [
+      "substrate:action-guard"
+    ],
+    "commit_messages": [
+      "fix(agent-guard): re-exec under Python 3.11+ when python3 is older"
+    ],
+    "body": "## Summary - The `magpie-agent-guard` PreToolUse hook runs the engine as a bare `python3`. When that resolves to a pre-3.11 interpreter \u2014 typically an activated project virtualenv, e.g. Apache Airflow's `.venv` on 3.10 \u2014 the module-level `import tomllib` fails with `ModuleNotFoundError` on **every**...",
+    "createdAt": "2026-10-04T07:30:26Z",
+    "closedAt": null,
+    "ground_truth_label": "passing",
+    "ground_truth_reason": "All checks green, mergeable, zero unresolved threads"
+  }
+]
