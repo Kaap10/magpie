@@ -56,7 +56,7 @@ Every mod authored for or shipped with Apache Magpie must strictly comply with f
 
 Vendor neutrality is a foundational design principle of Apache Magpie ([`PRINCIPLES.md` §10](../PRINCIPLES.md#10-vendor-neutrality-is-non-negotiable), [`docs/vendor-neutrality.md`](vendor-neutrality.md)).
 Mods exist only in Claude Code (CLI and Desktop Code tab).
-They do not run in Codex, Gemini CLI, Cursor, Copilot, OpenCode, Kiro, the VS Code panel, or `claude -p`.
+They don't run in Codex or Gemini CLI, and the VS Code panel and `claude -p` don't draw them.
 
 Therefore, a mod can **only ever enhance a skill additively**.
 Every skill must continue to work end-to-end when mods are disabled, unsupported, or absent.
@@ -68,7 +68,7 @@ When a mod accelerates or formats an interaction, the underlying skill must main
 
 ### 2. Security and unsandboxed execution boundaries
 
-Mods execute directly in the user's host environment with full user privileges outside the containerized Bash sandbox.
+Mods execute directly in the user's host environment with full user privileges outside the Bash sandbox.
 A mod's `$.fs`, `$.process`, and `$.http` calls bypass the filesystem isolation and network egress gateways that sandbox standard agent tool executions.
 Furthermore, a mod can intercept and approve tool calls that an interactive user confirmation rule would otherwise prompt for.
 
@@ -89,7 +89,7 @@ Calls to `$.model.complete`, `$.model.fork`, or `turn.step` model routing consti
 ### 4. Distribution and enterprise policy fallbacks
 
 Magpie distributes skills through modular family plugins (such as `plugins/magpie-setup/` and `plugins/magpie-utilities/`).
-When a family includes a mod, the mod files (`hooks.ts` or `hooks.js`) sit directly inside the family plugin directory.
+When a family includes a mod, the mod files live under the family plugin's `hooks/` directory (e.g. `hooks/hooks.json` and `hooks/register.ts`), not directly in the plugin root.
 
 Enterprise environments often enforce strict administrator policies, such as `allowManagedModsOnly`.
 In these environments, user-level or third-party mods will be blocked by the agent runtime.
@@ -100,22 +100,23 @@ Magpie plugins must handle this gracefully: the plugin and its skills will load 
 To maintain architectural clarity, Magpie enforces a strict distinction between skills, capability contracts, tools, and mods:
 
 ```text
-  SKILLS (Universal Markdown)
-    │  Portable across all harnesses (Gemini CLI, Codex, Claude, Cursor, Copilot)
-    │  Declares required capability contracts (contract:*)
-    ▼
-  CAPABILITY CONTRACTS & TOOLS (Python / Shell / Substrate)
-    │  The abstraction layer where vendor implementations live (GitHub, Jira, Git, SVN)
-    │  Executes inside the secured sandbox environment
-    ▼
-  MODS (Optional Harness Acceleration Layer — Claude Code Only)
-    │  Additive event handlers (hooks.ts) packaged inside family plugins
-    │  Offloads presentation and deterministic pre-checks out of model context
+┌────────────────────────────────────────────────────────┐      ┌─────────────────────────────────────────────────┐
+│ SKILLS (Universal Markdown)                            │      │ MODS (Claude Code Only)                         │
+│ - Portable across all harnesses (Gemini, Codex, etc.)  │      │ - Additive event hooks                          │
+│ - Declares required capability contracts (contract:*)  │<─────┤ - Hooks harness alongside skill execution       │
+└───────────────────────────┬────────────────────────────┘      │ - Zero-token UI, commands, & pre-checks         │
+                            │                                   │ - Lives under plugins/<family>/hooks/           │
+                            v                                   └─────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ CAPABILITY CONTRACTS & TOOLS (Python / Shell)          │
+│ - Abstraction layer for vendor backends (GitHub, Git)  │
+│ - Backed by tool adapters under tools/<name>/          │
+└────────────────────────────────────────────────────────┘
 ```
 
 A mod is **not** a Magpie capability contract.
 Capability contracts (`contract:tracker`, `contract:source-control`, `contract:cve-authority`) define abstract operations fulfilled by swappable backend tools.
-Mods operate purely at the harness integration tier to enhance user experience and optimize token efficiency.
+Mods operate purely at the harness integration tier alongside skill execution to enhance user experience and optimize token efficiency.
 
 ## Decision rubric: when to author a mod
 
@@ -156,17 +157,26 @@ The following table summarizes candidate opportunities for additive mods across 
 
 ## Packaging, testing, and CI validation
 
-Mods ship inside their respective family plugins in `plugins/<family>/`.
-The plugin manifest declares the hooks entry point:
+Mods ship inside their respective family plugins in `plugins/<family>/` under the `hooks/` directory.
+The plugin manifest sits at `.claude-plugin/plugin.json` declaring plugin metadata:
 
 ```json
 {
   "name": "magpie-utilities",
   "description": "Apache Magpie — framework meta-skills and zero-token utilities.",
-  "module": "./hooks.ts",
-  "skills": "./skills"
+  "version": "0.9.0.dev0"
 }
 ```
+
+The hooks manifest at `hooks/hooks.json` lists the mod modules to load:
+
+```json
+{
+  "modules": ["./register.ts"]
+}
+```
+
+The module (`hooks/register.ts`) exports a `register(on, options)` function that registers event listeners with the harness.
 
 Every mod must include unit tests and pass strict validation before landing:
 1. **Static Validation**: Mod modules must pass `claude plugin validate <dir> --strict` to verify hooked events and API calls.
