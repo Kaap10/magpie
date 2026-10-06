@@ -138,6 +138,7 @@ from mailing lists, slack etc.
 | Find or author a backend adapter | [adapters/](adapters/README.md) |
 | Pull a skill/family from a trusted external source | [skill-sources/README.md](skill-sources/README.md) |
 | Extend Magpie (project / org / individual) | [extending.md](extending.md) |
+| Know when to use a Claude Code mod in a plugin | [when-to-use-mods.md](when-to-use-mods.md) |
 | See what skills exist today | [modes.md](modes.md) |
 | Install it right now | [quick-start.md](quick-start.md) |
 | Check what a skill needs before it runs | [quick-start/prerequisites.md](quick-start/prerequisites.md) |

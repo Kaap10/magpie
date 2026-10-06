@@ -348,6 +348,7 @@ already open, labelled `good first issue`:
 [OpenHands](https://github.com/apache/magpie/issues/322).
 The step-by-step wiring recipe for any new runtime is
 [`docs/adapters/add-a-harness.md`](adapters/add-a-harness.md).
+Harness-specific optimizations (such as Claude Code mods) are permitted only as strictly additive enhancements that leave every skill 100% portable on all other runtimes ([`docs/when-to-use-mods.md`](when-to-use-mods.md)).
 
 ### 3. Forge and tracker
 
@@ -719,4 +720,5 @@ labelled.
 - [`docs/setup/privacy-llm.md`](setup/privacy-llm.md) — the six LLM-stack variants
 - [`docs/rfcs/RFC-AI-0004.md` § Principle 3](rfcs/RFC-AI-0004.md#principle-3--vendor-neutrality) — vendor neutrality as a baseline ethics principle
 - [`tools/vcs/`](../tools/vcs/) and [`tools/github/source-control.md`](../tools/github/source-control.md) — the VCS abstraction worked example
+- [`docs/when-to-use-mods.md`](when-to-use-mods.md) — rules and decision rubric for additive Claude Code mods in family plugins
 - [`docs/mode-economics.md`](mode-economics.md) — what each mode costs to run, per model class

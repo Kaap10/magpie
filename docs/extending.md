@@ -40,6 +40,7 @@ indexes and catalogs exist for discovery, not installation.
 | **Skill source** | a trusted external repo a skill/family is *pulled* from | [`docs/skill-sources/`](skill-sources/README.md), [`RFC-AI-0006`](rfcs/RFC-AI-0006.md) |
 | **Tool / tool adapter** | the only layer that knows a vendor — a backend behind a capability contract | [vendor-neutrality § Tool adapters](vendor-neutrality.md#tool-adapters), [`adapters/authoring.md`](adapters/authoring.md) |
 | **Capability contract** | the stable verb set a skill depends on; the seam adapters plug into | [`tools/cve-tool/`](../tools/cve-tool/) and siblings |
+| **Claude Code Mod** | additive UI and zero-token event hooks in family plugins | [`docs/when-to-use-mods.md`](when-to-use-mods.md) |
 | **Organization** | governance vocabulary + backend bundle + identity, shared by an org's projects | [`organizations/README.md`](../organizations/README.md) |
 | **Project config** | one adopter's concrete values | [`projects/_template/`](../plugins/magpie-setup/templates/) |
 | **User config** | one person's preferences (handle, governance membership, local clone paths) | [`AGENTS.md` § user.md](../AGENTS.md#usermd-resolution-order) |
@@ -131,5 +132,6 @@ every adopter:
 ## See also
 
 - [`docs/vendor-neutrality.md`](vendor-neutrality.md) — the skills / tools / capabilities / organizations architecture.
+- [`docs/when-to-use-mods.md`](when-to-use-mods.md) — rules and decision rubric for additive Claude Code mods in family plugins.
 - [`docs/adapters/registry.md`](adapters/registry.md) — discovery index of in-tree and external adapters.
 - [`organizations/README.md`](../organizations/README.md) — the organization entity and its resolution order.
