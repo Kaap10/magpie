@@ -1,0 +1,22 @@
+{
+  "read_fully_layers": [
+    3,
+    6
+  ],
+  "exemplar_layers": [
+    1,
+    2,
+    4
+  ],
+  "skipped_layers": [
+    5
+  ],
+  "tier_a_read_in_full": true,
+  "demoted_layers": [
+    1,
+    2,
+    4
+  ],
+  "has_sampled_tag_in_note": true,
+  "has_no_forbidden_wording_in_note": true
+}
