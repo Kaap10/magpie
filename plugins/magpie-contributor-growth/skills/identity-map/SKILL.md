@@ -7,7 +7,7 @@ mode: Triage
 requires_config:
   - project.md
 description: |
-  Map a contributor's GitHub handle to their Slack, Discord, Matrix,
+  Map a contributor's code-host or community handle to their Slack, Discord, Matrix,
   mailing-list, and social-media identities. Infers each mapping from
   the sources the session can reach, grades the evidence, and records
   only what the maintainer confirms, in a project-wide identity file
@@ -23,7 +23,7 @@ argument-hint: "<github-handle>[,<github-handle>...] [context:standalone|onboard
 capability: capability:intake
 surface_hash: sha256:78eccfcead182fca
 license: Apache-2.0
-measured_tokens: 3486
+measured_tokens: 3489
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0

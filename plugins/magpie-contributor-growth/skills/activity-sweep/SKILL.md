@@ -8,9 +8,9 @@ mode: Triage
 requires_config:
   - project.md
 description: |
-  Read-only GitHub activity card for a named contributor on `<upstream>`.
-  Summarizes PRs, reviews, issues, and comments over a configurable window.
-  GitHub-visible activity only; use `contributor-nomination` for a full brief.
+  Read-only activity card for a named contributor on `<upstream>` across
+  code-host and tracker surfaces. Code-host and tracker activity only; use
+  `contributor-nomination` for a full brief.
 when_to_use: |
   Invoke when asked "show me activity for <handle>", "what has <handle> been doing lately",
   or "give me a quick summary of <handle>'s contributions".
@@ -20,7 +20,7 @@ argument-hint: "<github-handle> [window:Nm]"
 capability: capability:stats
 surface_hash: sha256:a39919af92a37e2d
 license: Apache-2.0
-measured_tokens: 3490
+measured_tokens: 3482
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0

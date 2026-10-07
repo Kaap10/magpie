@@ -10,7 +10,7 @@ requires_config:
   - project.md
 description: |
   Read-only nomination brief for a named contributor on <upstream>.
-  Aggregates GitHub activity across contribution tracks, off-GitHub signal,
+  Aggregates code-host and tracker activity across contribution tracks, off-forge signal,
   and vendor-neutrality context for committer or PMC nomination threads.
   Surfaces information only: never rates the contributor or says whether they are ready.
 when_to_use: |
@@ -25,7 +25,7 @@ argument-hint: "<github-handle> [window:Nm] [target:committer|pmc]"
 capability: capability:stats
 surface_hash: sha256:d78eb556cf43aa79
 license: Apache-2.0
-measured_tokens: 5316
+measured_tokens: 5318
 ---
 
 <!-- SPDX-License-Identifier: Apache-2.0
