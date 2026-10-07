@@ -23,6 +23,10 @@ import * as os from 'node:os';
 import {
   checkSetupDrift,
   resolvePluginVersion,
+  parseLockfile,
+  parseLocalLockfile,
+  parsePep440,
+  comparePep440,
   register,
 } from './drift-check.ts';
 
@@ -57,192 +61,328 @@ describe('drift-check mod (Pilot 1)', () => {
     }
   });
 
-  it('returns not adopted when .apache-magpie.lock does not exist', () => {
-    const result = checkSetupDrift(workspaceDir, pluginDir);
-    assert.strictEqual(result.isAdopted, false);
-    assert.strictEqual(result.hasDrift, false);
-    assert.strictEqual(result.message, undefined);
+  describe('PEP 440 parsing and comparison', () => {
+    it('correctly compares numeric release segments (0.10.0 > 0.9.0)', () => {
+      assert.ok(comparePep440('0.10.0', '0.9.0') > 0);
+      assert.ok(comparePep440('0.9.0', '0.10.0') < 0);
+      assert.strictEqual(comparePep440('0.9.0', '0.9.0'), 0);
+    });
+
+    it('correctly orders development releases (0.2.0 > 0.2.0.dev202609110041)', () => {
+      assert.ok(comparePep440('0.2.0', '0.2.0.dev202609110041') > 0);
+      assert.ok(comparePep440('0.2.0.dev202609110041', '0.2.0') < 0);
+      assert.ok(comparePep440('0.9.0.dev202609262258', '0.2.0') > 0);
+    });
+
+    it('correctly orders pre-releases, final releases, and post-releases', () => {
+      assert.ok(comparePep440('1.0.0a1', '1.0.0b1') < 0);
+      assert.ok(comparePep440('1.0.0b1', '1.0.0rc1') < 0);
+      assert.ok(comparePep440('1.0.0rc1', '1.0.0') < 0);
+      assert.ok(comparePep440('1.0.0.post1', '1.0.0') > 0);
+    });
+
+    it('parses epochs and complex versions correctly', () => {
+      assert.ok(comparePep440('1!0.1.0', '0.9.0') > 0);
+      assert.strictEqual(parsePep440('invalid-version'), null);
+    });
   });
 
-  it('detects drift when lockfile is completely empty', () => {
-    fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.lock'), '');
+  describe('YAML scalar lockfile parsing', () => {
+    it('parses standard marketplace YAML lockfile with comments and list', () => {
+      const yaml = `# .apache-magpie.lock — committed; the project's floor.
+method:       marketplace
+url:          apache/magpie
+min_version:  0.2.0
 
-    const result = checkSetupDrift(workspaceDir, pluginDir);
-    assert.strictEqual(result.isAdopted, true);
-    assert.strictEqual(result.hasDrift, true);
-    assert.ok(result.message?.includes('Empty `.apache-magpie.lock`'));
+plugins:
+  - magpie-setup
+  - magpie-utilities
+`;
+      const lock = parseLockfile(yaml);
+      assert.strictEqual(lock.method, 'marketplace');
+      assert.strictEqual(lock.url, 'apache/magpie');
+      assert.strictEqual(lock.min_version, '0.2.0');
+      assert.deepStrictEqual(lock.plugins, ['magpie-setup', 'magpie-utilities']);
+    });
+
+    it('parses git-tag snapshot YAML lockfile', () => {
+      const yaml = `method: git-tag
+url:    https://github.com/apache/magpie.git
+ref:    v1.0.0
+commit: abc1234
+`;
+      const lock = parseLockfile(yaml);
+      assert.strictEqual(lock.method, 'git-tag');
+      assert.strictEqual(lock.ref, 'v1.0.0');
+      assert.strictEqual(lock.commit, 'abc1234');
+    });
+
+    it('parses local fingerprint lockfile (.apache-magpie.local.lock)', () => {
+      const yaml = `# .apache-magpie.local.lock
+source_method:  git-tag
+source_url:     https://github.com/apache/magpie.git
+source_ref:     v1.0.0
+fetched_commit: abc1234
+fetched_at:     2026-10-07T00:00:00Z
+`;
+      const local = parseLocalLockfile(yaml);
+      assert.strictEqual(local.source_method, 'git-tag');
+      assert.strictEqual(local.source_ref, 'v1.0.0');
+      assert.strictEqual(local.fetched_commit, 'abc1234');
+    });
+
+    it('throws on malformed YAML syntax', () => {
+      assert.throws(() => parseLockfile('invalid line without colon'), /not a key: value line/);
+      assert.throws(() => parseLockfile('unknown_key: value'), /unknown key/);
+      assert.throws(() => parseLocalLockfile('unknown_local_key: value'), /unknown key/);
+    });
   });
 
-  it('returns no drift when lockfile version matches current plugin version', () => {
-    fs.writeFileSync(
-      path.join(workspaceDir, '.apache-magpie.lock'),
-      JSON.stringify({
-        version: '0.9.0',
-        ref: '0.9.0',
-        snapshot_commit: 'abc1234',
-      })
-    );
+  describe('checkSetupDrift workflow verification', () => {
+    it('returns not adopted when .apache-magpie.lock does not exist', () => {
+      const result = checkSetupDrift(workspaceDir, pluginDir);
+      assert.strictEqual(result.isAdopted, false);
+      assert.strictEqual(result.hasDrift, false);
+      assert.strictEqual(result.message, undefined);
+    });
 
-    const result = checkSetupDrift(workspaceDir, pluginDir);
-    assert.strictEqual(result.isAdopted, true);
-    assert.strictEqual(result.hasDrift, false);
-    assert.strictEqual(result.lockVersion, '0.9.0');
-    assert.strictEqual(result.currentVersion, '0.9.0');
-    assert.strictEqual(result.message, undefined);
+    it('detects drift when lockfile is completely empty', () => {
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.lock'), '');
+
+      const result = checkSetupDrift(workspaceDir, pluginDir);
+      assert.strictEqual(result.isAdopted, true);
+      assert.strictEqual(result.hasDrift, true);
+      assert.ok(result.message?.includes('Empty `.apache-magpie.lock`'));
+    });
+
+    it('detects drift when lockfile contains invalid / malformed YAML', () => {
+      fs.writeFileSync(
+        path.join(workspaceDir, '.apache-magpie.lock'),
+        'invalid yaml content {{{ no colons'
+      );
+
+      const result = checkSetupDrift(workspaceDir, pluginDir);
+      assert.strictEqual(result.isAdopted, true);
+      assert.strictEqual(result.hasDrift, true);
+      assert.ok(result.message?.includes('Malformed `.apache-magpie.lock`'));
+    });
+
+    it('satisfies marketplace floor when installed version meets or exceeds min_version', () => {
+      // Lock floor: 0.2.0, Installed: 0.9.0
+      const lockContent = `method:       marketplace
+url:          apache/magpie
+min_version:  0.2.0
+
+plugins:
+  - magpie-setup
+`;
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.lock'), lockContent);
+
+      const result = checkSetupDrift(workspaceDir, pluginDir);
+      assert.strictEqual(result.isAdopted, true);
+      assert.strictEqual(result.hasDrift, false);
+      assert.strictEqual(result.lockVersion, '0.2.0');
+      assert.strictEqual(result.currentVersion, '0.9.0');
+      assert.strictEqual(result.message, undefined);
+    });
+
+    it('detects drift when installed plugin is below marketplace adoption floor', () => {
+      // Lock floor: 1.0.0, Installed: 0.9.0
+      const lockContent = `method:       marketplace
+url:          apache/magpie
+min_version:  1.0.0
+
+plugins:
+  - magpie-setup
+`;
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.lock'), lockContent);
+
+      const result = checkSetupDrift(workspaceDir, pluginDir);
+      assert.strictEqual(result.isAdopted, true);
+      assert.strictEqual(result.hasDrift, true);
+      assert.strictEqual(result.lockVersion, '1.0.0');
+      assert.strictEqual(result.currentVersion, '0.9.0');
+      assert.ok(result.message?.includes('below adoption floor (1.0.0)'));
+    });
+
+    it('detects missing local snapshot lockfile for git-tag method', () => {
+      const lockContent = `method: git-tag
+url:    https://github.com/apache/magpie.git
+ref:    v1.0.0
+`;
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.lock'), lockContent);
+
+      const result = checkSetupDrift(workspaceDir, pluginDir);
+      assert.strictEqual(result.isAdopted, true);
+      assert.strictEqual(result.hasDrift, true);
+      assert.ok(result.message?.includes('Local snapshot lockfile missing'));
+    });
+
+    it('returns no drift when git-tag snapshot matches .apache-magpie.local.lock', () => {
+      const lockContent = `method: git-tag
+url:    https://github.com/apache/magpie.git
+ref:    v1.0.0
+`;
+      const localContent = `source_method:  git-tag
+source_url:     https://github.com/apache/magpie.git
+source_ref:     v1.0.0
+`;
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.lock'), lockContent);
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.local.lock'), localContent);
+
+      const result = checkSetupDrift(workspaceDir, pluginDir);
+      assert.strictEqual(result.isAdopted, true);
+      assert.strictEqual(result.hasDrift, false);
+      assert.strictEqual(result.lockVersion, 'v1.0.0');
+      assert.strictEqual(result.message, undefined);
+    });
+
+    it('detects snapshot drift when .apache-magpie.local.lock ref differs from committed pin', () => {
+      const lockContent = `method: git-tag
+url:    https://github.com/apache/magpie.git
+ref:    v1.1.0
+`;
+      const localContent = `source_method:  git-tag
+source_url:     https://github.com/apache/magpie.git
+source_ref:     v1.0.0
+`;
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.lock'), lockContent);
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.local.lock'), localContent);
+
+      const result = checkSetupDrift(workspaceDir, pluginDir);
+      assert.strictEqual(result.isAdopted, true);
+      assert.strictEqual(result.hasDrift, true);
+      assert.ok(result.message?.includes('Snapshot drift detected (v1.0.0 -> v1.1.0)'));
+    });
+
+    it('resolves plugin version correctly from candidate paths', () => {
+      const version = resolvePluginVersion(pluginDir);
+      assert.strictEqual(version, '0.9.0');
+    });
   });
 
-  it('detects drift when lockfile version differs from installed plugin version', () => {
-    fs.writeFileSync(
-      path.join(workspaceDir, '.apache-magpie.lock'),
-      JSON.stringify({
-        version: '0.8.0',
-        ref: '0.8.0',
-        snapshot_commit: 'oldcommit123',
-      })
-    );
+  describe('Claude Code hook registration and AbovePrompt UI', () => {
+    it('registers session.start and ui.render hooks and renders Box/Text view on drift', async () => {
+      // Marketplace floor 1.0.0 vs installed 0.9.0 triggers drift
+      const lockContent = `method:       marketplace
+url:          apache/magpie
+min_version:  1.0.0
 
-    const result = checkSetupDrift(workspaceDir, pluginDir);
-    assert.strictEqual(result.isAdopted, true);
-    assert.strictEqual(result.hasDrift, true);
-    assert.strictEqual(result.lockVersion, '0.8.0');
-    assert.strictEqual(result.currentVersion, '0.9.0');
-    assert.ok(result.message?.includes('0.8.0 -> 0.9.0'));
-    assert.ok(result.message?.includes('/magpie-setup upgrade'));
-  });
+plugins:
+  - magpie-setup
+`;
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.lock'), lockContent);
 
-  it('detects drift when lockfile contains invalid / malformed JSON', () => {
-    fs.writeFileSync(
-      path.join(workspaceDir, '.apache-magpie.lock'),
-      'invalid json content {{{'
-    );
+      const registeredHooks = new Map<string, Function>();
+      const mockOn = (event: string, ...args: any[]) => {
+        const handler = args[args.length - 1];
+        registeredHooks.set(event, handler);
+      };
 
-    const result = checkSetupDrift(workspaceDir, pluginDir);
-    assert.strictEqual(result.isAdopted, true);
-    assert.strictEqual(result.hasDrift, true);
-    assert.ok(result.message?.includes('Malformed `.apache-magpie.lock`'));
-  });
+      register(mockOn);
 
-  it('resolves plugin version correctly from candidate paths', () => {
-    const version = resolvePluginVersion(pluginDir);
-    assert.strictEqual(version, '0.9.0');
-  });
+      assert.ok(registeredHooks.has('session.start'));
+      assert.ok(registeredHooks.has('ui.render'));
 
-  it('registers session.start and ui.render hooks and renders Box/Text view', async () => {
-    fs.writeFileSync(
-      path.join(workspaceDir, '.apache-magpie.lock'),
-      JSON.stringify({
-        version: '0.7.5',
-      })
-    );
+      let nextCalled = false;
+      const mockNext = async (e: any) => {
+        nextCalled = true;
+        return e;
+      };
 
-    const registeredHooks = new Map<string, Function>();
+      let uiInvalidated = false;
+      const mock$ = {
+        session: {
+          root: () => workspaceDir,
+          cwd: () => workspaceDir,
+        },
+        plugin: {
+          root: pluginDir,
+        },
+        ui: {
+          invalidate: (target: string) => {
+            if (target === 'ui.render') {
+              uiInvalidated = true;
+            }
+          },
+          resolve: (_e: any) => ({
+            Box: (props: any) => ({ type: 'Box', ...props }),
+            Text: (props: any) => ({ type: 'Text', ...props }),
+          }),
+        },
+      };
 
-    const mockOn = (event: string, ...args: any[]) => {
-      const handler = args[args.length - 1];
-      registeredHooks.set(event, handler);
-    };
+      // 1. Fire session.start
+      const sessionStartHandler = registeredHooks.get('session.start')!;
+      await sessionStartHandler(mock$, {}, mockNext);
 
-    register(mockOn);
+      assert.strictEqual(nextCalled, true);
+      assert.strictEqual(uiInvalidated, true);
 
-    assert.ok(registeredHooks.has('session.start'));
-    assert.ok(registeredHooks.has('ui.render'));
+      // 2. Fire ui.render for AbovePrompt
+      let renderedResult: any = null;
+      const mockRenderNext = async (e: any) => {
+        renderedResult = e;
+        return e;
+      };
 
-    let nextCalled = false;
-    const mockNext = async (e: any) => {
-      nextCalled = true;
-      return e;
-    };
+      const uiRenderHandler = registeredHooks.get('ui.render')!;
+      await uiRenderHandler(mock$, {}, mockRenderNext);
 
-    let uiInvalidated = false;
-    const mock$ = {
-      session: {
-        root: () => workspaceDir,
-        cwd: () => workspaceDir,
-      },
-      plugin: {
-        root: pluginDir,
-      },
-      ui: {
-        invalidate: (target: string) => {
-          if (target === 'ui.render') {
+      assert.strictEqual(renderedResult?.view?.type, 'Box');
+      const textChild = renderedResult?.view?.children?.[0];
+      assert.strictEqual(textChild?.type, 'Text');
+      assert.ok(textChild?.text?.includes('below adoption floor (1.0.0)'));
+      assert.ok(textChild?.text?.includes('/magpie-setup upgrade'));
+    });
+
+    it('remains silent when session starts without drift (installed 0.9.0 >= floor 0.2.0)', async () => {
+      const lockContent = `method:       marketplace
+url:          apache/magpie
+min_version:  0.2.0
+
+plugins:
+  - magpie-setup
+`;
+      fs.writeFileSync(path.join(workspaceDir, '.apache-magpie.lock'), lockContent);
+
+      const registeredHooks = new Map<string, Function>();
+      register((event: string, ...args: any[]) => {
+        registeredHooks.set(event, args[args.length - 1]);
+      });
+
+      let uiInvalidated = false;
+      const mock$ = {
+        session: {
+          root: () => workspaceDir,
+          cwd: () => workspaceDir,
+        },
+        plugin: {
+          root: pluginDir,
+        },
+        ui: {
+          invalidate: () => {
             uiInvalidated = true;
-          }
+          },
+          resolve: () => ({
+            Box: (props: any) => props,
+            Text: (props: any) => props,
+          }),
         },
-        resolve: (_e: any) => ({
-          Box: (props: any) => ({ type: 'Box', ...props }),
-          Text: (props: any) => ({ type: 'Text', ...props }),
-        }),
-      },
-    };
+      };
 
-    // 1. Fire session.start
-    const sessionStartHandler = registeredHooks.get('session.start')!;
-    await sessionStartHandler(mock$, {}, mockNext);
+      const sessionStartHandler = registeredHooks.get('session.start')!;
+      await sessionStartHandler(mock$, {}, (e: any) => e);
+      assert.strictEqual(uiInvalidated, false);
 
-    assert.strictEqual(nextCalled, true);
-    assert.strictEqual(uiInvalidated, true);
+      let renderedResult: any = null;
+      const uiRenderHandler = registeredHooks.get('ui.render')!;
+      await uiRenderHandler(mock$, {}, (e: any) => {
+        renderedResult = e;
+        return e;
+      });
 
-    // 2. Fire ui.render for AbovePrompt
-    let renderedResult: any = null;
-    const mockRenderNext = async (e: any) => {
-      renderedResult = e;
-      return e;
-    };
-
-    const uiRenderHandler = registeredHooks.get('ui.render')!;
-    await uiRenderHandler(mock$, {}, mockRenderNext);
-
-    assert.strictEqual(renderedResult?.view?.type, 'Box');
-    const textChild = renderedResult?.view?.children?.[0];
-    assert.strictEqual(textChild?.type, 'Text');
-    assert.ok(textChild?.text?.includes('0.7.5 -> 0.9.0'));
-    assert.ok(textChild?.text?.includes('/magpie-setup upgrade'));
-  });
-
-  it('remains silent when session starts without drift', async () => {
-    fs.writeFileSync(
-      path.join(workspaceDir, '.apache-magpie.lock'),
-      JSON.stringify({
-        version: '0.9.0',
-      })
-    );
-
-    const registeredHooks = new Map<string, Function>();
-    register((event: string, ...args: any[]) => {
-      registeredHooks.set(event, args[args.length - 1]);
+      assert.strictEqual(renderedResult?.view, undefined);
     });
-
-    let uiInvalidated = false;
-    const mock$ = {
-      session: {
-        root: () => workspaceDir,
-        cwd: () => workspaceDir,
-      },
-      plugin: {
-        root: pluginDir,
-      },
-      ui: {
-        invalidate: () => {
-          uiInvalidated = true;
-        },
-        resolve: () => ({
-          Box: (props: any) => props,
-          Text: (props: any) => props,
-        }),
-      },
-    };
-
-    const sessionStartHandler = registeredHooks.get('session.start')!;
-    await sessionStartHandler(mock$, {}, (e: any) => e);
-    assert.strictEqual(uiInvalidated, false);
-
-    let renderedResult: any = null;
-    const uiRenderHandler = registeredHooks.get('ui.render')!;
-    await uiRenderHandler(mock$, {}, (e: any) => {
-      renderedResult = e;
-      return e;
-    });
-
-    assert.strictEqual(renderedResult?.view, undefined);
   });
 });
