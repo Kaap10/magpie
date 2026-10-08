@@ -749,9 +749,22 @@ def check(fam: dict[str, set[str]]) -> list[str]:
     if not UPGRADE_HOOK.is_file():
         errors.append(f"{UPGRADE_HOOK}: missing (magpie-setup's SessionStart upgrade check)")
     setup_manifest = PLUGINS / "magpie-setup" / ".claude-plugin" / "plugin.json"
+    setup_hooks_manifest = PLUGINS / "magpie-setup" / "hooks" / "hooks.json"
     setup_data, _setup_err = load_json(setup_manifest)
-    if setup_data is not None and "check-upgrade.sh" not in json.dumps(setup_data.get("hooks", {})):
-        errors.append(f"{setup_manifest}: SessionStart hook does not reference check-upgrade.sh")
+    if setup_hooks_manifest.is_file():
+        hooks_data, hooks_err = load_json(setup_hooks_manifest)
+        if hooks_err:
+            errors.append(f"{setup_hooks_manifest}: {hooks_err}")
+        elif not isinstance(hooks_data.get("modules"), list) or not hooks_data.get("modules"):
+            errors.append(f"{setup_hooks_manifest}: 'modules' is missing or not a non-empty list")
+        if setup_data is not None and "hooks" in setup_data:
+            errors.append(
+                f"{setup_manifest}: declares inline 'hooks' while {setup_hooks_manifest} is present; "
+                "drop inline 'hooks' to avoid duplicate hooks collision in Claude Code"
+            )
+    else:
+        if setup_data is not None and "check-upgrade.sh" not in json.dumps(setup_data.get("hooks", {})):
+            errors.append(f"{setup_manifest}: SessionStart hook does not reference check-upgrade.sh")
     errors += check_setup_preflight_package()
 
     errors += check_setup_templates()
@@ -973,7 +986,7 @@ def fix(fam: dict[str, set[str]]) -> int:
             **shared,
             "skills": "./skills",
         }
-        if name == "magpie-setup":
+        if name == "magpie-setup" and not (pdir / "hooks" / "hooks.json").is_file():
             manifest["hooks"] = SETUP_HOOKS
         (pdir / ".claude-plugin" / "plugin.json").write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
