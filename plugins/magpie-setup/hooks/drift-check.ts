@@ -533,7 +533,7 @@ export function register(on: any): void {
   let driftNotice: string | null = null;
 
   // 1. Hook session.start to check for lockfile drift
-  on('session.start', async ($: any, e: any, next?: any) => {
+  on('session.start', async ($: any) => {
     try {
       const fsApi: FsApi = $?.fs;
 
@@ -567,39 +567,28 @@ export function register(on: any): void {
     } catch {
       // Safe no-op on exception
     }
-
-    if (typeof next === 'function') {
-      return next(e);
-    }
   });
 
   // 2. Hook ui.render to display AbovePrompt drift banner if detected
-  on('ui.render', async ($: any, e: any, next?: any) => {
+  on('ui.render', async ($: any) => {
     if (driftNotice && typeof $?.ui?.resolve === 'function') {
       try {
-        const { Box, Text } = $.ui.resolve(e);
+        const { Box, Text } = $.ui.resolve();
         if (Box && Text) {
-          return next({
-            ...e,
-            view: Box({
-              padding: 0,
-              children: [
-                Text({
-                  text: `⚠ ${driftNotice}`,
-                  color: 'yellow',
-                  bold: true,
-                }),
-              ],
-            }),
+          return Box({
+            padding: 0,
+            children: [
+              Text({
+                text: `⚠ ${driftNotice}`,
+                color: 'yellow',
+                bold: true,
+              }),
+            ],
           });
         }
       } catch {
-        // Fallback cleanly to next
+        // Fallback cleanly
       }
-    }
-
-    if (typeof next === 'function') {
-      return next(e);
     }
   });
 }

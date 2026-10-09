@@ -330,12 +330,6 @@ plugins:
       assert(registeredHooks.has('session.start'));
       assert(registeredHooks.has('ui.render'));
 
-      let nextCalled = false;
-      const mockNext = async (e: any) => {
-        nextCalled = true;
-        return e;
-      };
-
       let uiInvalidated = false;
       const mock$ = {
         fs,
@@ -352,7 +346,7 @@ plugins:
               uiInvalidated = true;
             }
           },
-          resolve: (_e: any) => ({
+          resolve: () => ({
             Box: (props: any) => ({ type: 'Box', ...props }),
             Text: (props: any) => ({ type: 'Text', ...props }),
           }),
@@ -361,23 +355,16 @@ plugins:
 
       // 1. Fire session.start
       const sessionStartHandler = registeredHooks.get('session.start')!;
-      await sessionStartHandler(mock$, {}, mockNext);
+      await sessionStartHandler(mock$);
 
-      assertStrictEqual(nextCalled, true);
       assertStrictEqual(uiInvalidated, true);
 
       // 2. Fire ui.render for AbovePrompt
-      let renderedResult: any = null;
-      const mockRenderNext = async (e: any) => {
-        renderedResult = e;
-        return e;
-      };
-
       const uiRenderHandler = registeredHooks.get('ui.render')!;
-      await uiRenderHandler(mock$, {}, mockRenderNext);
+      const renderedResult = await uiRenderHandler(mock$);
 
-      assertStrictEqual(renderedResult?.view?.type, 'Box');
-      const textChild = renderedResult?.view?.children?.[0];
+      assertStrictEqual(renderedResult?.type, 'Box');
+      const textChild = renderedResult?.children?.[0];
       assertStrictEqual(textChild?.type, 'Text');
       assert(textChild?.text?.includes('below adoption floor (1.0.0)'));
       assert(textChild?.text?.includes('/magpie-setup upgrade'));
@@ -421,17 +408,13 @@ plugins:
       };
 
       const sessionStartHandler = registeredHooks.get('session.start')!;
-      await sessionStartHandler(mock$, {}, (e: any) => e);
+      await sessionStartHandler(mock$);
       assertStrictEqual(uiInvalidated, false);
 
-      let renderedResult: any = null;
       const uiRenderHandler = registeredHooks.get('ui.render')!;
-      await uiRenderHandler(mock$, {}, (e: any) => {
-        renderedResult = e;
-        return e;
-      });
+      const renderedResult = await uiRenderHandler(mock$);
 
-      assertStrictEqual(renderedResult?.view, undefined);
+      assertStrictEqual(renderedResult, undefined);
     });
   });
 });
