@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+//
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -15,43 +17,91 @@
 // specific language governing permissions and limitations
 // under the License.
 
-/**
- * Apache Magpie — Setup Drift Check Mod (Claude Code).
- *
- * Hooks `session.start` to deterministically verify whether the current
- * workspace has drifted from the installed Magpie plugin version or gitignored
- * snapshot, without burning prompt tokens on every session turn.
- *
- * Implements Pilot 1 of RFC-AI-0004 Claude Code Mods (Issue #1497).
- */
+import { atom, read, update } from 'claude-code';
 
-export interface FsApi {
-  existsSync(filePath: string): boolean;
-  readFileSync(filePath: string, encoding?: string): string;
+export const driftNotice = atom(
+  { plugin: 'magpie-setup', key: 'driftNotice' },
+  null as string | null
+);
+
+/**
+ * Parses a simple subset of YAML used for apache-magpie.lock files.
+ */
+function parseYamlLike(content: string): Record<string, any> {
+  const result: Record<string, any> = {};
+  const lines = content.split('\n');
+
+  let inList = false;
+  let currentListKey = '';
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) {
+      continue;
+    }
+
+    if (line.startsWith('- ')) {
+      if (inList && currentListKey) {
+        result[currentListKey].push(line.substring(2).trim());
+      }
+      continue;
+    }
+
+    const colonIndex = line.indexOf(':');
+    if (colonIndex > 0) {
+      const key = line.substring(0, colonIndex).trim();
+      const value = line.substring(colonIndex + 1).trim();
+
+      if (!value) {
+        inList = true;
+        currentListKey = key;
+        result[key] = [];
+      } else {
+        inList = false;
+        result[key] = value;
+      }
+    }
+  }
+
+  return result;
 }
 
 export interface LockfileData {
-  method?: string;
+  method: string;
   url?: string;
   min_version?: string;
   ref?: string;
   commit?: string;
-  sha512?: string;
-  source?: string;
   plugins?: string[];
-  reconciled?: {
-    version?: string;
-    at?: string;
-    skills?: Record<string, string>;
+}
+
+export function parseLockfile(content: string): LockfileData {
+  const parsed = parseYamlLike(content);
+  return {
+    method: parsed.method,
+    url: parsed.url,
+    min_version: parsed.min_version,
+    ref: parsed.ref,
+    commit: parsed.commit,
+    plugins: parsed.plugins,
   };
 }
 
 export interface LocalLockfileData {
-  source_method?: string;
-  source_url?: string;
+  method: string;
+  url?: string;
   source_ref?: string;
   fetched_commit?: string;
-  fetched_at?: string;
+}
+
+export function parseLocalLockfile(content: string): LocalLockfileData {
+  const parsed = parseYamlLike(content);
+  return {
+    method: parsed.method,
+    url: parsed.url,
+    source_ref: parsed.source_ref,
+    fetched_commit: parsed.fetched_commit,
+  };
 }
 
 export interface DriftCheckResult {
@@ -62,6 +112,37 @@ export interface DriftCheckResult {
   message?: string;
 }
 
+/**
+ * Joins path segments normalizing slashes.
+ */
+export function joinPath(...segments: string[]): string {
+  if (segments.length === 0) return '.';
+  const parts: string[] = [];
+  for (const seg of segments) {
+    if (!seg) continue;
+    const split = seg.split(/[/\\]+/);
+    for (const p of split) {
+      if (p === '..') {
+        if (parts.length > 0 && parts[parts.length - 1] !== '..') {
+          parts.pop();
+        } else {
+          parts.push('..');
+        }
+      } else if (p !== '.' && p !== '') {
+        parts.push(p);
+      } else if (p === '' && parts.length === 0) {
+        parts.push(''); // leading slash
+      }
+    }
+  }
+  const result = parts.join('/');
+  if (result === '') return '/';
+  if (segments[0].startsWith('/') && !result.startsWith('/')) {
+    return '/' + result;
+  }
+  return result || '.';
+}
+
 export interface Pep440Version {
   epoch: number;
   release: number[];
@@ -70,24 +151,7 @@ export interface Pep440Version {
   dev?: number;
 }
 
-/**
- * Zero-dependency path joiner to comply with strict sandbox module restrictions.
- */
-export function joinPath(...parts: (string | undefined)[]): string {
-  return parts
-    .filter((p): p is string => Boolean(p && typeof p === 'string'))
-    .map((p, i) => (i === 0 ? p.replace(/[\\/]+$/, '') : p.replace(/^[\\/]+|[\\/]+$/g, '')))
-    .filter(Boolean)
-    .join('/');
-}
-
-/**
- * Parse a PEP 440 version string.
- * Supports epochs (N!), release segments (N.N.N), pre-releases (a/b/rc),
- * post-releases (.postN), and dev-releases (.devN).
- */
 export function parsePep440(v: string): Pep440Version | null {
-  if (!v || typeof v !== 'string') return null;
   let s = v.trim().replace(/^v/i, '');
   if (!s) return null;
 
@@ -138,13 +202,6 @@ export function parsePep440(v: string): Pep440Version | null {
   return { epoch, release, pre, post, dev };
 }
 
-/**
- * Compare two PEP 440 version strings.
- * Returns < 0 if a < b, 0 if a == b, > 0 if a > b.
- *
- * Ordering:
- * 1.0.devN < 1.0aN < 1.0bN < 1.0rcN < 1.0 < 1.0.postN
- */
 export function comparePep440(aStr: string, bStr: string): number {
   const a = parsePep440(aStr);
   const b = parsePep440(bStr);
@@ -186,7 +243,6 @@ export function comparePep440(aStr: string, bStr: string): number {
 
   // Same phase comparisons:
   if (aPhase === -1) {
-    // Both are dev-only: compare dev numbers
     return (a.dev ?? 0) - (b.dev ?? 0);
   }
 
@@ -216,139 +272,27 @@ export function comparePep440(aStr: string, bStr: string): number {
 }
 
 /**
- * Line-oriented scalar parser for `.apache-magpie.lock` mirroring setup_preflight/lockfile.py.
+ * Resolves the currently executing plugin's version using provided fs adapters.
  */
-export function parseLockfile(text: string): LockfileData {
-  const lock: LockfileData = { plugins: [] };
-  let section: string | null = null;
+export async function resolvePluginVersion(
+  exists: (p: string) => Promise<boolean>,
+  read: (p: string) => Promise<string>,
+  pluginDir?: string
+): Promise<string | undefined> {
+  if (!pluginDir) return undefined;
 
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.split('#')[0].trimEnd();
-    if (!line.trim()) continue;
+  const candidatePaths = [
+    joinPath(pluginDir, '.claude-plugin', 'plugin.json'),
+    joinPath(pluginDir, 'package.json'),
+    joinPath(pluginDir, '..', 'package.json'),
+    joinPath(pluginDir, '..', '..', 'package.json')
+  ];
 
-    const indent = line.length - line.trimStart().length;
-    const body = line.trim();
-
-    if (indent === 0) {
-      section = null;
-      if (body.endsWith(':') && !body.slice(0, -1).includes(':')) {
-        const key = body.slice(0, -1).trim();
-        if (key === 'plugins') {
-          section = 'plugins';
-        } else if (key === 'reconciled') {
-          section = 'reconciled';
-          lock.reconciled = { skills: {} };
-        } else {
-          throw new Error(`unknown block: ${key}`);
-        }
-        continue;
-      }
-      if (!body.includes(':')) {
-        throw new Error(`not a key: value line: ${raw}`);
-      }
-      const [key, ...rest] = body.split(':');
-      const val = rest.join(':').trim();
-      const trimmedKey = key.trim();
-      if (['method', 'url', 'min_version', 'ref', 'commit', 'sha512', 'source'].includes(trimmedKey)) {
-        (lock as any)[trimmedKey] = val;
-      } else {
-        throw new Error(`unknown key: ${trimmedKey}`);
-      }
-      continue;
-    }
-
-    if (section === 'plugins') {
-      if (!body.startsWith('- ')) {
-        throw new Error(`not a plugins entry: ${raw}`);
-      }
-      lock.plugins!.push(body.slice(2).trim());
-      continue;
-    }
-
-    if (section === 'reconciled') {
-      if (body === 'skills:') {
-        section = 'reconciled.skills';
-        continue;
-      }
-      const [key, ...rest] = body.split(':');
-      const val = rest.join(':').trim();
-      const trimmedKey = key.trim();
-      if (trimmedKey === 'version' || trimmedKey === 'at') {
-        (lock.reconciled as any)[trimmedKey] = val;
-        continue;
-      }
-      throw new Error(`unknown reconciled key: ${trimmedKey}`);
-    }
-
-    if (section === 'reconciled.skills') {
-      const [key, ...rest] = body.split(':');
-      const val = rest.join(':').trim();
-      if (!val) {
-        throw new Error(`skill entry without a hash: ${raw}`);
-      }
-      lock.reconciled!.skills![key.trim()] = val;
-      continue;
-    }
-
-    throw new Error(`indented line outside any block: ${raw}`);
-  }
-
-  return lock;
-}
-
-/**
- * Line-oriented scalar parser for `.apache-magpie.local.lock`.
- */
-export function parseLocalLockfile(text: string): LocalLockfileData {
-  const local: LocalLockfileData = {};
-  const validKeys = new Set(['source_method', 'source_url', 'source_ref', 'fetched_commit', 'fetched_at']);
-
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.split('#')[0].trimEnd();
-    if (!line.trim()) continue;
-
-    if (line.startsWith(' ') || !line.includes(':')) {
-      throw new Error(`not a key: value line: ${raw}`);
-    }
-
-    const [key, ...rest] = line.split(':');
-    const trimmedKey = key.trim();
-    const val = rest.join(':').trim();
-
-    if (!validKeys.has(trimmedKey)) {
-      throw new Error(`unknown key: ${trimmedKey}`);
-    }
-
-    (local as any)[trimmedKey] = val;
-  }
-
-  return local;
-}
-
-/**
- * Resolve the plugin version from available plugin manifests via the harness filesystem API.
- */
-export function resolvePluginVersion(fsApi: FsApi, pluginDir?: string): string | undefined {
-  if (!fsApi || typeof fsApi.existsSync !== 'function' || typeof fsApi.readFileSync !== 'function') {
-    return undefined;
-  }
-
-  const candidates: string[] = [];
-
-  if (pluginDir) {
-    candidates.push(
-      joinPath(pluginDir, '.claude-plugin', 'plugin.json'),
-      joinPath(pluginDir, 'plugin.json'),
-      joinPath(pluginDir, '..', '.claude-plugin', 'plugin.json'),
-      joinPath(pluginDir, '..', 'plugin.json')
-    );
-  }
-
-  for (const candidate of candidates) {
+  for (const p of candidatePaths) {
     try {
-      if (fsApi.existsSync(candidate)) {
-        const raw = fsApi.readFileSync(candidate, 'utf-8');
-        const parsed = JSON.parse(raw);
+      if (await exists(p)) {
+        const content = await read(p);
+        const parsed = JSON.parse(content);
         if (parsed && typeof parsed.version === 'string' && parsed.version.trim()) {
           return parsed.version.trim();
         }
@@ -364,13 +308,14 @@ export function resolvePluginVersion(fsApi: FsApi, pluginDir?: string): string |
 /**
  * Core deterministic drift check between workspace lockfile and installed plugin/snapshot.
  */
-export function checkSetupDrift(
-  fsApi: FsApi,
+export async function checkSetupDrift(
+  exists: (p: string) => Promise<boolean>,
+  read: (p: string) => Promise<string>,
   workspaceDir: string,
   pluginDir?: string
-): DriftCheckResult {
+): Promise<DriftCheckResult> {
   try {
-    if (!fsApi || typeof fsApi.existsSync !== 'function' || typeof fsApi.readFileSync !== 'function') {
+    if (typeof exists !== 'function' || typeof read !== 'function') {
       return {
         isAdopted: false,
         hasDrift: false,
@@ -379,14 +324,15 @@ export function checkSetupDrift(
 
     const lockPath = joinPath(workspaceDir, '.apache-magpie.lock');
 
-    if (!fsApi.existsSync(lockPath)) {
+    if (!(await exists(lockPath))) {
       return {
         isAdopted: false,
         hasDrift: false,
       };
     }
 
-    const content = fsApi.readFileSync(lockPath, 'utf-8').trim();
+    const rawContent = await read(lockPath);
+    const content = rawContent.trim();
     if (!content) {
       return {
         isAdopted: true,
@@ -422,7 +368,7 @@ export function checkSetupDrift(
         };
       }
 
-      const currentVersion = resolvePluginVersion(fsApi, pluginDir);
+      const currentVersion = await resolvePluginVersion(exists, read, pluginDir);
       if (currentVersion) {
         // Floor semantics: drift only occurs when installed < min_version
         if (comparePep440(currentVersion, minVersion) < 0) {
@@ -455,7 +401,7 @@ export function checkSetupDrift(
       const localLockPath = joinPath(workspaceDir, '.apache-magpie.local.lock');
       const committedPin = lockData.ref || lockData.commit;
 
-      if (!fsApi.existsSync(localLockPath)) {
+      if (!(await exists(localLockPath))) {
         return {
           isAdopted: true,
           hasDrift: true,
@@ -465,7 +411,8 @@ export function checkSetupDrift(
         };
       }
 
-      const localContent = fsApi.readFileSync(localLockPath, 'utf-8').trim();
+      const rawLocalContent = await read(localLockPath);
+      const localContent = rawLocalContent.trim();
       if (!localContent) {
         return {
           isAdopted: true,
@@ -548,72 +495,71 @@ export function checkSetupDrift(
  * Event hook registration entry point for Claude Code.
  */
 export function register(on: any): void {
-  let driftNotice: string | null = null;
-
   // 1. Hook session.start to check for lockfile drift
-  on('session.start', async ($: any) => {
+  on('session.start', async ($: any, e: any, next: any) => {
     try {
-      const fsApi: FsApi = $.fs;
-      const session = $.session;
-      const plugin = $.plugin;
+      const workspaceDir = await $.session.root();
+      const pluginDir = $.plugin.root;
 
-      const workspaceDir =
-        (session && typeof session.root === 'function' ? session.root() : undefined) ||
-        (session && typeof session.cwd === 'function' ? session.cwd() : undefined) ||
-        $.workspacePath ||
-        $.cwd ||
-        '.';
+      const result = await checkSetupDrift(
+        async (p) => await $.fs.exists(p),
+        async (p) => await $.fs.read(p),
+        workspaceDir,
+        pluginDir
+      );
 
-      const pluginDir =
-        (plugin && plugin.root) ||
-        $.pluginPath ||
-        '..';
-
-      if (fsApi) {
-        const result = checkSetupDrift(fsApi, workspaceDir, pluginDir);
-
-        if (result.hasDrift && result.message) {
-          driftNotice = result.message;
-
-          const ui = $.ui;
-          if (ui && typeof ui.invalidate === 'function') {
-            ui.invalidate('ui.render');
-          } else if (ui && typeof ui.toast === 'function') {
-            ui.toast(result.message, { level: 'info' });
-          } else if (ui && typeof ui.banner === 'function') {
-            ui.banner(result.message);
-          }
+      if (result.hasDrift && result.message) {
+        await update($, driftNotice, () => result.message);
+        try {
+          $.ui.invalidate('ui.render');
+        } catch {
+          // fallback
         }
+      } else {
+        await update($, driftNotice, () => null);
       }
     } catch {
       // Safe no-op on exception
     }
+    if (typeof next === 'function') {
+      return next(e);
+    }
   });
 
   // 2. Hook ui.render to display AbovePrompt drift banner if detected
-  on('ui.render', async ($: any) => {
-    const ui = $.ui;
-    if (driftNotice && ui && typeof ui.resolve === 'function') {
-      try {
-        const { Box, Text } = ui.resolve();
-        if (Box && Text) {
-          return Box({
-            padding: 0,
-            children: [
-              Text({
-                text: `⚠ ${driftNotice}`,
-                color: 'yellow',
-                bold: true,
-              }),
-            ],
-          });
+  on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any, next: any) => {
+    const notice = await read($, driftNotice);
+    if (!notice) {
+      if (typeof next === 'function') return next(e);
+      return;
+    }
+
+    try {
+      const { Box, Text } = $.ui.resolve(e);
+      if (Box && Text) {
+        const view = Box({
+          padding: 0,
+          children: [
+            Text({
+              text: `\u26A0 ${notice}`,
+              color: 'yellow',
+              bold: true,
+            }),
+          ],
+        });
+        if (typeof next === 'function') {
+          return next({ ...e, view });
         }
-      } catch {
-        // Fallback cleanly
+        return view;
       }
+    } catch {
+      // Fallback cleanly
+    }
+
+    if (typeof next === 'function') {
+      return next(e);
     }
   });
 }
 
 export default register;
-
