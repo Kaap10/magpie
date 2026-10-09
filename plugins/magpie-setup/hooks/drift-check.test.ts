@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { describe, it } from 'claude-code/testing';
+import { describe, test } from 'claude-code/testing';
 import {
   checkSetupDrift,
   resolvePluginVersion,
@@ -101,33 +101,33 @@ describe('drift-check mod (Pilot 1)', () => {
   }
 
   describe('PEP 440 parsing and comparison', () => {
-    it('correctly compares numeric release segments (0.10.0 > 0.9.0)', () => {
+    test('correctly compares numeric release segments (0.10.0 > 0.9.0)', () => {
       assert(comparePep440('0.10.0', '0.9.0') > 0);
       assert(comparePep440('0.9.0', '0.10.0') < 0);
       assertStrictEqual(comparePep440('0.9.0', '0.9.0'), 0);
     });
 
-    it('correctly orders development releases (0.2.0 > 0.2.0.dev202609110041)', () => {
+    test('correctly orders development releases (0.2.0 > 0.2.0.dev202609110041)', () => {
       assert(comparePep440('0.2.0', '0.2.0.dev202609110041') > 0);
       assert(comparePep440('0.2.0.dev202609110041', '0.2.0') < 0);
       assert(comparePep440('0.9.0.dev202609262258', '0.2.0') > 0);
     });
 
-    it('correctly orders pre-releases, final releases, and post-releases', () => {
+    test('correctly orders pre-releases, final releases, and post-releases', () => {
       assert(comparePep440('1.0.0a1', '1.0.0b1') < 0);
       assert(comparePep440('1.0.0b1', '1.0.0rc1') < 0);
       assert(comparePep440('1.0.0rc1', '1.0.0') < 0);
       assert(comparePep440('1.0.0.post1', '1.0.0') > 0);
     });
 
-    it('parses epochs and complex versions correctly', () => {
+    test('parses epochs and complex versions correctly', () => {
       assert(comparePep440('1!0.1.0', '0.9.0') > 0);
       assertStrictEqual(parsePep440('invalid-version'), null);
     });
   });
 
   describe('YAML scalar lockfile parsing', () => {
-    it('parses standard marketplace YAML lockfile with comments and list', () => {
+    test('parses standard marketplace YAML lockfile with comments and list', () => {
       const yaml = `# .apache-magpie.lock — committed; the project's floor.
 method:       marketplace
 url:          apache/magpie
@@ -144,7 +144,7 @@ plugins:
       assertDeepStrictEqual(lock.plugins, ['magpie-setup', 'magpie-utilities']);
     });
 
-    it('parses git-tag snapshot YAML lockfile', () => {
+    test('parses git-tag snapshot YAML lockfile', () => {
       const yaml = `method: git-tag
 url:    https://github.com/apache/magpie.git
 ref:    v1.0.0
@@ -156,7 +156,7 @@ commit: abc1234
       assertStrictEqual(lock.commit, 'abc1234');
     });
 
-    it('parses local fingerprint lockfile (.apache-magpie.local.lock)', () => {
+    test('parses local fingerprint lockfile (.apache-magpie.local.lock)', () => {
       const yaml = `# .apache-magpie.local.lock
 source_method:  git-tag
 source_url:     https://github.com/apache/magpie.git
@@ -170,7 +170,7 @@ fetched_at:     2026-10-07T00:00:00Z
       assertStrictEqual(local.fetched_commit, 'abc1234');
     });
 
-    it('throws on malformed YAML syntax', () => {
+    test('throws on malformed YAML syntax', () => {
       assertThrows(() => parseLockfile('invalid line without colon'), /not a key: value line/);
       assertThrows(() => parseLockfile('unknown_key: value'), /unknown key/);
       assertThrows(() => parseLocalLockfile('unknown_local_key: value'), /unknown key/);
@@ -178,7 +178,7 @@ fetched_at:     2026-10-07T00:00:00Z
   });
 
   describe('checkSetupDrift workflow verification', () => {
-    it('returns not adopted when .apache-magpie.lock does not exist', () => {
+    test('returns not adopted when .apache-magpie.lock does not exist', () => {
       const fs = createTestEnv();
       const result = checkSetupDrift(fs, workspaceDir, pluginDir);
       assertStrictEqual(result.isAdopted, false);
@@ -186,7 +186,7 @@ fetched_at:     2026-10-07T00:00:00Z
       assertStrictEqual(result.message, undefined);
     });
 
-    it('detects drift when lockfile is completely empty', () => {
+    test('detects drift when lockfile is completely empty', () => {
       const fs = createTestEnv();
       fs.set(joinPath(workspaceDir, '.apache-magpie.lock'), '');
 
@@ -196,7 +196,7 @@ fetched_at:     2026-10-07T00:00:00Z
       assert(result.message?.includes('Empty `.apache-magpie.lock`'));
     });
 
-    it('detects drift when lockfile contains invalid / malformed YAML', () => {
+    test('detects drift when lockfile contains invalid / malformed YAML', () => {
       const fs = createTestEnv();
       fs.set(
         joinPath(workspaceDir, '.apache-magpie.lock'),
@@ -209,7 +209,7 @@ fetched_at:     2026-10-07T00:00:00Z
       assert(result.message?.includes('Malformed `.apache-magpie.lock`'));
     });
 
-    it('satisfies marketplace floor when installed version meets or exceeds min_version', () => {
+    test('satisfies marketplace floor when installed version meets or exceeds min_version', () => {
       const fs = createTestEnv();
       const lockContent = `method:       marketplace
 url:          apache/magpie
@@ -228,7 +228,7 @@ plugins:
       assertStrictEqual(result.message, undefined);
     });
 
-    it('detects drift when installed plugin is below marketplace adoption floor', () => {
+    test('detects drift when installed plugin is below marketplace adoption floor', () => {
       const fs = createTestEnv();
       const lockContent = `method:       marketplace
 url:          apache/magpie
@@ -247,7 +247,7 @@ plugins:
       assert(result.message?.includes('below adoption floor (1.0.0)'));
     });
 
-    it('detects missing local snapshot lockfile for git-tag method', () => {
+    test('detects missing local snapshot lockfile for git-tag method', () => {
       const fs = createTestEnv();
       const lockContent = `method: git-tag
 url:    https://github.com/apache/magpie.git
@@ -261,7 +261,7 @@ ref:    v1.0.0
       assert(result.message?.includes('Local snapshot lockfile missing'));
     });
 
-    it('returns no drift when git-tag snapshot matches .apache-magpie.local.lock', () => {
+    test('returns no drift when git-tag snapshot matches .apache-magpie.local.lock', () => {
       const fs = createTestEnv();
       const lockContent = `method: git-tag
 url:    https://github.com/apache/magpie.git
@@ -281,7 +281,7 @@ source_ref:     v1.0.0
       assertStrictEqual(result.message, undefined);
     });
 
-    it('detects snapshot drift when .apache-magpie.local.lock ref differs from committed pin', () => {
+    test('detects snapshot drift when .apache-magpie.local.lock ref differs from committed pin', () => {
       const fs = createTestEnv();
       const lockContent = `method: git-tag
 url:    https://github.com/apache/magpie.git
@@ -300,7 +300,7 @@ source_ref:     v1.0.0
       assert(result.message?.includes('Snapshot drift detected (v1.0.0 -> v1.1.0)'));
     });
 
-    it('resolves plugin version correctly from candidate paths', () => {
+    test('resolves plugin version correctly from candidate paths', () => {
       const fs = createTestEnv();
       const version = resolvePluginVersion(fs, pluginDir);
       assertStrictEqual(version, '0.9.0');
@@ -308,7 +308,7 @@ source_ref:     v1.0.0
   });
 
   describe('Claude Code hook registration and AbovePrompt UI', () => {
-    it('registers session.start and ui.render hooks and renders Box/Text view on drift', async () => {
+    test('registers session.start and ui.render hooks and renders Box/Text view on drift', async () => {
       const fs = createTestEnv();
       const lockContent = `method:       marketplace
 url:          apache/magpie
@@ -383,7 +383,7 @@ plugins:
       assert(textChild?.text?.includes('/magpie-setup upgrade'));
     });
 
-    it('remains silent when session starts without drift (installed 0.9.0 >= floor 0.2.0)', async () => {
+    test('remains silent when session starts without drift (installed 0.9.0 >= floor 0.2.0)', async () => {
       const fs = createTestEnv();
       const lockContent = `method:       marketplace
 url:          apache/magpie

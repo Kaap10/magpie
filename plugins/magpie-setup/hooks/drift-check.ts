@@ -529,11 +529,7 @@ export function checkSetupDrift(
 /**
  * Event hook registration entry point for Claude Code.
  */
-export function register(on: any, _options?: any): void {
-  if (typeof on !== 'function') {
-    return;
-  }
-
+export function register(on: any): void {
   let driftNotice: string | null = null;
 
   // 1. Hook session.start to check for lockfile drift
@@ -578,7 +574,7 @@ export function register(on: any, _options?: any): void {
   });
 
   // 2. Hook ui.render to display AbovePrompt drift banner if detected
-  on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any, next?: any) => {
+  on('ui.render', async ($: any, e: any, next?: any) => {
     if (driftNotice && typeof $?.ui?.resolve === 'function') {
       try {
         const { Box, Text } = $.ui.resolve(e);
