@@ -141,6 +141,9 @@ export function parsePep440(v: string): Pep440Version | null {
 /**
  * Compare two PEP 440 version strings.
  * Returns < 0 if a < b, 0 if a == b, > 0 if a > b.
+ *
+ * Ordering:
+ * 1.0.devN < 1.0aN < 1.0bN < 1.0rcN < 1.0 < 1.0.postN
  */
 export function comparePep440(aStr: string, bStr: string): number {
   const a = parsePep440(aStr);
@@ -163,35 +166,50 @@ export function comparePep440(aStr: string, bStr: string): number {
     }
   }
 
-  const getPreRank = (v: Pep440Version) => {
-    if (!v.pre) return 3;
-    if (v.pre.type === 'a') return 0;
-    if (v.pre.type === 'b') return 1;
-    if (v.pre.type === 'rc') return 2;
-    return -1;
+  const getPhaseRank = (v: Pep440Version) => {
+    if (v.dev !== undefined && !v.pre && !v.post) return -1; // e.g. 1.0.dev1
+    if (v.pre) {
+      if (v.pre.type === 'a') return 0;
+      if (v.pre.type === 'b') return 1;
+      if (v.pre.type === 'rc') return 2;
+    }
+    if (v.post !== undefined) return 4; // e.g. 1.0.post1
+    return 3; // final release: 1.0
   };
 
-  const aPreRank = getPreRank(a);
-  const bPreRank = getPreRank(b);
+  const aPhase = getPhaseRank(a);
+  const bPhase = getPhaseRank(b);
 
-  if (aPreRank !== bPreRank) {
-    return aPreRank - bPreRank;
+  if (aPhase !== bPhase) {
+    return aPhase - bPhase;
   }
 
-  if (a.pre && b.pre && a.pre.num !== b.pre.num) {
-    return a.pre.num - b.pre.num;
+  // Same phase comparisons:
+  if (aPhase === -1) {
+    // Both are dev-only: compare dev numbers
+    return (a.dev ?? 0) - (b.dev ?? 0);
   }
 
-  const aPost = a.post ?? -1;
-  const bPost = b.post ?? -1;
-  if (aPost !== bPost) {
-    return aPost - bPost;
+  if (a.pre && b.pre) {
+    if (a.pre.num !== b.pre.num) {
+      return a.pre.num - b.pre.num;
+    }
+    const aDev = a.dev !== undefined ? a.dev : Infinity;
+    const bDev = b.dev !== undefined ? b.dev : Infinity;
+    if (aDev !== bDev) {
+      return aDev - bDev;
+    }
   }
 
-  const aDev = a.dev !== undefined ? a.dev : Infinity;
-  const bDev = b.dev !== undefined ? b.dev : Infinity;
-  if (aDev !== bDev) {
-    return aDev - bDev;
+  if (a.post !== undefined && b.post !== undefined) {
+    if (a.post !== b.post) {
+      return a.post - b.post;
+    }
+    const aDev = a.dev !== undefined ? a.dev : Infinity;
+    const bDev = b.dev !== undefined ? b.dev : Infinity;
+    if (aDev !== bDev) {
+      return aDev - bDev;
+    }
   }
 
   return 0;
@@ -535,18 +553,20 @@ export function register(on: any): void {
   // 1. Hook session.start to check for lockfile drift
   on('session.start', async ($: any) => {
     try {
-      const fsApi: FsApi = $?.fs;
+      const fsApi: FsApi = $.fs;
+      const session = $.session;
+      const plugin = $.plugin;
 
       const workspaceDir =
-        (typeof $?.session?.root === 'function' ? $.session.root() : undefined) ||
-        (typeof $?.session?.cwd === 'function' ? $.session.cwd() : undefined) ||
-        $?.workspacePath ||
-        $?.cwd ||
+        (session && typeof session.root === 'function' ? session.root() : undefined) ||
+        (session && typeof session.cwd === 'function' ? session.cwd() : undefined) ||
+        $.workspacePath ||
+        $.cwd ||
         '.';
 
       const pluginDir =
-        $?.plugin?.root ||
-        $?.pluginPath ||
+        (plugin && plugin.root) ||
+        $.pluginPath ||
         '..';
 
       if (fsApi) {
@@ -555,12 +575,13 @@ export function register(on: any): void {
         if (result.hasDrift && result.message) {
           driftNotice = result.message;
 
-          if (typeof $?.ui?.invalidate === 'function') {
-            $.ui.invalidate('ui.render');
-          } else if (typeof $?.ui?.toast === 'function') {
-            $.ui.toast(result.message, { level: 'info' });
-          } else if (typeof $?.ui?.banner === 'function') {
-            $.ui.banner(result.message);
+          const ui = $.ui;
+          if (ui && typeof ui.invalidate === 'function') {
+            ui.invalidate('ui.render');
+          } else if (ui && typeof ui.toast === 'function') {
+            ui.toast(result.message, { level: 'info' });
+          } else if (ui && typeof ui.banner === 'function') {
+            ui.banner(result.message);
           }
         }
       }
@@ -571,9 +592,10 @@ export function register(on: any): void {
 
   // 2. Hook ui.render to display AbovePrompt drift banner if detected
   on('ui.render', async ($: any) => {
-    if (driftNotice && typeof $?.ui?.resolve === 'function') {
+    const ui = $.ui;
+    if (driftNotice && ui && typeof ui.resolve === 'function') {
       try {
-        const { Box, Text } = $.ui.resolve();
+        const { Box, Text } = ui.resolve();
         if (Box && Text) {
           return Box({
             padding: 0,
@@ -594,3 +616,4 @@ export function register(on: any): void {
 }
 
 export default register;
+

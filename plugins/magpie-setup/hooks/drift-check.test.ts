@@ -120,6 +120,16 @@ describe('drift-check mod (Pilot 1)', () => {
       assert(comparePep440('1.0.0.post1', '1.0.0') > 0);
     });
 
+    test('development releases sort before alpha and pre-releases in PEP 440', () => {
+      assert(comparePep440('1.0.dev1', '1.0a1') < 0);
+      assert(comparePep440('1.0a1', '1.0b1') < 0);
+      assert(comparePep440('1.0b1', '1.0rc1') < 0);
+      assert(comparePep440('1.0rc1', '1.0') < 0);
+      assert(comparePep440('1.0a1.dev1', '1.0a1') < 0);
+      assert(comparePep440('1.0rc1.dev1', '1.0rc1') < 0);
+      assert(comparePep440('1.0.post1.dev1', '1.0.post1') < 0);
+    });
+
     test('parses epochs and complex versions correctly', () => {
       assert(comparePep440('1!0.1.0', '0.9.0') > 0);
       assertStrictEqual(parsePep440('invalid-version'), null);
@@ -415,6 +425,35 @@ plugins:
       const renderedResult = await uiRenderHandler(mock$);
 
       assertStrictEqual(renderedResult, undefined);
+    });
+
+    test('preserves check-upgrade.sh SessionStart hook alongside modules in hooks.json', () => {
+      const fs = createTestEnv();
+      const hooksJsonContent = JSON.stringify({
+        $schema: 'https://code.claude.com/schemas/hooks.json',
+        description: 'Apache Magpie — Claude Code mods for zero-token setup drift detection and workspace verification.',
+        hooks: {
+          SessionStart: [
+            {
+              matcher: 'startup',
+              hooks: [
+                {
+                  type: 'command',
+                  command: '${CLAUDE_PLUGIN_ROOT}/hooks/check-upgrade.sh',
+                  timeout: 10,
+                },
+              ],
+            },
+          ],
+        },
+        modules: ['./drift-check.ts'],
+      });
+
+      fs.set(joinPath(pluginDir, 'hooks', 'hooks.json'), hooksJsonContent);
+      const readContent = JSON.parse(fs.readFileSync(joinPath(pluginDir, 'hooks', 'hooks.json')));
+
+      assertStrictEqual(readContent.modules[0], './drift-check.ts');
+      assertStrictEqual(readContent.hooks.SessionStart[0].hooks[0].command, '${CLAUDE_PLUGIN_ROOT}/hooks/check-upgrade.sh');
     });
   });
 });
