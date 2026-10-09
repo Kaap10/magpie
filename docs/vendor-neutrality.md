@@ -164,7 +164,7 @@ with pluggable backends already include:
 | [`tools/forwarder-relay`](../tools/forwarder-relay/) | ASF Security relay, huntr.com, HackerOne triagers |
 | [`tools/scan-format`](../tools/scan-format/) | security-scanner report formats (ASVS reference) |
 | [`tools/vcs`](../tools/vcs/) | Git (complete), Mercurial (complete), Subversion, … (extension points) |
-| [`tools/typed-decision`](../tools/typed-decision/) | TypeSafe Jev API (cloud), local models via llama.cpp / Ollama (extension point) |
+| [`tools/typed-decision`](../tools/typed-decision/) | TypeSafe Jev API (cloud), in-tree local provider (Ollama / llama.cpp / vLLM) |
 | [`tools/people`](../tools/people/) | Forge / tracker accounts — GitHub (profile, collaborators, teams), Jira (profile lookup); GitLab, Forgejo, Bitbucket (extension points) |
 | [`tools/tracker`](../tools/tracker/) | Tracker activity queries — GitHub and Jira, both through [`tools/contributor-metrics`](../tools/contributor-metrics/) backends; GitLab, Forgejo, Bitbucket (extension points) |
 
@@ -178,9 +178,9 @@ vulnerability cross-reference client [`tools/osv`](../tools/osv/)
 implements the `contract:security-cross-ref` capability.
 Similarly, structured low-latency decisions sit behind the
 `contract:typed-decision` contract ([`tools/typed-decision`](../tools/typed-decision/)),
-with TypeSafe's Jev API as the initial reference backend and local
-inference (via llama.cpp, Ollama, or vLLM) tracked as the second backend to
-ensure cross-vendor choice.
+with TypeSafe's Jev API as the initial reference backend; a local
+OpenAI-compatible provider supports llama.cpp, Ollama, or vLLM as a second
+option for cross-vendor choice.
 
 The distinction Magpie enforces: **vendor-specific *integrations* are
 expected and welcome; vendor-specific *workflows* are forbidden.** A
@@ -217,7 +217,7 @@ contract for one vendor:
 | [`tools/forwarder-relay`](../tools/forwarder-relay/) | ASF-security ([`tools/gmail/asf-relay.md`](../tools/gmail/asf-relay.md)) | huntr.com, HackerOne |
 | [`tools/scan-format`](../tools/scan-format/) | ASVS | other scanner formats |
 | [`tools/vcs`](../tools/vcs/) | Git | Mercurial, Subversion, … |
-| [`tools/typed-decision`](../tools/typed-decision/) | TypeSafe Jev API | Local models (llama.cpp, Ollama, vLLM) ([#1431](https://github.com/apache/magpie/issues/1431)) |
+| [`tools/typed-decision`](../tools/typed-decision/) | TypeSafe Jev API, in-tree local provider (Ollama / llama.cpp / vLLM) ([#1431](https://github.com/apache/magpie/issues/1431)) | — |
 | [`tools/people`](../tools/people/) | [`tools/github`](../tools/github/operations.md#people) (every verb), [`tools/jira`](../tools/jira/README.md#people-and-contributor-activity-reads) (profile lookup) | GitLab, Forgejo, Bitbucket |
 | [`tools/tracker`](../tools/tracker/) | [`tools/github`](../tools/github/operations.md#contributor-activity-read-only), [`tools/jira`](../tools/jira/README.md#people-and-contributor-activity-reads) | GitLab, Forgejo, Bitbucket |
 
