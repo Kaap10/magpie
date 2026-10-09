@@ -25,8 +25,10 @@
  * Implements Pilot 1 of RFC-AI-0004 Claude Code Mods (Issue #1497).
  */
 
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+export interface FsApi {
+  existsSync(filePath: string): boolean;
+  readFileSync(filePath: string, encoding?: string): string;
+}
 
 export interface LockfileData {
   method?: string;
@@ -66,6 +68,17 @@ export interface Pep440Version {
   pre?: { type: string; num: number };
   post?: number;
   dev?: number;
+}
+
+/**
+ * Zero-dependency path joiner to comply with strict sandbox module restrictions.
+ */
+export function joinPath(...parts: (string | undefined)[]): string {
+  return parts
+    .filter((p): p is string => Boolean(p && typeof p === 'string'))
+    .map((p, i) => (i === 0 ? p.replace(/[\\/]+$/, '') : p.replace(/^[\\/]+|[\\/]+$/g, '')))
+    .filter(Boolean)
+    .join('/');
 }
 
 /**
@@ -295,32 +308,28 @@ export function parseLocalLockfile(text: string): LocalLockfileData {
 }
 
 /**
- * Resolve the plugin version from available plugin manifests.
+ * Resolve the plugin version from available plugin manifests via the harness filesystem API.
  */
-export function resolvePluginVersion(pluginDir?: string): string | undefined {
+export function resolvePluginVersion(fsApi: FsApi, pluginDir?: string): string | undefined {
+  if (!fsApi || typeof fsApi.existsSync !== 'function' || typeof fsApi.readFileSync !== 'function') {
+    return undefined;
+  }
+
   const candidates: string[] = [];
 
   if (pluginDir) {
     candidates.push(
-      path.join(pluginDir, '.claude-plugin', 'plugin.json'),
-      path.join(pluginDir, 'plugin.json'),
-      path.join(pluginDir, '..', '.claude-plugin', 'plugin.json'),
-      path.join(pluginDir, '..', 'plugin.json')
-    );
-  }
-
-  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || process.env.PLUGIN_ROOT;
-  if (pluginRoot) {
-    candidates.push(
-      path.join(pluginRoot, '.claude-plugin', 'plugin.json'),
-      path.join(pluginRoot, 'plugin.json')
+      joinPath(pluginDir, '.claude-plugin', 'plugin.json'),
+      joinPath(pluginDir, 'plugin.json'),
+      joinPath(pluginDir, '..', '.claude-plugin', 'plugin.json'),
+      joinPath(pluginDir, '..', 'plugin.json')
     );
   }
 
   for (const candidate of candidates) {
     try {
-      if (fs.existsSync(candidate)) {
-        const raw = fs.readFileSync(candidate, 'utf-8');
+      if (fsApi.existsSync(candidate)) {
+        const raw = fsApi.readFileSync(candidate, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed.version === 'string' && parsed.version.trim()) {
           return parsed.version.trim();
@@ -338,20 +347,28 @@ export function resolvePluginVersion(pluginDir?: string): string | undefined {
  * Core deterministic drift check between workspace lockfile and installed plugin/snapshot.
  */
 export function checkSetupDrift(
+  fsApi: FsApi,
   workspaceDir: string,
   pluginDir?: string
 ): DriftCheckResult {
   try {
-    const lockPath = path.join(workspaceDir, '.apache-magpie.lock');
-
-    if (!fs.existsSync(lockPath)) {
+    if (!fsApi || typeof fsApi.existsSync !== 'function' || typeof fsApi.readFileSync !== 'function') {
       return {
         isAdopted: false,
         hasDrift: false,
       };
     }
 
-    const content = fs.readFileSync(lockPath, 'utf-8').trim();
+    const lockPath = joinPath(workspaceDir, '.apache-magpie.lock');
+
+    if (!fsApi.existsSync(lockPath)) {
+      return {
+        isAdopted: false,
+        hasDrift: false,
+      };
+    }
+
+    const content = fsApi.readFileSync(lockPath, 'utf-8').trim();
     if (!content) {
       return {
         isAdopted: true,
@@ -387,7 +404,7 @@ export function checkSetupDrift(
         };
       }
 
-      const currentVersion = resolvePluginVersion(pluginDir);
+      const currentVersion = resolvePluginVersion(fsApi, pluginDir);
       if (currentVersion) {
         // Floor semantics: drift only occurs when installed < min_version
         if (comparePep440(currentVersion, minVersion) < 0) {
@@ -417,10 +434,10 @@ export function checkSetupDrift(
 
     // 2. Snapshot methods (git-tag, git-branch, svn-zip)
     if (method === 'git-tag' || method === 'git-branch' || method === 'svn-zip') {
-      const localLockPath = path.join(workspaceDir, '.apache-magpie.local.lock');
+      const localLockPath = joinPath(workspaceDir, '.apache-magpie.local.lock');
       const committedPin = lockData.ref || lockData.commit;
 
-      if (!fs.existsSync(localLockPath)) {
+      if (!fsApi.existsSync(localLockPath)) {
         return {
           isAdopted: true,
           hasDrift: true,
@@ -430,7 +447,7 @@ export function checkSetupDrift(
         };
       }
 
-      const localContent = fs.readFileSync(localLockPath, 'utf-8').trim();
+      const localContent = fsApi.readFileSync(localLockPath, 'utf-8').trim();
       if (!localContent) {
         return {
           isAdopted: true,
@@ -512,7 +529,7 @@ export function checkSetupDrift(
 /**
  * Event hook registration entry point for Claude Code.
  */
-export function register(on: any, options?: any): void {
+export function register(on: any, _options?: any): void {
   if (typeof on !== 'function') {
     return;
   }
@@ -522,30 +539,33 @@ export function register(on: any, options?: any): void {
   // 1. Hook session.start to check for lockfile drift
   on('session.start', async ($: any, e: any, next?: any) => {
     try {
+      const fsApi: FsApi = $?.fs;
+
       const workspaceDir =
         (typeof $?.session?.root === 'function' ? $.session.root() : undefined) ||
         (typeof $?.session?.cwd === 'function' ? $.session.cwd() : undefined) ||
         $?.workspacePath ||
         $?.cwd ||
-        process.cwd();
+        '.';
 
       const pluginDir =
         $?.plugin?.root ||
         $?.pluginPath ||
-        process.env.CLAUDE_PLUGIN_ROOT ||
-        path.resolve(__dirname, '..');
+        '..';
 
-      const result = checkSetupDrift(workspaceDir, pluginDir);
+      if (fsApi) {
+        const result = checkSetupDrift(fsApi, workspaceDir, pluginDir);
 
-      if (result.hasDrift && result.message) {
-        driftNotice = result.message;
+        if (result.hasDrift && result.message) {
+          driftNotice = result.message;
 
-        if (typeof $?.ui?.invalidate === 'function') {
-          $.ui.invalidate('ui.render');
-        } else if (typeof $?.ui?.toast === 'function') {
-          $.ui.toast(result.message, { level: 'info' });
-        } else if (typeof $?.ui?.banner === 'function') {
-          $.ui.banner(result.message);
+          if (typeof $?.ui?.invalidate === 'function') {
+            $.ui.invalidate('ui.render');
+          } else if (typeof $?.ui?.toast === 'function') {
+            $.ui.toast(result.message, { level: 'info' });
+          } else if (typeof $?.ui?.banner === 'function') {
+            $.ui.banner(result.message);
+          }
         }
       }
     } catch {
