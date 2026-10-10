@@ -528,7 +528,7 @@ export function register(on: any): void {
 
   // 2. Hook ui.render to display AbovePrompt drift banner if detected
   on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any, next: any) => {
-    const notice = await read($, driftNotice);
+    const notice = (await read($, driftNotice)) ?? e?.props?.notice;
     if (!notice) {
       if (typeof next === 'function') return next(e);
       return;
@@ -537,20 +537,16 @@ export function register(on: any): void {
     try {
       const { Box, Text } = $.ui.resolve(e);
       if (Box && Text) {
-        const view = Box({
+        return Box({
           padding: 0,
           children: [
             Text({
-              text: `\u26A0 ${notice}`,
-              color: 'yellow',
+              children: [`\u26A0 ${notice}`],
+              color: 'warning',
               bold: true,
             }),
           ],
         });
-        if (typeof next === 'function') {
-          return next({ ...e, view });
-        }
-        return view;
       }
     } catch {
       // Fallback cleanly

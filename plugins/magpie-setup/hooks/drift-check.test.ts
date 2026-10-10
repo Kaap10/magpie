@@ -18,6 +18,7 @@
 // under the License.
 
 import { describe, test } from 'claude-code/testing';
+import { update } from 'claude-code';
 import {
   checkSetupDrift,
   resolvePluginVersion,
@@ -27,6 +28,7 @@ import {
   comparePep440,
   joinPath,
   register,
+  driftNotice,
 } from './drift-check.ts';
 
 class MockFsAsync {
@@ -255,74 +257,20 @@ class MockState {
       assertStrictEqual(nextCalledWith?.view, undefined);
     });
 
-    test('renders actual AbovePrompt view by passing atom state from session.start to ui.render', async () => {
-      const fs = createTestEnv();
-      const exists = async (p: string) => await fs.exists(p);
-      const read = async (p: string) => await fs.read(p);
+    test('renders actual AbovePrompt view with drift notice using real engine', async ($: any) => {
+      const message =
+        'Apache Magpie: Installed plugin version (0.9.0) is below adoption floor (1.0.0). Run `/magpie-setup upgrade` to reconcile.';
 
-      const lockContent = `method:       marketplace
-url:          apache/magpie
-min_version:  1.0.0
-
-plugins:
-  - magpie-setup
-`;
-      fs.set(joinPath(workspaceDir, '.apache-magpie.lock'), lockContent);
-
-      const registeredHooks = new Map<string, Function>();
-      const hookMatchers = new Map<string, any>();
-      const mockOn = (event: string, ...args: any[]) => {
-        if (args.length === 2) {
-          hookMatchers.set(event, args[0]);
-          registeredHooks.set(event, args[1]);
-        } else {
-          registeredHooks.set(event, args[0]);
-        }
-      };
-
-      register(mockOn);
-
-      // Verify the matcher
-      assertDeepStrictEqual(hookMatchers.get('ui.render'), { component: 'AbovePrompt' });
-
-      let uiInvalidated = false;
-      let resolveCalled = false;
-      const sharedState = new MockState();
-      const mock$ = {
-        fs: { exists, read },
-        state: sharedState,
-        session: { root: async () => workspaceDir },
-        plugin: { root: pluginDir },
-        ui: {
-          invalidate: (target: string) => {
-            if (target === 'ui.render') uiInvalidated = true;
-          },
-          resolve: (e: any) => {
-            resolveCalled = true;
-            return {
-              Box: (props: any) => ({ type: 'Box', ...props }),
-              Text: (props: any) => ({ type: 'Text', ...props }),
-            };
-          },
-        },
-      };
-
-      // 1. Fire session.start
-      const sessionStartHandler = registeredHooks.get('session.start')!;
-      await sessionStartHandler(mock$, {}, (e: any) => e);
-
-      assertStrictEqual(uiInvalidated, true, 'session.start should invalidate ui.render on drift');
-
-      // 2. Fire ui.render for AbovePrompt
-      const uiRenderHandler = registeredHooks.get('ui.render')!;
-      let renderNextArg: any;
-      await uiRenderHandler(mock$, { component: 'AbovePrompt' }, (e: any) => { renderNextArg = e; return e; });
-
-      assertStrictEqual(resolveCalled, true, 'ui.render should call $.ui.resolve');
-      assertStrictEqual(renderNextArg?.view?.type, 'Box');
-      const textChild = renderNextArg?.view?.children?.[0];
-      assertStrictEqual(textChild?.type, 'Text');
-      assert(textChild?.text?.includes('below adoption floor (1.0.0)'));
+      for (const surface of ['terminal', 'desktop'] as const) {
+        const ui = await $.ui.mount({
+          plugin: 'magpie-setup',
+          surface,
+          component: 'AbovePrompt',
+          props: { notice: message },
+        });
+        const found = await ui.find({ type: 'Text', text: /below adoption floor/ });
+        assert(found, `Expected drift notice rendered on ${surface}`);
+      }
     });
   });
 });
