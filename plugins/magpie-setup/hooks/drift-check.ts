@@ -528,7 +528,7 @@ export function register(on: any): void {
 
   // 2. Hook ui.render to display AbovePrompt drift banner if detected
   on('ui.render', { component: 'AbovePrompt' }, async ($: any, e: any, next: any) => {
-    const notice = (await read($, driftNotice)) ?? e?.props?.notice;
+    const notice = await read($, driftNotice);
     if (!notice) {
       if (typeof next === 'function') return next(e);
       return;
