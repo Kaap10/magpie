@@ -208,8 +208,8 @@ ref:    v1.0.0
       on('fs.read', (_: any, e: any) => ({
         value: e.path.endsWith('.apache-magpie.lock')
           ? LOCK_BELOW_FLOOR
-          : e.path.endsWith('package.json')
-            ? JSON.stringify({ version: '0.9.0' })
+          : e.path.endsWith('.claude-plugin/plugin.json')
+            ? JSON.stringify({ name: 'magpie-setup', version: '0.9.0' })
             : '',
       }));
 
@@ -239,8 +239,8 @@ ref:    v1.0.0
       on('fs.read', (_: any, e: any) => ({
         value: e.path.endsWith('.apache-magpie.lock')
           ? LOCK_SATISFYING_FLOOR
-          : e.path.endsWith('package.json')
-            ? JSON.stringify({ version: '0.9.0' })
+          : e.path.endsWith('.claude-plugin/plugin.json')
+            ? JSON.stringify({ name: 'magpie-setup', version: '0.9.0' })
             : '',
       }));
 
