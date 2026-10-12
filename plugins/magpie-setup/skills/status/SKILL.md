@@ -148,7 +148,10 @@ python3 <framework>/skills/setup-status/scripts/collect_status.py
 `.apache-magpie/skills/setup-status/scripts/`; invoke it via the
 `magpie-setup-status` symlink's resolved path. The default output
 is the Markdown dashboard; pass `--format json` only when tooling
-needs the raw fields — see [`collect.md`](collect.md).)
+needs the raw fields — see [`collect.md`](collect.md). In Claude Code
+with mods enabled, the zero-token `/magpie-status` code command executes
+this collector directly via `$.process.run` with zero model turns and
+zero token cost.)
 
 > **OUTPUT CONTRACT — non-negotiable.** Present the script's
 > Markdown output **verbatim** (it is already GitHub-flavoured

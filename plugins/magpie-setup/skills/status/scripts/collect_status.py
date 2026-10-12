@@ -758,6 +758,12 @@ def main(argv: list[str] | None = None) -> int:
         "gitignore": gitignore_coverage(root, targets),
     }
 
+    try:
+        if getattr(sys.stdout, "reconfigure", None):
+            sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
     if args.format == "md":
         sys.stdout.write(render_markdown(result))
     else:
