@@ -47,6 +47,7 @@ Run as a module:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -434,6 +435,14 @@ def scan_families(base: Path) -> dict[str, str]:
     if mirror.is_dir():
         for link in sorted(mirror.iterdir()):
             target = link.resolve()
+            if not target.is_dir() and link.is_file():
+                try:
+                    rel = link.read_text(encoding="utf-8").strip()
+                    cand = (link.parent / rel).resolve()
+                    if cand.is_dir():
+                        target = cand
+                except OSError:
+                    pass
             if target in by_dir:
                 found.setdefault(f"magpie-{link.name}", by_dir[target])
     return dict(sorted(found.items()))
@@ -448,6 +457,9 @@ def render_constant(mapping: dict[str, str]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        with contextlib.suppress(Exception):
+            sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="setup_preflight.welcome", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("list", help="print the guides that ship, one per line")

@@ -31,6 +31,7 @@ verdict is rendered, never written:
   on `PATH`).
 * `requires` — `requires_config:` entries passed as `--requires`.
 * `skill`, `hash` — the invoking skill's `name:` and `surface_hash:`.
+* `reconciled` — dict written to personal layer `reconciled.json`, or `null`.
 * `welcome` — `true` to include the skill family's first-run welcome guide.
   Left out otherwise (`--no-welcome`), so a floor case is about the floor
   and not about which family its skill happens to belong to.
@@ -72,6 +73,16 @@ def run_checker(state: dict[str, object], repo_root: Path, scratch: Path) -> str
         overrides = project / ".apache-magpie-overrides"
         overrides.mkdir()
         (overrides / "project.md").write_text("# project\n", encoding="utf-8")
+
+    reconciled = state.get("reconciled")
+    if reconciled is not None:
+        if not isinstance(reconciled, dict):
+            raise ValueError("`reconciled` must be a dict or null")
+        personal = (
+            (project / ".apache-magpie-local") if lock is not None else (project / ".git" / "apache-magpie")
+        )
+        personal.mkdir(parents=True, exist_ok=True)
+        (personal / "reconciled.json").write_text(json.dumps(reconciled), encoding="utf-8")
 
     listing = scratch / "plugins.json"
     plugins = state.get("plugins")
