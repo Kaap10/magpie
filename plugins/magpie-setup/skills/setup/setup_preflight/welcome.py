@@ -455,9 +455,6 @@ def render_constant(mapping: dict[str, str]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        with contextlib.suppress(Exception):
-            sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="setup_preflight.welcome", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("list", help="print the guides that ship, one per line")

@@ -426,6 +426,24 @@ def test_list_prints_every_guide(capsys) -> None:
     assert capsys.readouterr().out.split() == welcome.guides()
 
 
+def _plugin_skill(base: Path, name: str, family: str) -> Path:
+    skill = base / "plugins" / f"magpie-{family}" / "skills" / name
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(f"---\nname: {name}\nfamily: {family}\n---\n", encoding="utf-8")
+    return skill
+
+
+def test_a_mirror_entry_checked_out_as_a_text_file_still_resolves(tmp_path: Path) -> None:
+    """Without symlink support git writes a link as a file holding its target path."""
+    _plugin_skill(tmp_path, "list-skills", "utilities")
+    mirror = tmp_path / "skills"
+    mirror.mkdir()
+    (mirror / "list-skills").write_text("../plugins/magpie-utilities/skills/list-skills\n", encoding="utf-8")
+    (mirror / "stray").write_text("../plugins/magpie-utilities/skills/missing\n", encoding="utf-8")
+
+    assert welcome.scan_families(tmp_path) == {"list-skills": "utilities", "magpie-list-skills": "utilities"}
+
+
 @pytest.mark.skipif(not (REPO_ROOT / "plugins").is_dir(), reason="needs the framework tree")
 def test_the_shipped_family_map_matches_the_framework_tree() -> None:
     """The prek hook keeps this in sync; a failure means it was bypassed."""
