@@ -17,8 +17,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { joinPath } from './drift-check.ts';
-
 export interface ProcessRunResult {
   exitCode: number;
   stdout: string;
@@ -29,6 +27,8 @@ export type ProcessRunner = (
   argv: readonly string[],
   init?: { cwd?: string; env?: Record<string, string>; timeoutMs?: number }
 ) => Promise<ProcessRunResult>;
+
+const PROCESS_TIMEOUT_MS = 30_000;
 
 /**
  * Executes collect_status.py deterministically via process runner (python3 or python).
@@ -46,15 +46,18 @@ export async function executeMagpieStatus(
     ? [scriptPath, '--format', 'json', '--pretty', '--repo', workspaceDir]
     : [scriptPath, '--format', 'md', '--repo', workspaceDir];
 
+  const runInit = {
+    cwd: workspaceDir,
+    env: { PYTHONIOENCODING: 'utf-8' },
+    timeoutMs: PROCESS_TIMEOUT_MS,
+  };
+
   // Try python3 first, fallback to python
   let result: ProcessRunResult | undefined;
   let executionError: Error | undefined;
 
   try {
-    result = await runProcess(['python3', ...collectorArgs], {
-      cwd: workspaceDir,
-      env: { PYTHONIOENCODING: 'utf-8' },
-    });
+    result = await runProcess(['python3', ...collectorArgs], runInit);
   } catch (err: any) {
     executionError = err instanceof Error ? err : new Error(String(err));
   }
@@ -62,10 +65,7 @@ export async function executeMagpieStatus(
   // If python3 failed to run (e.g. command not found) or returned non-zero, try python
   if (!result || result.exitCode !== 0) {
     try {
-      const fallbackResult = await runProcess(['python', ...collectorArgs], {
-        cwd: workspaceDir,
-        env: { PYTHONIOENCODING: 'utf-8' },
-      });
+      const fallbackResult = await runProcess(['python', ...collectorArgs], runInit);
       if (fallbackResult.exitCode === 0 || !result || result.exitCode === 127) {
         result = fallbackResult;
         if (fallbackResult.exitCode === 0) {
