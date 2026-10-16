@@ -7,11 +7,11 @@ A one-minute tour, then straight back to what you asked for.
 
 ## 🔄 The typical flow
 
-1. 📋 **List** skills — what is installed here and what is in the marketplace — *"list skills"*
+1. 📋 **List** the skills installed here, grouped by family — *"list skills"*
 2. ✍️ **Write** a new skill against framework conventions, with evals — *"write a skill"*
 3. ⚡ **Optimize** an existing skill for brevity and token efficiency — *"optimize a skill"*
 4. 🐛 **Report a framework issue** from where you hit it, after checking duplicates — *"report an issue"*
-5. 🔁 **Reconcile** skills across your repo and snapshot — *"reconcile skills"*
+5. 🔁 **Reconcile** two near-duplicate skills and classify where they drifted — *"reconcile <skill-A> and <skill-B>"*
 
 Nothing is written, modified, or posted without your OK.
 
@@ -32,7 +32,7 @@ Talk to Magpie in plain language:
 - *"write a skill that drafts PR release notes"*
 - *"optimize the write-skill instructions"*
 - *"file a bug about preflight caching"*
-- *"reconcile my local skills against the snapshot"*
+- *"have these two skill copies drifted?"*
 
 ## 🎨 Make it yours
 
@@ -40,7 +40,7 @@ Magpie ships default workflows and conventions.
 Change them by describing the change:
 
 - *"from now on, always add a smoke test when writing a skill"*
-- *"skip the marketplace check when listing skills"*
+- *"group the skill list by capability instead of family"*
 
 Each becomes an override for the utility skill it changes.
 Useful to everyone? *"Upstream this change to Magpie"* opens a generic `apache/magpie` PR for you to review first.

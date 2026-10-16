@@ -436,13 +436,11 @@ def scan_families(base: Path) -> dict[str, str]:
         for link in sorted(mirror.iterdir()):
             target = link.resolve()
             if not target.is_dir() and link.is_file():
-                try:
-                    rel = link.read_text(encoding="utf-8").strip()
-                    cand = (link.parent / rel).resolve()
+                # A checkout without symlink support stores a mirror entry as a text file holding its target path.
+                with contextlib.suppress(OSError):
+                    cand = (link.parent / link.read_text(encoding="utf-8").strip()).resolve()
                     if cand.is_dir():
                         target = cand
-                except OSError:
-                    pass
             if target in by_dir:
                 found.setdefault(f"magpie-{link.name}", by_dir[target])
     return dict(sorted(found.items()))
