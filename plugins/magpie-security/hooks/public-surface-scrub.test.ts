@@ -21,9 +21,12 @@ import { describe, test } from 'claude-code/testing';
 import {
   evaluatePublicSurfaceCommand,
   findForbiddenTerms,
-  isPrivateTrackerTarget,
-  parsePublicSurfaceCommand,
+  parseProjectManifest,
+  parseSubcommand,
   register,
+  resolvePath,
+  resolveProjectConfig,
+  splitShellCommands,
 } from './public-surface-scrub.ts';
 
 function assert(condition: any, message?: string): void {
@@ -67,6 +70,7 @@ describe('Deterministic Public-Surface Scrub mod (family:security)', () => {
       assert(findForbiddenTerms('Apply security-fix for session timeout').includes('security fix'));
       assert(findForbiddenTerms('Security patch for query builder').includes('security fix'));
       assert(findForbiddenTerms('Apply critical security-patch').includes('security fix'));
+      assert(findForbiddenTerms('Security advisory update').includes('security fix'));
       assert(findForbiddenTerms('Contact security@apache.org for details').includes('security mailing list'));
     });
 
@@ -96,173 +100,503 @@ describe('Deterministic Public-Surface Scrub mod (family:security)', () => {
     });
   });
 
-  describe('isPrivateTrackerTarget', () => {
-    test('identifies ASF security tracker repo format with -s suffix', () => {
-      assertStrictEqual(isPrivateTrackerTarget('gh pr comment 123 --repo airflow-s/airflow-s --body "Details"'), true);
-      assertStrictEqual(isPrivateTrackerTarget('gh pr create -R myorg/kafka-s -b "Fix"'), true);
-      assertStrictEqual(isPrivateTrackerTarget('gh issue view 5 -R org/security-tracker'), true);
-      assertStrictEqual(isPrivateTrackerTarget('gh pr view 10 -R org/repo-private'), true);
+  describe('parseProjectManifest & resolveProjectConfig', () => {
+    test('extracts tracker_repo and upstream_repo from markdown tables', () => {
+      const sample = `
+# Project Manifest
+| Key | Value | Purpose |
+|---|---|---|
+| \`tracker_repo\` | \`airflow-s/airflow-s\` | Private security tracker |
+| \`upstream_repo\` | \`apache/airflow\` | Public codebase where fixes land |
+`;
+      const parsed = parseProjectManifest(sample);
+      assertStrictEqual(parsed.trackerRepo, 'airflow-s/airflow-s');
+      assertStrictEqual(parsed.upstreamRepo, 'apache/airflow');
     });
 
-    test('returns false for public upstream repositories', () => {
-      assertStrictEqual(isPrivateTrackerTarget('gh pr create --repo apache/airflow --body "Details"'), false);
-      assertStrictEqual(isPrivateTrackerTarget('gh pr comment 123 -R apache/kafka -b "Fix"'), false);
-      assertStrictEqual(isPrivateTrackerTarget('git commit -m "Fix"'), false);
+    test('extracts tracker_repo and upstream_repo from yaml format', () => {
+      const sample = `
+tracker_repo: kafka-s/kafka-s
+upstream_repo: apache/kafka
+`;
+      const parsed = parseProjectManifest(sample);
+      assertStrictEqual(parsed.trackerRepo, 'kafka-s/kafka-s');
+      assertStrictEqual(parsed.upstreamRepo, 'apache/kafka');
+    });
+
+    test('ignores TODO placeholders in project.md template', () => {
+      const sample = `
+| tracker_repo | TODO: e.g. foo-s/foo-s |
+| upstream_repo | TODO: e.g. apache/foo |
+`;
+      const parsed = parseProjectManifest(sample);
+      assertStrictEqual(parsed.trackerRepo, undefined);
+      assertStrictEqual(parsed.upstreamRepo, undefined);
+    });
+
+    test('ignores "not used" descriptions and extracts clean slugs with annotations', () => {
+      const sample = `
+| tracker_repo | not used — Apache Magpie has no private security tracker; reports follow the ASF default process via security@apache.org |
+| upstream_repo | apache/magpie (derived from the upstream git remote) |
+`;
+      const parsed = parseProjectManifest(sample);
+      assertStrictEqual(parsed.trackerRepo, undefined);
+      assertStrictEqual(parsed.upstreamRepo, 'apache/magpie');
+    });
+
+    test('resolveProjectConfig probes in precedence order', async () => {
+      const mockFiles: Record<string, string> = {
+        '.apache-magpie-overrides/project.md': '| tracker_repo | overrides-s/tracker |\n| upstream_repo | apache/overrides |',
+      };
+
+      const resolved = await resolveProjectConfig(async (p) => mockFiles[p]);
+      assertStrictEqual(resolved.trackerRepo, 'overrides-s/tracker');
+      assertStrictEqual(resolved.upstreamRepo, 'apache/overrides');
+      assertStrictEqual(resolved.isTrackerCheckout, true);
     });
   });
 
-  describe('parsePublicSurfaceCommand', () => {
-    test('identifies clean git commit with -m', () => {
-      const parsed = parsePublicSurfaceCommand('git commit -m "Fix asset graph view"');
+  describe('splitShellCommands', () => {
+    test('splits on semicolons, conditional operators, pipes, and newlines', () => {
+      const raw = 'git status; git commit -m "Clean"\ngh pr create -t "Title" && git tag v1.0 || exit 1';
+      const parts = splitShellCommands(raw);
+      assertDeepStrictEqual(parts, [
+        'git status',
+        'git commit -m "Clean"',
+        'gh pr create -t "Title"',
+        'git tag v1.0',
+        'exit 1',
+      ]);
+    });
+
+    test('preserves semicolons and newlines inside quoted strings', () => {
+      const raw = 'git commit -m "Header line; second part\nThird line" ; git push';
+      const parts = splitShellCommands(raw);
+      assertStrictEqual(parts.length, 2);
+      assertStrictEqual(parts[0], 'git commit -m "Header line; second part\nThird line"');
+      assertStrictEqual(parts[1], 'git push');
+    });
+  });
+
+  describe('resolvePath', () => {
+    test('resolves relative path against git -C directory without node:path', () => {
+      assertStrictEqual(resolvePath('/path/to/upstream', 'msg.txt'), '/path/to/upstream/msg.txt');
+      assertStrictEqual(resolvePath('/path/to/upstream/', 'msg.txt'), '/path/to/upstream/msg.txt');
+      assertStrictEqual(resolvePath('/path/to/upstream', './msg.txt'), '/path/to/upstream/msg.txt');
+      assertStrictEqual(resolvePath('/path/to/upstream', '"msg.txt"'), '/path/to/upstream/msg.txt');
+      assertStrictEqual(resolvePath('/path/to/upstream', '/abs/msg.txt'), '/abs/msg.txt');
+      assertStrictEqual(resolvePath(undefined, 'msg.txt'), 'msg.txt');
+    });
+  });
+
+  describe('parseSubcommand', () => {
+    test('identifies git commit with -m and combined flags', () => {
+      const parsed = parseSubcommand('git commit -m "Fix asset graph view"');
       assertStrictEqual(parsed.isPublicSurfaceCommand, true);
       assertStrictEqual(parsed.commandType, 'git commit');
       assertDeepStrictEqual(parsed.extractedTexts, ['Fix asset graph view']);
-      assertDeepStrictEqual(parsed.referencedFiles, []);
+
+      const am = parseSubcommand('git commit -am "Fix view"');
+      assertDeepStrictEqual(am.extractedTexts, ['Fix view']);
+
+      const sam = parseSubcommand('git commit -sam "Signed and added"');
+      assertDeepStrictEqual(sam.extractedTexts, ['Signed and added']);
     });
 
-    test('identifies git commit with combined short flags like -am and -sm', () => {
-      const amParsed = parsePublicSurfaceCommand('git commit -am "Fix asset graph view"');
-      assertStrictEqual(amParsed.isPublicSurfaceCommand, true);
-      assertDeepStrictEqual(amParsed.extractedTexts, ['Fix asset graph view']);
+    test('identifies attached short options without whitespace (-m"...", -m\'...\', -mval, -Fpath)', () => {
+      const attachedM = parseSubcommand('git commit -m"Fix view"');
+      assertDeepStrictEqual(attachedM.extractedTexts, ['Fix view']);
 
-      const smParsed = parsePublicSurfaceCommand('git commit -sm "Fix asset graph view"');
-      assertStrictEqual(smParsed.isPublicSurfaceCommand, true);
-      assertDeepStrictEqual(smParsed.extractedTexts, ['Fix asset graph view']);
+      const attachedSingleM = parseSubcommand("git commit -m'Fix view'");
+      assertDeepStrictEqual(attachedSingleM.extractedTexts, ['Fix view']);
 
-      const samParsed = parsePublicSurfaceCommand('git commit -sam "Fix asset graph view"');
-      assertStrictEqual(samParsed.isPublicSurfaceCommand, true);
-      assertDeepStrictEqual(samParsed.extractedTexts, ['Fix asset graph view']);
+      const attachedBareM = parseSubcommand('git commit -mFixView');
+      assertDeepStrictEqual(attachedBareM.extractedTexts, ['FixView']);
+
+      const attachedF = parseSubcommand('git commit -Fmsg.txt');
+      assertDeepStrictEqual(attachedF.referencedFiles, ['msg.txt']);
+
+      const attachedT = parseSubcommand('gh pr create -t"Title" -b"Body"');
+      assert(attachedT.extractedTexts.includes('Title'));
+      assert(attachedT.extractedTexts.includes('Body'));
     });
 
-    test('identifies git -C <dir> commit with options that take arguments', () => {
-      const parsed = parsePublicSurfaceCommand('git -C /path/to/upstream commit -s -m "Fix asset graph view"');
-      assertStrictEqual(parsed.isPublicSurfaceCommand, true);
-      assertStrictEqual(parsed.commandType, 'git commit');
-      assertDeepStrictEqual(parsed.extractedTexts, ['Fix asset graph view']);
+    test('identifies git tag with annotated message or file', () => {
+      const tagM = parseSubcommand('git tag -a v1.0.0 -m "Release v1.0.0"');
+      assertStrictEqual(tagM.isPublicSurfaceCommand, true);
+      assertStrictEqual(tagM.commandType, 'git tag');
+      assertDeepStrictEqual(tagM.extractedTexts, ['Release v1.0.0']);
+
+      const tagF = parseSubcommand('git tag -F tag-notes.txt v1.0.0');
+      assertStrictEqual(tagF.isPublicSurfaceCommand, true);
+      assertDeepStrictEqual(tagF.referencedFiles, ['tag-notes.txt']);
+
+      // Lightweight tag without message is not a public surface publishing command
+      const bareTag = parseSubcommand('git tag v1.0.0');
+      assertStrictEqual(bareTag.isPublicSurfaceCommand, false);
     });
 
-    test('identifies git commit with multiple -m flags and flags in between', () => {
-      const parsed = parsePublicSurfaceCommand('git commit -s -m "Header line" -m "Body description"');
-      assertStrictEqual(parsed.isPublicSurfaceCommand, true);
-      assertDeepStrictEqual(parsed.extractedTexts, ['Header line', 'Body description']);
+    test('identifies gh pr edit and gh pr review', () => {
+      const edit = parseSubcommand('gh pr edit 123 --title "New Title" --body "New Body"');
+      assertStrictEqual(edit.isPublicSurfaceCommand, true);
+      assertStrictEqual(edit.commandType, 'gh pr edit');
+      assert(edit.extractedTexts.includes('New Title'));
+      assert(edit.extractedTexts.includes('New Body'));
+
+      const review = parseSubcommand('gh pr review 123 --body "Approved changes"');
+      assertStrictEqual(review.isPublicSurfaceCommand, true);
+      assertStrictEqual(review.commandType, 'gh pr review');
+      assertDeepStrictEqual(review.extractedTexts, ['Approved changes']);
     });
 
-    test('identifies git commit with -F message file', () => {
-      const parsed = parsePublicSurfaceCommand('git commit -F /tmp/commit-msg.txt');
-      assertStrictEqual(parsed.isPublicSurfaceCommand, true);
-      assertDeepStrictEqual(parsed.referencedFiles, ['/tmp/commit-msg.txt']);
+    test('identifies gh issue comment', () => {
+      const comment = parseSubcommand('gh issue comment 456 --body "Under investigation"');
+      assertStrictEqual(comment.isPublicSurfaceCommand, true);
+      assertStrictEqual(comment.commandType, 'gh pr comment');
+      assertDeepStrictEqual(comment.extractedTexts, ['Under investigation']);
     });
 
-    test('detects heredoc and shell pipeline usage', () => {
-      const heredocParsed = parsePublicSurfaceCommand("git commit -F - << 'EOF'\nFix CVE-2026-1234\nEOF");
-      assertStrictEqual(heredocParsed.isPublicSurfaceCommand, true);
-      assertStrictEqual(heredocParsed.hasComplexShellInput, true);
+    test('identifies gh api comment creation with -f body=... and quoted key-value pairs', () => {
+      const apiCmd = parseSubcommand('gh api repos/apache/airflow/issues/1/comments -f body="Fixed problem"');
+      assertStrictEqual(apiCmd.isPublicSurfaceCommand, true);
+      assertStrictEqual(apiCmd.commandType, 'gh api');
+      assertStrictEqual(apiCmd.targetRepo, 'apache/airflow');
+      assertDeepStrictEqual(apiCmd.extractedTexts, ['Fixed problem']);
 
-      const pipeParsed = parsePublicSurfaceCommand('echo "msg" | gh pr create --title "Title" --body-file -');
-      assertStrictEqual(pipeParsed.isPublicSurfaceCommand, true);
-      assertStrictEqual(pipeParsed.hasComplexShellInput, true);
+      const apiQuotedPair = parseSubcommand('gh api repos/apache/airflow/issues/1/comments -f "body=Fixed problem"');
+      assertDeepStrictEqual(apiQuotedPair.extractedTexts, ['Fixed problem']);
+
+      const apiField = parseSubcommand('gh api repos/apache/airflow/issues/1/comments --field "body=Fixed problem"');
+      assertDeepStrictEqual(apiField.extractedTexts, ['Fixed problem']);
+
+      const apiRawField = parseSubcommand("gh api repos/apache/airflow/issues/1/comments --raw-field 'body=Fixed problem'");
+      assertDeepStrictEqual(apiRawField.extractedTexts, ['Fixed problem']);
     });
 
-    test('identifies gh pr create with title, body, and body-file', () => {
-      const parsed = parsePublicSurfaceCommand('gh pr create --title "Neutral title" --body "Neutral body"');
-      assertStrictEqual(parsed.isPublicSurfaceCommand, true);
-      assertStrictEqual(parsed.commandType, 'gh pr create');
-      assert(parsed.extractedTexts.includes('Neutral title'));
-      assert(parsed.extractedTexts.includes('Neutral body'));
+    test('extracts git -C directory and -R target repo', () => {
+      const parsed = parseSubcommand('git -C /home/repo commit -m "Fix"');
+      assertStrictEqual(parsed.gitCwd, '/home/repo');
 
-      const fileParsed = parsePublicSurfaceCommand('gh pr create -t "Title" --body-file /tmp/pr.md');
-      assertStrictEqual(fileParsed.isPublicSurfaceCommand, true);
-      assertDeepStrictEqual(fileParsed.referencedFiles, ['/tmp/pr.md']);
+      const ghParsed = parseSubcommand('gh pr create -R apache/airflow -t "T" -b "B"');
+      assertStrictEqual(ghParsed.targetRepo, 'apache/airflow');
     });
 
-    test('skips public surface parsing when target is a private tracker repo', () => {
-      const parsed = parsePublicSurfaceCommand('gh pr comment 123 --repo airflow-s/airflow-s --body "Fixes CVE-2026-1"');
-      assertStrictEqual(parsed.isPrivateTrackerTarget, true);
-      assertStrictEqual(parsed.isPublicSurfaceCommand, false);
-    });
-
-    test('ignores non-public surface commands', () => {
-      assertStrictEqual(parsePublicSurfaceCommand('pytest tests/').isPublicSurfaceCommand, false);
-      assertStrictEqual(parsePublicSurfaceCommand('git status').isPublicSurfaceCommand, false);
-      assertStrictEqual(parsePublicSurfaceCommand('git diff HEAD~1').isPublicSurfaceCommand, false);
-      assertStrictEqual(parsePublicSurfaceCommand('uv run ruff check').isPublicSurfaceCommand, false);
-      assertStrictEqual(parsePublicSurfaceCommand('').isPublicSurfaceCommand, false);
+    test('detects dynamic inputs (heredoc, command substitution, variables, stdin pipe)', () => {
+      assertStrictEqual(parseSubcommand("git commit -F - << 'EOF'\nEOF").hasDynamicInput, true);
+      assertStrictEqual(parseSubcommand('git commit -m "$(cat msg.txt)"').hasDynamicInput, true);
+      assertStrictEqual(parseSubcommand('git commit -m "`echo test`"').hasDynamicInput, true);
+      assertStrictEqual(parseSubcommand('git commit -m "$COMMIT_MSG"').hasDynamicInput, true);
+      assertStrictEqual(parseSubcommand('git commit -F -').hasDynamicInput, true);
     });
   });
 
   describe('evaluatePublicSurfaceCommand', () => {
+    const defaultProject = {
+      trackerRepo: 'airflow-s/airflow-s',
+      upstreamRepo: 'apache/airflow',
+    };
+
     test('allows clean neutral commit', async () => {
-      const evaluation = await evaluatePublicSurfaceCommand('git commit -m "Fix asset graph view"');
-      assertStrictEqual(evaluation.blocked, false);
-      assertDeepStrictEqual(evaluation.matchedTerms, []);
-    });
-
-    test('blocks git commit -am containing CVE reference', async () => {
-      const evaluation = await evaluatePublicSurfaceCommand('git commit -am "Fix CVE-2026-5555 in connection test"');
-      assertStrictEqual(evaluation.blocked, true);
-      assert(evaluation.matchedTerms.includes('CVE reference'));
-    });
-
-    test('blocks git -C <dir> commit containing hyphenated vulnerability class', async () => {
-      const evaluation = await evaluatePublicSurfaceCommand('git -C /path/to/upstream commit -m "Fix SQL-injection in query"');
-      assertStrictEqual(evaluation.blocked, true);
-      assert(evaluation.matchedTerms.includes('SQL injection'));
-      assert(evaluation.reason?.includes('Apache Magpie Security Guard'));
-      assert(evaluation.reason?.includes('Confidentiality Rule'));
-    });
-
-    test('blocks commit reading message file that contains forbidden terms', async () => {
-      const mockFiles: Record<string, string> = {
-        '/tmp/msg.txt': 'Stop deserializing XCom values\n\nFixes arbitrary SQL injection in worker.',
-      };
-      const evaluation = await evaluatePublicSurfaceCommand('git commit -F /tmp/msg.txt', {
-        readFile: async (p) => mockFiles[p] || '',
+      const res = await evaluatePublicSurfaceCommand('git commit -m "Fix asset graph view"', {
+        projectConfig: defaultProject,
       });
-
-      assertStrictEqual(evaluation.blocked, true);
-      assert(evaluation.matchedTerms.includes('SQL injection'));
+      assertStrictEqual(res.blocked, false);
+      assertDeepStrictEqual(res.matchedTerms, []);
     });
 
-    test('blocks heredoc commit containing forbidden terms', async () => {
-      const heredocCmd = "git commit -F - << 'EOF'\nFix CVE-2026-1111: Critical SSRF vulnerability\nEOF";
-      const evaluation = await evaluatePublicSurfaceCommand(heredocCmd);
-      assertStrictEqual(evaluation.blocked, true);
-      assert(evaluation.matchedTerms.includes('CVE reference'));
-      assert(evaluation.matchedTerms.includes('SSRF'));
-      assert(evaluation.matchedTerms.includes('vulnerability'));
+    test('blocks git commit containing CVE reference', async () => {
+      const res = await evaluatePublicSurfaceCommand('git commit -m "Fix CVE-2026-1234 in webserver"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.reason?.includes('Apache Magpie Security Guard'));
+      assert(res.reason?.includes('Confidentiality Rule'));
     });
 
-    test('blocks piped command line containing forbidden terms', async () => {
-      const pipeCmd = 'echo "Fixes critical SSRF vulnerability" | gh pr create --title "Fix" --body-file -';
-      const evaluation = await evaluatePublicSurfaceCommand(pipeCmd);
-      assertStrictEqual(evaluation.blocked, true);
-      assert(evaluation.matchedTerms.includes('SSRF'));
-      assert(evaluation.matchedTerms.includes('vulnerability'));
+    test('blocks git commit with attached -m"..." (no whitespace)', async () => {
+      const res = await evaluatePublicSurfaceCommand('git commit -m"Fix CVE-2026-5555"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE reference'));
     });
 
-    test('allows private tracker commands even when mentioning CVEs and vulnerability classes', async () => {
-      const trackerCmd = 'gh pr comment 45 --repo apache/airflow-s --body "Confirmed SSRF fix for CVE-2026-1234"';
-      const evaluation = await evaluatePublicSurfaceCommand(trackerCmd);
-      assertStrictEqual(evaluation.blocked, false);
+    test('blocks git commit with attached -am"..." flag', async () => {
+      const res = await evaluatePublicSurfaceCommand('git commit -am"Prevent critical SSRF bug"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('SSRF'));
     });
 
-    test('honors maintainer escape hatch via env var', async () => {
-      const leakingCmd = 'git commit -m "Backport CVE-2026-1234 release notes"';
-      const evaluation = await evaluatePublicSurfaceCommand(leakingCmd, {
+    test('blocks git tag with forbidden terms in annotated message', async () => {
+      const res = await evaluatePublicSurfaceCommand('git tag -a v1.0.0 -m "Release with CVE-2026-1111 fix"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE reference'));
+    });
+
+    test('blocks gh pr edit containing forbidden terms', async () => {
+      const res = await evaluatePublicSurfaceCommand('gh pr edit 50 -R apache/airflow --title "Fix CVE-2026-9999"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE reference'));
+    });
+
+    test('blocks gh pr review containing forbidden terms', async () => {
+      const res = await evaluatePublicSurfaceCommand('gh pr review 50 -R apache/airflow --body "Looks good, fixes the SSRF"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('SSRF'));
+    });
+
+    test('blocks gh issue comment containing forbidden terms', async () => {
+      const res = await evaluatePublicSurfaceCommand('gh issue comment 50 -R apache/airflow -b "Confirmed auth-bypass vulnerability"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('auth bypass'));
+      assert(res.matchedTerms.includes('vulnerability'));
+    });
+
+    test('blocks gh api comment creation with forbidden terms', async () => {
+      const res = await evaluatePublicSurfaceCommand('gh api repos/apache/airflow/issues/1/comments -f body="Fixed CVE-2026-1000"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE reference'));
+    });
+
+    test('per-subcommand isolation: blocks leaking subcommand even if previous targets tracker', async () => {
+      const multiCmd = 'gh pr view 1 -R airflow-s/airflow-s; gh pr comment 2 -R apache/airflow -b "Fixes CVE-2026-9999 SSRF"';
+      const res = await evaluatePublicSurfaceCommand(multiCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('SSRF'));
+    });
+
+    test('newline separation: detects command separated by newline', async () => {
+      const newlineCmd = 'git status\ngit commit -m "Fix CVE-2026-1234 SSRF"';
+      const res = await evaluatePublicSurfaceCommand(newlineCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE reference'));
+    });
+
+    test('multi-command sequence: git commit clean && gh pr create leaking', async () => {
+      const seqCmd = 'git commit -m "Neutral message" && gh pr create -R apache/airflow -t "Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(seqCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE reference'));
+    });
+
+    test('fails closed if referenced message file cannot be read', async () => {
+      const res = await evaluatePublicSurfaceCommand('git commit -F missing.txt', {
+        projectConfig: defaultProject,
+        readFile: async () => null,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.reason?.includes('Referenced message file cannot be read') || res.reason?.includes('could not be read'));
+      assert(res.reason?.includes('missing.txt'));
+    });
+
+    test('resolves file path relative to git -C directory', async () => {
+      const mockFiles: Record<string, string> = {
+        '/upstream/msg.txt': 'Neutral headline\n\nFixes critical SSRF vulnerability.',
+      };
+      const res = await evaluatePublicSurfaceCommand('git -C /upstream commit -F msg.txt', {
+        projectConfig: defaultProject,
+        readFile: async (p) => mockFiles[p],
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('SSRF'));
+      assert(res.matchedTerms.includes('vulnerability'));
+    });
+
+    test('blocks dynamic input pipelines when forbidden terms appear in command line', async () => {
+      const pipeCmd = 'echo "Fixes critical SSRF vulnerability" | gh pr create -R apache/airflow -t "Fix" --body-file -';
+      const res = await evaluatePublicSurfaceCommand(pipeCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('SSRF'));
+    });
+
+    test('fails closed on indeterminate dynamic inputs (variables, command substitution, stdin, --fill)', async () => {
+      // Variable in commit message
+      const varCmd = await evaluatePublicSurfaceCommand('git commit -m "$COMMIT_MSG"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(varCmd.blocked, true);
+      assert(varCmd.matchedTerms.includes('dynamic input'));
+      assert(varCmd.reason?.includes('indeterminate dynamic input'));
+
+      // Command substitution
+      const subCmd = await evaluatePublicSurfaceCommand('git commit -m "$(cat /tmp/msg.txt)"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(subCmd.blocked, true);
+      assert(subCmd.matchedTerms.includes('dynamic input'));
+
+      // Piped stdin
+      const stdinCmd = await evaluatePublicSurfaceCommand('cat msg.txt | git commit -F -', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(stdinCmd.blocked, true);
+      assert(stdinCmd.matchedTerms.includes('dynamic input'));
+
+      // gh pr create --fill
+      const fillCmd = await evaluatePublicSurfaceCommand('gh pr create -R apache/airflow --fill', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(fillCmd.blocked, true);
+      assert(fillCmd.matchedTerms.includes('dynamic input'));
+    });
+
+    test('handles git commit --amend: blocks indeterminate reuse; allows clean explicit message', async () => {
+      // Amend without message flag reuses unverified prior commit -> blocked
+      const bareAmend = await evaluatePublicSurfaceCommand('git commit --amend', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(bareAmend.blocked, true);
+      assert(bareAmend.matchedTerms.includes('dynamic input'));
+
+      const noEditAmend = await evaluatePublicSurfaceCommand('git commit --amend --no-edit', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(noEditAmend.blocked, true);
+      assert(noEditAmend.matchedTerms.includes('dynamic input'));
+
+      // Amend with explicit clean message -> allowed
+      const cleanAmend = await evaluatePublicSurfaceCommand('git commit --amend -m "Update asset graph view"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(cleanAmend.blocked, false);
+
+      // Amend with explicit leaking message -> blocked on terms
+      const leakingAmend = await evaluatePublicSurfaceCommand('git commit --amend -m "Fix CVE-2026-9999 SSRF"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(leakingAmend.blocked, true);
+      assert(leakingAmend.matchedTerms.includes('CVE reference'));
+      assert(leakingAmend.matchedTerms.includes('SSRF'));
+    });
+
+    test('allows commands explicitly targeting the private security tracker', async () => {
+      const trackerCmd = 'gh pr comment 45 -R airflow-s/airflow-s -b "Confirmed SSRF fix for CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(trackerCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, false);
+    });
+
+    test('allows commands targeting other repositories (adopter docs, framework, etc.) and scopes strictly to upstream_repo', async () => {
+      // Adopter docs repo is not upstreamRepo -> passes unchecked
+      const docsRepoCmd = 'gh pr comment 45 -R apache/airflow-site -b "Update CVE-2026-1234 advisory docs"';
+      const docsRes = await evaluatePublicSurfaceCommand(docsRepoCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(docsRes.blocked, false);
+
+      // Framework repo is not upstreamRepo -> passes unchecked
+      const frameworkCmd = 'gh pr comment 1 -R apache/magpie -b "fix(generate-cve-json): CVE parser"';
+      const frameworkRes = await evaluatePublicSurfaceCommand(frameworkCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(frameworkRes.blocked, false);
+
+      // Upstream repo is strictly blocked
+      const upstreamCmd = 'gh pr comment 45 -R apache/airflow -b "Fix CVE-2026-1234"';
+      const upstreamRes = await evaluatePublicSurfaceCommand(upstreamCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(upstreamRes.blocked, true);
+      assert(upstreamRes.matchedTerms.includes('CVE reference'));
+
+      // If upstream_repo happens to contain 'private' or end in '-s', it does NOT fail open on naming
+      const upstreamWithPrivate = 'gh pr comment 45 -R myorg/foo-private -b "Fix SSRF"';
+      const resPrivate = await evaluatePublicSurfaceCommand(upstreamWithPrivate, {
+        projectConfig: { trackerRepo: 'other-s/other-s', upstreamRepo: 'myorg/foo-private' },
+      });
+      assertStrictEqual(resPrivate.blocked, true);
+      assert(resPrivate.matchedTerms.includes('SSRF'));
+
+      // Custom tracker repo not ending in '-s' is properly exempt
+      const customTrackerCmd = 'gh pr comment 1 -R apache/foo-security -b "Investigating CVE-2026-9999"';
+      const customTrackerRes = await evaluatePublicSurfaceCommand(customTrackerCmd, {
+        projectConfig: { trackerRepo: 'apache/foo-security', upstreamRepo: 'apache/foo' },
+      });
+      assertStrictEqual(customTrackerRes.blocked, false);
+
+      // When upstreamRepo is unconfigured or is the framework repo itself (apache/magpie), ordinary commits pass
+      const unconfiguredRes = await evaluatePublicSurfaceCommand('git commit -m "fix(generate-cve-json): handle CVE fields"', {
+        projectConfig: {},
+      });
+      assertStrictEqual(unconfiguredRes.blocked, false);
+
+      const magpieRepoRes = await evaluatePublicSurfaceCommand('git commit -m "fix(generate-cve-json): validate CVE schema"', {
+        projectConfig: { upstreamRepo: 'apache/magpie' },
+      });
+      assertStrictEqual(magpieRepoRes.blocked, false);
+
+      const magpiePrRes = await evaluatePublicSurfaceCommand('gh pr create -R apache/magpie -t "fix(generate-cve-json): fix vulnerability test"', {
+        projectConfig: { upstreamRepo: 'apache/magpie' },
+      });
+      assertStrictEqual(magpiePrRes.blocked, false);
+
+      // git -C in unrelated repo passes; git -C in upstream repo blocks
+      const unrelatedGitCwd = await evaluatePublicSurfaceCommand('git -C /home/user/magpie commit -m "fix: CVE test"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(unrelatedGitCwd.blocked, false);
+
+      const upstreamGitCwd = await evaluatePublicSurfaceCommand('git -C /home/user/airflow commit -m "fix: CVE-2026-1234"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(upstreamGitCwd.blocked, true);
+    });
+
+    test('escape hatch: cannot be bypassed from command-line injection', async () => {
+      const cmdWithInlineEnv = 'MAGPIE_ALLOW_EMBARGO_TERMS=1 git commit -m "CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmdWithInlineEnv, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE reference'));
+
+      const cmdWithFlag = 'git commit -m "CVE-2026-1234 --allow-embargo-terms"';
+      const res2 = await evaluatePublicSurfaceCommand(cmdWithFlag, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res2.blocked, true);
+      assert(res2.matchedTerms.includes('CVE reference'));
+    });
+
+    test('escape hatch: honored ONLY when set in environment by human', async () => {
+      const cmd = 'git commit -m "Backport CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: defaultProject,
         env: { MAGPIE_ALLOW_EMBARGO_TERMS: '1' },
       });
-      assertStrictEqual(evaluation.blocked, false);
+      assertStrictEqual(res.blocked, false);
     });
 
-    test('honors maintainer escape hatch via inline flag', async () => {
-      const leakingCmd = 'MAGPIE_ALLOW_EMBARGO_TERMS=1 git commit -m "Backport CVE-2026-1234"';
-      const evaluation = await evaluatePublicSurfaceCommand(leakingCmd);
-      assertStrictEqual(evaluation.blocked, false);
-    });
-
-    test('passes non-target commands through immediately', async () => {
-      const evaluation = await evaluatePublicSurfaceCommand('git log -n 5 --grep "CVE-"');
-      assertStrictEqual(evaluation.blocked, false);
+    test('blocking reason does NOT instruct agent how to bypass; tells to ask maintainer', async () => {
+      const res = await evaluatePublicSurfaceCommand('git commit -m "Fix CVE-2026-1234"', {
+        projectConfig: defaultProject,
+      });
+      assert(res.reason?.includes('consult an Apache Magpie security-team maintainer to review and set the environment bypass'));
+      assert(!res.reason?.includes('MAGPIE_ALLOW_EMBARGO_TERMS'));
+      assert(!res.reason?.includes('--allow-embargo-terms'));
     });
   });
 
@@ -290,7 +624,40 @@ describe('Deterministic Public-Surface Scrub mod (family:security)', () => {
       assertStrictEqual(result.success, true);
     });
 
-    test('intercepts and blocks leaking Bash tool call with combined -am flag returning error', async () => {
+    test('intercepts and blocks leaking Bash tool call returning error', async () => {
+      let registeredHook: any = null;
+      const on = (event: string, handler: any) => {
+        if (event === 'tool.call') {
+          registeredHook = handler;
+        }
+      };
+
+      register(on);
+
+      const mockProject = `
+| Key | Value |
+| tracker_repo | airflow-s/airflow-s |
+| upstream_repo | apache/airflow |
+`;
+
+      let nextCalled = false;
+      const mockEvent = {
+        tool: 'Bash',
+        input: { command: 'gh pr create -R apache/airflow -t "Fix CVE-2026-1111: SSRF vulnerability"' },
+      };
+      const next = () => {
+        nextCalled = true;
+      };
+
+      const result = await registeredHook({ fs: { read: async () => mockProject } }, mockEvent, next);
+      assertStrictEqual(nextCalled, false, 'next() must NOT be called on blocked commands');
+      assert(result.error, 'Error explanation must be returned');
+      assert(result.error.includes('Apache Magpie Security Guard'));
+      assert(result.error.includes('CVE reference'));
+      assert(result.error.includes('SSRF'));
+    });
+
+    test('allows Bash tool call when upstream_repo is not configured (e.g. magpie repo)', async () => {
       let registeredHook: any = null;
       const on = (event: string, handler: any) => {
         if (event === 'tool.call') {
@@ -303,18 +670,16 @@ describe('Deterministic Public-Surface Scrub mod (family:security)', () => {
       let nextCalled = false;
       const mockEvent = {
         tool: 'Bash',
-        input: { command: 'git -C /upstream commit -am "Fix CVE-2026-1111: SSRF vulnerability"' },
+        input: { command: 'git commit -m "fix(generate-cve-json): handle CVE fields"' },
       };
-      const next = () => {
+      const next = (e: any) => {
         nextCalled = true;
+        return { forwarded: e };
       };
 
       const result = await registeredHook({ fs: { read: async () => '' } }, mockEvent, next);
-      assertStrictEqual(nextCalled, false, 'next() must NOT be called on blocked commands');
-      assert(result.error, 'Error explanation must be returned');
-      assert(result.error.includes('Apache Magpie Security Guard'));
-      assert(result.error.includes('CVE reference'));
-      assert(result.error.includes('SSRF'));
+      assertStrictEqual(nextCalled, true, 'next() must be called when upstream_repo is not configured');
+      assertStrictEqual(result.forwarded.input.command, 'git commit -m "fix(generate-cve-json): handle CVE fields"');
     });
 
     test('passes non-Bash tools through to next() unchanged', async () => {
