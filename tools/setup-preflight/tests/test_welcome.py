@@ -87,6 +87,27 @@ def test_the_utilities_family_guide_comes_on_the_next_run(project: Path, version
     assert due(project, "list-skills") == [("general", "again")]
 
 
+def test_the_contributor_growth_family_guide_comes_on_the_next_run(project: Path, version) -> None:
+    for skill in (
+        "activity-sweep",
+        "calibrate",
+        "candidate-screen",
+        "committer-onboarding",
+        "contributor-to-committer",
+        "identity-map",
+        "nomination",
+        "onboarding-concierge",
+        "sentiment",
+    ):
+        assert welcome.family_of(skill) == "contributor-growth"
+
+    assert due(project, "activity-sweep") == [("general", "first-run")]
+    welcome.record(project, "general", "seen")
+    assert due(project, "activity-sweep") == [("contributor-growth", "first-run")]
+    welcome.record(project, "contributor-growth", "seen")
+    assert due(project, "activity-sweep") == [("general", "again")]
+
+
 def test_at_most_one_guide_per_run(project: Path, version) -> None:
     for _ in range(8):
         found = welcome_findings(project, SECURITY_SKILL)

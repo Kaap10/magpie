@@ -19,11 +19,15 @@ Nothing is ranked, decided, or posted without your OK.
 
 ## ⚙️ Configure it
 
-Key configurations to note:
+Each skill reads `project.md`, plus the file for its own job:
 
-- 🔒 **Private governance** — `<private-list>` access for nomination discussions and past vote calibration; never leaked to public surfaces
-- 📏 **Calibrated thresholds** — reference levels derived from past elections, deliberately relaxed; information only, never a readiness verdict
-- 🛠️ **Two ways to run Magpie** — personal install (`/magpie-setup:setup config`) or project adoption (`/magpie-setup:setup adopt`)
+- 📏 **Reference levels** — `committer-readiness.md` for the path-to-committer comparison, calibration and candidate screen; information only, never a readiness verdict
+- 📝 **Nominations** — `contributor-nomination-config.md` for briefs, calibration and screening
+- 🔒 **Private governance** — calibration reads past votes on `<private-list>`, so it also needs an approved model in `privacy-llm.md`; nothing from it reaches a public surface
+- 🤝 **Onboarding and sentiment** — `committer-onboarding-config.md`, `onboarding-concierge-config.md` and `contributor-sentiment-config.md`
+
+Configure it for yourself with `/magpie-setup:setup config`.
+Project adoption with `/magpie-setup:setup adopt` is a maintainer decision.
 
 ## 💬 Just ask
 
