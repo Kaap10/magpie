@@ -1,0 +1,97 @@
+[
+  {
+    "name": "CVE id",
+    "pattern": "\\bCVE-\\d{4}-\\d{4,}\\b",
+    "flags": "i"
+  },
+  {
+    "name": "CVE",
+    "pattern": "\\bCVEs?\\b",
+    "flags": "i"
+  },
+  {
+    "name": "vulnerability",
+    "pattern": "\\bvulnerab(?:le|ility|ilities)\\b",
+    "flags": "i"
+  },
+  {
+    "name": "security fix",
+    "pattern": "\\bsecurity[\\s_-]+fix(?:es|ed)?\\b",
+    "flags": "i"
+  },
+  {
+    "name": "advisory",
+    "pattern": "\\badvisor(?:y|ies)\\b",
+    "flags": "i"
+  },
+  {
+    "name": "security@",
+    "pattern": "\\bsecurity@",
+    "flags": "i"
+  },
+  {
+    "name": "CVE-tool URL",
+    "pattern": "cveprocess\\.apache\\.org",
+    "flags": "i"
+  },
+  {
+    "name": "exploit",
+    "pattern": "\\bexploit(?:s|able|ed)?\\b",
+    "flags": "i"
+  },
+  {
+    "name": "SSRF",
+    "pattern": "\\bSSRF\\b",
+    "flags": "i"
+  },
+  {
+    "name": "XSS",
+    "pattern": "\\bXSS\\b",
+    "flags": "i"
+  },
+  {
+    "name": "CSRF",
+    "pattern": "\\bCSRF\\b",
+    "flags": "i"
+  },
+  {
+    "name": "RCE",
+    "pattern": "\\bRCE\\b",
+    "flags": "i"
+  },
+  {
+    "name": "SQL injection",
+    "pattern": "\\bSQL[\\s_-]+injection\\b",
+    "flags": "i"
+  },
+  {
+    "name": "path traversal",
+    "pattern": "\\b(?:path|directory)[\\s_-]+traversal\\b",
+    "flags": "i"
+  },
+  {
+    "name": "remote code execution",
+    "pattern": "\\b(?:remote|arbitrary)[\\s_-]+code[\\s_-]+execution\\b",
+    "flags": "i"
+  },
+  {
+    "name": "privilege escalation",
+    "pattern": "\\bprivilege[\\s_-]+escalation\\b",
+    "flags": "i"
+  },
+  {
+    "name": "auth bypass",
+    "pattern": "\\b(?:auth|authentication|authorization)[\\s_-]+bypass\\b",
+    "flags": "i"
+  },
+  {
+    "name": "buffer overflow",
+    "pattern": "\\b(?:buffer|heap|stack)[\\s_-]+overflow\\b",
+    "flags": "i"
+  },
+  {
+    "name": "use-after-free",
+    "pattern": "\\buse[\\s_-]+after[\\s_-]+free\\b",
+    "flags": "i"
+  }
+]

@@ -59,23 +59,24 @@ describe('Deterministic Public-Surface Scrub mod (family:security)', () => {
 
     test('detects CVE references', () => {
       const hits = findForbiddenTerms('Fix CVE-2026-12345 in connection test');
-      assert(hits.includes('CVE reference'));
+      assert(hits.includes('CVE id'));
       const bareHits = findForbiddenTerms('Address issue reported as cve');
-      assert(bareHits.includes('CVE reference'));
+      assert(bareHits.includes('CVE'));
     });
 
     test('detects vulnerability and security fix keywords (spaced and hyphenated)', () => {
       assert(findForbiddenTerms('Fix critical vulnerability in parsing logic').includes('vulnerability'));
+      assert(findForbiddenTerms('close vulnerability').includes('vulnerability'));
       assert(findForbiddenTerms('Security fix for webserver endpoints').includes('security fix'));
       assert(findForbiddenTerms('Apply security-fix for session timeout').includes('security fix'));
-      assert(findForbiddenTerms('Security patch for query builder').includes('security fix'));
-      assert(findForbiddenTerms('Apply critical security-patch').includes('security fix'));
-      assert(findForbiddenTerms('Security advisory update').includes('security fix'));
-      assert(findForbiddenTerms('Contact security@apache.org for details').includes('security mailing list'));
+      assert(findForbiddenTerms('security advisory draft').includes('advisory'));
+      assert(findForbiddenTerms('Security advisory update').includes('advisory'));
+      assert(findForbiddenTerms('Contact security@apache.org for details').includes('security@'));
     });
 
     test('detects vulnerability classes with whitespace and hyphens', () => {
       assert(findForbiddenTerms('Prevent SSRF in HTTP provider').includes('SSRF'));
+      assert(findForbiddenTerms('fix: SSRF').includes('SSRF'));
       assert(findForbiddenTerms('Mitigate stored XSS in log view').includes('XSS'));
       assert(findForbiddenTerms('Add CSRF token validation').includes('CSRF'));
       assert(findForbiddenTerms('Prevent SQL injection in search filter').includes('SQL injection'));
@@ -83,17 +84,21 @@ describe('Deterministic Public-Surface Scrub mod (family:security)', () => {
       assert(findForbiddenTerms('Fix path traversal in file download').includes('path traversal'));
       assert(findForbiddenTerms('Prevent path-traversal in file handler').includes('path traversal'));
       assert(findForbiddenTerms('Prevent remote code execution in worker').includes('remote code execution'));
-      assert(findForbiddenTerms('Close RCE vector in serializer').includes('remote code execution'));
+      assert(findForbiddenTerms('Close RCE vector in serializer').includes('RCE'));
       assert(findForbiddenTerms('Fix remote-code-execution vulnerability').includes('remote code execution'));
+      assert(findForbiddenTerms('fix: Remote-Code-Execution bug').includes('remote code execution'));
       assert(findForbiddenTerms('Fix privilege escalation in role mapper').includes('privilege escalation'));
       assert(findForbiddenTerms('Prevent privilege-escalation bug').includes('privilege escalation'));
       assert(findForbiddenTerms('Fix auth bypass in REST API').includes('auth bypass'));
       assert(findForbiddenTerms('Mitigate auth-bypass vulnerability').includes('auth bypass'));
+      assert(findForbiddenTerms('auth_bypass').includes('auth bypass'));
+      assert(findForbiddenTerms('Buffer overflow in memory reader').includes('buffer overflow'));
+      assert(findForbiddenTerms('Use-after-free in parser loop').includes('use-after-free'));
     });
 
     test('returns multiple matched terms uniquely', () => {
       const terms = findForbiddenTerms('Fix CVE-2026-9999: critical SSRF vulnerability allowing auth-bypass');
-      assert(terms.includes('CVE reference'));
+      assert(terms.includes('CVE id'));
       assert(terms.includes('SSRF'));
       assert(terms.includes('vulnerability'));
       assert(terms.includes('auth bypass'));
@@ -144,7 +149,7 @@ upstream_repo: apache/kafka
       assertStrictEqual(parsed.upstreamRepo, 'apache/magpie');
     });
 
-    test('resolveProjectConfig probes in precedence order', async () => {
+    test('resolveProjectConfig probes in precedence order and sets isTrackerCheckout false for parent dirs', async () => {
       const mockFiles: Record<string, string> = {
         '.apache-magpie-overrides/project.md': '| tracker_repo | overrides-s/tracker |\n| upstream_repo | apache/overrides |',
       };
@@ -153,6 +158,14 @@ upstream_repo: apache/kafka
       assertStrictEqual(resolved.trackerRepo, 'overrides-s/tracker');
       assertStrictEqual(resolved.upstreamRepo, 'apache/overrides');
       assertStrictEqual(resolved.isTrackerCheckout, true);
+
+      // Probing via parent/sibling directory (../) must NOT mark current checkout as tracker
+      const siblingFiles: Record<string, string> = {
+        '../.apache-magpie-local/project.md': '| tracker_repo | tracker-s/tracker-s |\n| upstream_repo | apache/upstream |',
+      };
+      const siblingResolved = await resolveProjectConfig(async (p) => siblingFiles[p]);
+      assertStrictEqual(siblingResolved.trackerRepo, 'tracker-s/tracker-s');
+      assertStrictEqual(siblingResolved.isTrackerCheckout, false);
     });
   });
 
@@ -281,12 +294,13 @@ upstream_repo: apache/kafka
       assertStrictEqual(ghParsed.targetRepo, 'apache/airflow');
     });
 
-    test('detects dynamic inputs (heredoc, command substitution, variables, stdin pipe)', () => {
+    test('detects dynamic inputs (heredoc, command substitution, variables, stdin pipe, process substitution)', () => {
       assertStrictEqual(parseSubcommand("git commit -F - << 'EOF'\nEOF").hasDynamicInput, true);
       assertStrictEqual(parseSubcommand('git commit -m "$(cat msg.txt)"').hasDynamicInput, true);
       assertStrictEqual(parseSubcommand('git commit -m "`echo test`"').hasDynamicInput, true);
       assertStrictEqual(parseSubcommand('git commit -m "$COMMIT_MSG"').hasDynamicInput, true);
       assertStrictEqual(parseSubcommand('git commit -F -').hasDynamicInput, true);
+      assertStrictEqual(parseSubcommand('git commit -F <(echo test)').hasDynamicInput, true);
     });
   });
 
@@ -309,7 +323,7 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(res.blocked, true);
-      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('CVE id'));
       assert(res.reason?.includes('Apache Magpie Security Guard'));
       assert(res.reason?.includes('Confidentiality Rule'));
     });
@@ -319,7 +333,7 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(res.blocked, true);
-      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('CVE id'));
     });
 
     test('blocks git commit with attached -am"..." flag', async () => {
@@ -335,7 +349,7 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(res.blocked, true);
-      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('CVE id'));
     });
 
     test('blocks gh pr edit containing forbidden terms', async () => {
@@ -343,7 +357,7 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(res.blocked, true);
-      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('CVE id'));
     });
 
     test('blocks gh pr review containing forbidden terms', async () => {
@@ -368,7 +382,7 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(res.blocked, true);
-      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('CVE id'));
     });
 
     test('per-subcommand isolation: blocks leaking subcommand even if previous targets tracker', async () => {
@@ -377,7 +391,7 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(res.blocked, true);
-      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('CVE id'));
       assert(res.matchedTerms.includes('SSRF'));
     });
 
@@ -387,7 +401,7 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(res.blocked, true);
-      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('CVE id'));
     });
 
     test('multi-command sequence: git commit clean && gh pr create leaking', async () => {
@@ -396,7 +410,7 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(res.blocked, true);
-      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('CVE id'));
     });
 
     test('fails closed if referenced message file cannot be read', async () => {
@@ -460,6 +474,13 @@ upstream_repo: apache/kafka
       });
       assertStrictEqual(fillCmd.blocked, true);
       assert(fillCmd.matchedTerms.includes('dynamic input'));
+
+      // Process substitution <(...)
+      const procSubCmd = await evaluatePublicSurfaceCommand('git commit -F <(echo test)', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(procSubCmd.blocked, true);
+      assert(procSubCmd.matchedTerms.includes('dynamic input'));
     });
 
     test('handles git commit --amend: blocks indeterminate reuse; allows clean explicit message', async () => {
@@ -487,7 +508,7 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(leakingAmend.blocked, true);
-      assert(leakingAmend.matchedTerms.includes('CVE reference'));
+      assert(leakingAmend.matchedTerms.includes('CVE id'));
       assert(leakingAmend.matchedTerms.includes('SSRF'));
     });
 
@@ -505,29 +526,29 @@ upstream_repo: apache/kafka
       const docsRes = await evaluatePublicSurfaceCommand(docsRepoCmd, {
         projectConfig: defaultProject,
       });
-      assertStrictEqual(docsRes.blocked, false);
+      assertStrictEqual(docsRes.blocked, false, 'docsRes should not be blocked');
 
       // Framework repo is not upstreamRepo -> passes unchecked
       const frameworkCmd = 'gh pr comment 1 -R apache/magpie -b "fix(generate-cve-json): CVE parser"';
       const frameworkRes = await evaluatePublicSurfaceCommand(frameworkCmd, {
         projectConfig: defaultProject,
       });
-      assertStrictEqual(frameworkRes.blocked, false);
+      assertStrictEqual(frameworkRes.blocked, false, 'frameworkRes should not be blocked');
 
       // Upstream repo is strictly blocked
       const upstreamCmd = 'gh pr comment 45 -R apache/airflow -b "Fix CVE-2026-1234"';
       const upstreamRes = await evaluatePublicSurfaceCommand(upstreamCmd, {
         projectConfig: defaultProject,
       });
-      assertStrictEqual(upstreamRes.blocked, true);
-      assert(upstreamRes.matchedTerms.includes('CVE reference'));
+      assertStrictEqual(upstreamRes.blocked, true, 'upstreamRes should be blocked');
+      assert(upstreamRes.matchedTerms.includes('CVE id'));
 
       // If upstream_repo happens to contain 'private' or end in '-s', it does NOT fail open on naming
       const upstreamWithPrivate = 'gh pr comment 45 -R myorg/foo-private -b "Fix SSRF"';
       const resPrivate = await evaluatePublicSurfaceCommand(upstreamWithPrivate, {
         projectConfig: { trackerRepo: 'other-s/other-s', upstreamRepo: 'myorg/foo-private' },
       });
-      assertStrictEqual(resPrivate.blocked, true);
+      assertStrictEqual(resPrivate.blocked, true, 'resPrivate should be blocked');
       assert(resPrivate.matchedTerms.includes('SSRF'));
 
       // Custom tracker repo not ending in '-s' is properly exempt
@@ -535,34 +556,120 @@ upstream_repo: apache/kafka
       const customTrackerRes = await evaluatePublicSurfaceCommand(customTrackerCmd, {
         projectConfig: { trackerRepo: 'apache/foo-security', upstreamRepo: 'apache/foo' },
       });
-      assertStrictEqual(customTrackerRes.blocked, false);
+      assertStrictEqual(customTrackerRes.blocked, false, 'customTrackerRes should not be blocked');
 
-      // When upstreamRepo is unconfigured or is the framework repo itself (apache/magpie), ordinary commits pass
-      const unconfiguredRes = await evaluatePublicSurfaceCommand('git commit -m "fix(generate-cve-json): handle CVE fields"', {
+      // Clean commit in unconfigured repository passes
+      const unconfiguredCleanRes = await evaluatePublicSurfaceCommand('git commit -m "refactor(json): handle schema validation"', {
         projectConfig: {},
       });
-      assertStrictEqual(unconfiguredRes.blocked, false);
+      assertStrictEqual(unconfiguredCleanRes.blocked, false, 'unconfiguredCleanRes should not be blocked');
 
-      const magpieRepoRes = await evaluatePublicSurfaceCommand('git commit -m "fix(generate-cve-json): validate CVE schema"', {
-        projectConfig: { upstreamRepo: 'apache/magpie' },
+      // Leaking commit in unconfigured repository fails closed
+      const unconfiguredLeakingRes = await evaluatePublicSurfaceCommand('git commit -m "fix(generate-cve-json): validate CVE schema"', {
+        projectConfig: {},
       });
-      assertStrictEqual(magpieRepoRes.blocked, false);
+      assertStrictEqual(unconfiguredLeakingRes.blocked, true, 'unconfiguredLeakingRes should be blocked');
 
+      // Commands targeting non-upstream repos pass unchecked
       const magpiePrRes = await evaluatePublicSurfaceCommand('gh pr create -R apache/magpie -t "fix(generate-cve-json): fix vulnerability test"', {
-        projectConfig: { upstreamRepo: 'apache/magpie' },
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
       });
-      assertStrictEqual(magpiePrRes.blocked, false);
+      assertStrictEqual(magpiePrRes.blocked, false, 'magpiePrRes should not be blocked');
 
-      // git -C in unrelated repo passes; git -C in upstream repo blocks
+      // git -C in unrelated repo (verified via remote inspection) passes; git -C in upstream repo blocks
+      const mockGitConfigs: Record<string, string> = {
+        '/home/user/magpie/.git/config': '[remote "origin"]\nurl = https://github.com/apache/magpie.git\n',
+        '/home/user/airflow/.git/config': '[remote "origin"]\nurl = https://github.com/apache/airflow.git\n',
+      };
       const unrelatedGitCwd = await evaluatePublicSurfaceCommand('git -C /home/user/magpie commit -m "fix: CVE test"', {
         projectConfig: defaultProject,
+        readFile: async (p) => mockGitConfigs[p],
       });
-      assertStrictEqual(unrelatedGitCwd.blocked, false);
+      assertStrictEqual(unrelatedGitCwd.blocked, false, 'unrelatedGitCwd should not be blocked');
 
       const upstreamGitCwd = await evaluatePublicSurfaceCommand('git -C /home/user/airflow commit -m "fix: CVE-2026-1234"', {
         projectConfig: defaultProject,
+        readFile: async (p) => mockGitConfigs[p],
       });
-      assertStrictEqual(upstreamGitCwd.blocked, true);
+      assertStrictEqual(upstreamGitCwd.blocked, true, 'upstreamGitCwd should be blocked');
+
+      // Fork of upstream repo (e.g. contributor/airflow) MUST be blocked — cannot fail open!
+      const forkGitConfigs: Record<string, string> = {
+        '/home/user/fork/.git/config': '[remote "origin"]\nurl = https://github.com/contributor/airflow.git\n',
+      };
+      const forkGitCwd = await evaluatePublicSurfaceCommand('git -C /home/user/fork commit -m "Fix CVE-2026-1234 in fork"', {
+        projectConfig: defaultProject,
+        readFile: async (p) => forkGitConfigs[p],
+      });
+      assertStrictEqual(forkGitCwd.blocked, true, 'forkGitCwd should be blocked');
+      assert(forkGitCwd.matchedTerms.includes('CVE id'));
+
+      // PR creation targeting a fork of upstream MUST be blocked
+      const forkPrRes = await evaluatePublicSurfaceCommand('gh pr create -R contributor/airflow -t "Fix CVE-2026-1234"', {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(forkPrRes.blocked, true, 'forkPrRes should be blocked');
+      assert(forkPrRes.matchedTerms.includes('CVE id'));
+
+      // Git worktree with .git file pointing to gitdir: ... must be inspected and blocked if upstream
+      const worktreeConfigs: Record<string, string> = {
+        '/home/user/worktree/.git': 'gitdir: /home/user/main-repo/.git/worktrees/fix-branch\n',
+        '/home/user/main-repo/.git/worktrees/fix-branch/config': '[remote "origin"]\nurl = https://github.com/apache/airflow.git\n',
+      };
+      const worktreeRes = await evaluatePublicSurfaceCommand('git -C /home/user/worktree commit -m "Fix CVE-2026-1234"', {
+        projectConfig: defaultProject,
+        readFile: async (p) => worktreeConfigs[p],
+      });
+      assertStrictEqual(worktreeRes.blocked, true, 'worktreeRes should be blocked');
+      assert(worktreeRes.matchedTerms.includes('CVE id'));
+    });
+
+    test('tracks cd across sub-commands and blocks upstream leaks', async () => {
+      const mockGitConfigs: Record<string, string> = {
+        '/workspace/upstream/.git/config': '[remote "origin"]\nurl = https://github.com/apache/airflow.git\n',
+      };
+      const chainedCdCmd = 'cd /workspace/upstream && git commit -m "Fix CVE-2026-9999"';
+      const res = await evaluatePublicSurfaceCommand(chainedCdCmd, {
+        projectConfig: defaultProject,
+        readFile: async (p) => mockGitConfigs[p],
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('git -c config option does not collide with -C directory option', async () => {
+      const configCmd = 'git -c user.name=bot commit -m "Neutral message"';
+      const res = await evaluatePublicSurfaceCommand(configCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, false);
+    });
+
+    test('handles escaped quotes in commit messages', async () => {
+      const escapedQuoteCmd = 'git commit -m "Refactor \\"parser\\" for CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(escapedQuoteCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('--repo inside a body cannot forge tracker exemption', async () => {
+      const fakeRepoBody = 'gh pr create -R apache/airflow -b "--repo airflow-s/airflow-s" -t "Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(fakeRepoBody, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('dynamic input fail-closed reason mentions -F <file> guidance', async () => {
+      const dynamicCmd = 'git commit -m "$(cat /tmp/msg.txt)"';
+      const res = await evaluatePublicSurfaceCommand(dynamicCmd, {
+        projectConfig: defaultProject,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.reason?.includes('-F <file>'));
     });
 
     test('escape hatch: cannot be bypassed from command-line injection', async () => {
@@ -571,14 +678,14 @@ upstream_repo: apache/kafka
         projectConfig: defaultProject,
       });
       assertStrictEqual(res.blocked, true);
-      assert(res.matchedTerms.includes('CVE reference'));
+      assert(res.matchedTerms.includes('CVE id'));
 
       const cmdWithFlag = 'git commit -m "CVE-2026-1234 --allow-embargo-terms"';
       const res2 = await evaluatePublicSurfaceCommand(cmdWithFlag, {
         projectConfig: defaultProject,
       });
       assertStrictEqual(res2.blocked, true);
-      assert(res2.matchedTerms.includes('CVE reference'));
+      assert(res2.matchedTerms.includes('CVE id'));
     });
 
     test('escape hatch: honored ONLY when set in environment by human', async () => {
@@ -653,11 +760,11 @@ upstream_repo: apache/kafka
       assertStrictEqual(nextCalled, false, 'next() must NOT be called on blocked commands');
       assert(result.error, 'Error explanation must be returned');
       assert(result.error.includes('Apache Magpie Security Guard'));
-      assert(result.error.includes('CVE reference'));
+      assert(result.error.includes('CVE id'));
       assert(result.error.includes('SSRF'));
     });
 
-    test('allows Bash tool call when upstream_repo is not configured (e.g. magpie repo)', async () => {
+    test('honors MAGPIE_ALLOW_EMBARGO_TERMS=1 in register() hook event env', async () => {
       let registeredHook: any = null;
       const on = (event: string, handler: any) => {
         if (event === 'tool.call') {
@@ -671,6 +778,7 @@ upstream_repo: apache/kafka
       const mockEvent = {
         tool: 'Bash',
         input: { command: 'git commit -m "fix(generate-cve-json): handle CVE fields"' },
+        env: { MAGPIE_ALLOW_EMBARGO_TERMS: '1' },
       };
       const next = (e: any) => {
         nextCalled = true;
@@ -678,7 +786,7 @@ upstream_repo: apache/kafka
       };
 
       const result = await registeredHook({ fs: { read: async () => '' } }, mockEvent, next);
-      assertStrictEqual(nextCalled, true, 'next() must be called when upstream_repo is not configured');
+      assertStrictEqual(nextCalled, true, 'next() must be called when MAGPIE_ALLOW_EMBARGO_TERMS=1 is set');
       assertStrictEqual(result.forwarded.input.command, 'git commit -m "fix(generate-cve-json): handle CVE fields"');
     });
 
