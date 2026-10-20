@@ -147,7 +147,7 @@ def decide(data: Mapping[str, Any]) -> dict[str, Any]:
         )
     if probe in ("expired", "not-configured"):
         why = (
-            "the session expired: remind the operator to re-run vulnogram-api-setup; manual-paste hand-off this run"
+            "the session expired: remind the operator to re-run vulnogram-api-setup --pmc <project>; manual-paste hand-off this run"
             if probe == "expired"
             else "no session is configured: manual-paste hand-off through the source tab"
         )
