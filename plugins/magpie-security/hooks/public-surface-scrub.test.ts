@@ -707,35 +707,189 @@ upstream_repo: apache/kafka
     });
   });
 
+  describe('CLI parser & scoping enhancements (PR #1676 review #3)', () => {
+    test('extracts target repo from PR and issue URLs', async () => {
+      const mockProject = `
+| Key | Value |
+| tracker_repo | airflow-s/airflow-s |
+| upstream_repo | apache/airflow |
+`;
+      const res1 = await evaluatePublicSurfaceCommand(
+        'gh pr comment https://github.com/apache/airflow/pull/1 -b "Fix CVE-2026-1234 SSRF"',
+        { readFile: async () => mockProject }
+      );
+      assertStrictEqual(res1.blocked, true);
+      assert(res1.reason?.includes('CVE id'));
+
+      const res2 = await evaluatePublicSurfaceCommand(
+        'gh pr edit https://github.com/apache/airflow/pull/1 --body "Fix CVE-2026-1234 SSRF"',
+        { readFile: async () => mockProject }
+      );
+      assertStrictEqual(res2.blocked, true);
+    });
+
+    test('extracts target repo from leading GH_REPO= environment variable', async () => {
+      const mockProject = `
+| Key | Value |
+| tracker_repo | airflow-s/airflow-s |
+| upstream_repo | apache/airflow |
+`;
+      const res = await evaluatePublicSurfaceCommand(
+        'GH_REPO=apache/airflow gh pr comment 1 -b "Fix CVE-2026-1234 SSRF"',
+        { readFile: async () => mockProject }
+      );
+      assertStrictEqual(res.blocked, true);
+      assert(res.reason?.includes('SSRF'));
+    });
+
+    test('inspects referenced file in gh pr review --body-file', async () => {
+      const mockProject = `
+| Key | Value |
+| tracker_repo | airflow-s/airflow-s |
+| upstream_repo | apache/airflow |
+`;
+      const res = await evaluatePublicSurfaceCommand(
+        'gh pr review 1 -R apache/airflow --comment --body-file /path/to/review.md',
+        {
+          readFile: async (p: string) => {
+            if (p.includes('project.md')) return mockProject;
+            if (p.includes('review.md')) return 'Patch addresses CVE-2026-9999';
+            return null;
+          },
+        }
+      );
+      assertStrictEqual(res.blocked, true);
+      assert(res.reason?.includes('CVE id'));
+    });
+
+    test('inspects gh api --input and -F body=@file', async () => {
+      const mockProject = `
+| Key | Value |
+| tracker_repo | airflow-s/airflow-s |
+| upstream_repo | apache/airflow |
+`;
+      const resInput = await evaluatePublicSurfaceCommand(
+        'gh api repos/apache/airflow/issues/1/comments --input /path/to/payload.json',
+        {
+          readFile: async (p: string) => {
+            if (p.includes('project.md')) return mockProject;
+            if (p.includes('payload.json')) return '{"body": "Fix CVE-2026-1234 SSRF"}';
+            return null;
+          },
+        }
+      );
+      assertStrictEqual(resInput.blocked, true);
+
+      const resAtFile = await evaluatePublicSurfaceCommand(
+        'gh api repos/apache/airflow/issues/1/comments -F body=@msg.md',
+        {
+          readFile: async (p: string) => {
+            if (p.includes('project.md')) return mockProject;
+            if (p.includes('msg.md')) return 'Fix CVE-2026-1234 SSRF';
+            return null;
+          },
+        }
+      );
+      assertStrictEqual(resAtFile.blocked, true);
+    });
+
+    test('inspects gh api graphql mutation for forbidden terms', async () => {
+      const mockProject = `
+| Key | Value |
+| tracker_repo | airflow-s/airflow-s |
+| upstream_repo | apache/airflow |
+`;
+      const res = await evaluatePublicSurfaceCommand(
+        'gh api graphql -f query=\'mutation{addComment(input:{body:"CVE-2026-1234 SSRF"})}\' -R apache/airflow',
+        { readFile: async () => mockProject }
+      );
+      assertStrictEqual(res.blocked, true);
+    });
+
+    test('splits subcommands on single & separator', async () => {
+      const mockProject = `
+| Key | Value |
+| tracker_repo | airflow-s/airflow-s |
+| upstream_repo | apache/airflow |
+`;
+      const res = await evaluatePublicSurfaceCommand(
+        'git -C ../airflow status & git -C ../airflow commit -m "Fix CVE-2026-1234 SSRF"',
+        { readFile: async () => mockProject }
+      );
+      assertStrictEqual(res.blocked, true);
+    });
+
+    test('allows literal single-quoted $VAR like -m \'costs $HOME\'', async () => {
+      const mockProject = `
+| Key | Value |
+| tracker_repo | airflow-s/airflow-s |
+| upstream_repo | apache/airflow |
+`;
+      const res = await evaluatePublicSurfaceCommand(
+        "git commit -m 'costs $HOME'",
+        { readFile: async () => mockProject }
+      );
+      assertStrictEqual(res.blocked, false);
+    });
+
+    test('allows commands in unrelated repository without Magpie config when remote is determined', async () => {
+      const gitConfig = `
+[remote "origin"]
+  url = https://github.com/third-party/utility-lib.git
+`;
+      const res = await evaluatePublicSurfaceCommand(
+        'git commit -m "fix(generate-cve-json): tidy"',
+        {
+          readFile: async (p: string) => {
+            if (p.includes('.git/config')) return gitConfig;
+            return null;
+          },
+        }
+      );
+      assertStrictEqual(res.blocked, false);
+    });
+  });
+
   describe('Claude Code hook integration (register)', () => {
-    test('allows clean Bash tool call through via next()', async () => {
+    test('registers hook with Bash tool filter and allows clean command', async () => {
+      let registeredFilter: any = null;
       let registeredHook: any = null;
-      const on = (event: string, handler: any) => {
+      const on = (event: string, filterOrHandler: any, handler?: any) => {
         if (event === 'tool.call') {
-          registeredHook = handler;
+          if (typeof filterOrHandler === 'function') {
+            registeredHook = filterOrHandler;
+          } else {
+            registeredFilter = filterOrHandler;
+            registeredHook = handler;
+          }
         }
       };
 
       register(on);
       assert(registeredHook, 'tool.call hook must be registered');
+      assertStrictEqual(registeredFilter?.tool, 'Bash');
 
       let nextCalled = false;
-      const mockEvent = { tool: 'Bash', input: { command: 'git commit -m "Fix asset graph view"' } };
+      const mockEvent = { command: 'git commit -m "Fix asset graph view"' };
       const next = (e: any) => {
         nextCalled = true;
         return { success: true, event: e };
       };
 
-      const result = await registeredHook({ fs: { read: async () => '' } }, mockEvent, next);
+      const result = await registeredHook(
+        { fs: { read: async () => '' }, env: { get: async () => undefined } },
+        mockEvent,
+        next
+      );
       assertStrictEqual(nextCalled, true);
       assertStrictEqual(result.success, true);
     });
 
-    test('intercepts and blocks leaking Bash tool call returning error', async () => {
+    test('intercepts and blocks leaking Bash tool call returning deny', async () => {
       let registeredHook: any = null;
-      const on = (event: string, handler: any) => {
+      const on = (event: string, filterOrHandler: any, handler?: any) => {
         if (event === 'tool.call') {
-          registeredHook = handler;
+          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
         }
       };
 
@@ -749,26 +903,29 @@ upstream_repo: apache/kafka
 
       let nextCalled = false;
       const mockEvent = {
-        tool: 'Bash',
-        input: { command: 'gh pr create -R apache/airflow -t "Fix CVE-2026-1111: SSRF vulnerability"' },
+        command: 'gh pr create -R apache/airflow -t "Fix CVE-2026-1111: SSRF vulnerability"',
       };
       const next = () => {
         nextCalled = true;
       };
 
-      const result = await registeredHook({ fs: { read: async () => mockProject } }, mockEvent, next);
+      const result = await registeredHook(
+        { fs: { read: async () => mockProject }, env: { get: async () => undefined } },
+        mockEvent,
+        next
+      );
       assertStrictEqual(nextCalled, false, 'next() must NOT be called on blocked commands');
-      assert(result.error, 'Error explanation must be returned');
-      assert(result.error.includes('Apache Magpie Security Guard'));
-      assert(result.error.includes('CVE id'));
-      assert(result.error.includes('SSRF'));
+      assert(result.deny, 'Deny explanation must be returned');
+      assert(result.deny.includes('Apache Magpie Security Guard'));
+      assert(result.deny.includes('CVE id'));
+      assert(result.deny.includes('SSRF'));
     });
 
-    test('honors MAGPIE_ALLOW_EMBARGO_TERMS=1 in register() hook event env', async () => {
+    test('honors MAGPIE_ALLOW_EMBARGO_TERMS=1 via $.env.get in register()', async () => {
       let registeredHook: any = null;
-      const on = (event: string, handler: any) => {
+      const on = (event: string, filterOrHandler: any, handler?: any) => {
         if (event === 'tool.call') {
-          registeredHook = handler;
+          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
         }
       };
 
@@ -776,40 +933,48 @@ upstream_repo: apache/kafka
 
       let nextCalled = false;
       const mockEvent = {
-        tool: 'Bash',
-        input: { command: 'git commit -m "fix(generate-cve-json): handle CVE fields"' },
-        env: { MAGPIE_ALLOW_EMBARGO_TERMS: '1' },
+        command: 'gh pr create -R apache/airflow -t "fix(generate-cve-json): handle CVE fields"',
       };
       const next = (e: any) => {
         nextCalled = true;
         return { forwarded: e };
       };
 
-      const result = await registeredHook({ fs: { read: async () => '' } }, mockEvent, next);
+      const result = await registeredHook(
+        {
+          fs: { read: async () => '' },
+          env: { get: async (k: string) => (k === 'MAGPIE_ALLOW_EMBARGO_TERMS' ? '1' : undefined) },
+        },
+        mockEvent,
+        next
+      );
       assertStrictEqual(nextCalled, true, 'next() must be called when MAGPIE_ALLOW_EMBARGO_TERMS=1 is set');
-      assertStrictEqual(result.forwarded.input.command, 'git commit -m "fix(generate-cve-json): handle CVE fields"');
+      assertStrictEqual(result.forwarded.command, 'gh pr create -R apache/airflow -t "fix(generate-cve-json): handle CVE fields"');
     });
 
-    test('passes non-Bash tools through to next() unchanged', async () => {
+    test('passes non-string command through to next() unchanged', async () => {
       let registeredHook: any = null;
-      const on = (event: string, handler: any) => {
+      const on = (event: string, filterOrHandler: any, handler?: any) => {
         if (event === 'tool.call') {
-          registeredHook = handler;
+          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
         }
       };
 
       register(on);
 
       let nextCalled = false;
-      const mockEvent = { tool: 'ReadUrl', input: { url: 'https://cve.org/CVE-2026-1234' } };
+      const mockEvent = { command: 12345 };
       const next = (e: any) => {
         nextCalled = true;
         return { forwarded: e };
       };
 
-      const result = await registeredHook({ fs: { read: async () => '' } }, mockEvent, next);
+      const result = await registeredHook(
+        { fs: { read: async () => '' }, env: { get: async () => undefined } },
+        mockEvent,
+        next
+      );
       assertStrictEqual(nextCalled, true);
-      assertStrictEqual(result.forwarded.tool, 'ReadUrl');
     });
   });
 });
