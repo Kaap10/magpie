@@ -67,11 +67,14 @@ def test_skill_guard_dirs_are_discovered_without_configuration():
     """Every ``skills/*/guards`` in the framework tree is scanned as-is — this is
     what removes the "collect skill guards into a local guards.d" install step."""
     dirs = agent_guard.guard_dirs()
-    on_disk = sorted((REPO_ROOT / "skills").glob("*/guards"))
+    resolved_dirs = {d.resolve() for d in dirs}
+    on_disk = sorted((REPO_ROOT / "plugins").glob("*/skills/*/guards")) + sorted(
+        (REPO_ROOT / "skills").glob("*/guards")
+    )
     assert on_disk, "expected at least one skill-owned guards dir in the repo"
     for d in on_disk:
-        assert d in dirs
-    assert dirs[-1] == Path(agent_guard.__file__).resolve().parent / "guards.d"
+        assert d.resolve() in resolved_dirs
+    assert dirs[-1].resolve() == (Path(agent_guard.__file__).resolve().parent / "guards.d").resolve()
 
 
 def test_env_dirs_are_searched_before_discovered_ones(monkeypatch, tmp_path):
@@ -100,7 +103,10 @@ def test_discovery_survives_being_reached_through_a_symlinked_plugin_root(tmp_pa
     framework tree until it is resolved."""
     link_parent = tmp_path / "plugin" / "tools"
     link_parent.mkdir(parents=True)
-    (link_parent / "agent-guard").symlink_to(REPO_ROOT / "tools" / "agent-guard")
+    try:
+        (link_parent / "agent-guard").symlink_to(REPO_ROOT / "tools" / "agent-guard")
+    except OSError as exc:
+        pytest.skip(f"symlinks not supported on this platform: {exc}")
 
     entry = link_parent / "agent-guard" / "src" / "agent_guard" / "__init__.py"
     spec = importlib.util.spec_from_file_location("_linked_agent_guard", entry)
@@ -109,12 +115,43 @@ def test_discovery_survives_being_reached_through_a_symlinked_plugin_root(tmp_pa
     spec.loader.exec_module(module)
 
     assert module.framework_root() == REPO_ROOT
-    assert sorted((REPO_ROOT / "skills").glob("*/guards"))[0] in module.guard_dirs()
+    expected = (
+        sorted((REPO_ROOT / "plugins").glob("*/skills/*/guards"))
+        + sorted((REPO_ROOT / "skills").glob("*/guards"))
+    )[0]
+    assert expected in module.guard_dirs()
 
 
 def test_guard_dirs_are_deduplicated(monkeypatch):
     """A skill guards dir named in the environment as well as discovered is
     scanned once — otherwise its guards would run twice per command."""
-    skill_guards = sorted((REPO_ROOT / "skills").glob("*/guards"))[0]
+    skill_guards = (
+        sorted((REPO_ROOT / "plugins").glob("*/skills/*/guards"))
+        + sorted((REPO_ROOT / "skills").glob("*/guards"))
+    )[0]
     monkeypatch.setenv(agent_guard.GUARD_DIRS_ENV, f"{skill_guards}{os.pathsep}{skill_guards}")
     assert agent_guard.guard_dirs().count(skill_guards) == 1
+
+
+def test_plugin_skill_guards_are_discovered():
+    """Contributed guards under plugins/*/skills/*/guards are discovered."""
+    dirs = agent_guard.guard_dirs()
+    plugin_guards = sorted((REPO_ROOT / "plugins").glob("*/skills/*/guards"))
+    assert plugin_guards, "expected plugin skill guards to exist"
+    for d in plugin_guards:
+        assert d in dirs
+
+
+def test_guard_dirs_deduplicates_symlinks(tmp_path, monkeypatch):
+    """A directory reached through a symlink and its canonical path are deduplicated."""
+    real_dir = tmp_path / "real_guards"
+    real_dir.mkdir()
+    sym_dir = tmp_path / "sym_guards"
+    try:
+        sym_dir.symlink_to(real_dir, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlinks not supported on this platform: {exc}")
+
+    monkeypatch.setenv(agent_guard.GUARD_DIRS_ENV, f"{real_dir}{os.pathsep}{sym_dir}")
+    resolved_dirs = [d.resolve() for d in agent_guard.guard_dirs()]
+    assert resolved_dirs.count(real_dir.resolve()) == 1

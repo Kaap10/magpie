@@ -1610,35 +1610,40 @@ def framework_root() -> Path | None:
     """The framework tree this engine is running out of, or ``None``.
 
     Recognised by the two directories the engine always sits beside: a
-    ``skills/`` tree and the ``tools/agent-guard`` package holding this file.
+    ``skills/`` or ``plugins/`` tree and the ``tools/agent-guard`` package holding this file.
     That holds whether the hook runs from an installed plugin, a framework
     checkout, or an adopter's snapshot — and does not hold for a standalone copy
     of this one file, which is why the result is optional rather than a path
     computed by counting ``parents``.
     """
     for parent in Path(__file__).resolve().parents:
-        if (parent / "skills").is_dir() and (parent / "tools" / "agent-guard").is_dir():
+        if ((parent / "skills").is_dir() or (parent / "plugins").is_dir()) and (
+            parent / "tools" / "agent-guard"
+        ).is_dir():
             return parent
     return None
 
 
 def guard_dirs() -> list[Path]:
     """Directories scanned for contributed guards: ``$MAGPIE_GUARD_DIRS`` entries,
-    then every ``skills/*/guards`` in the framework tree this file runs from, then
-    the ``guards.d`` sibling of this file."""
+    then every ``plugins/*/skills/*/guards`` and ``skills/*/guards`` in the framework
+    tree this file runs from, then the ``guards.d`` sibling of this file."""
     dirs: list[Path] = []
     env = os.environ.get(GUARD_DIRS_ENV)
     if env:
         dirs.extend(Path(p) for p in env.split(os.pathsep) if p)
     if (root := framework_root()) is not None:
+        dirs.extend(sorted((root / "plugins").glob("*/skills/*/guards")))
         dirs.extend(sorted((root / "skills").glob("*/guards")))
     dirs.append(Path(__file__).resolve().parent / "guards.d")
     seen: set[Path] = set()
     out: list[Path] = []
     for d in dirs:
-        if d not in seen and d.is_dir():
-            seen.add(d)
-            out.append(d)
+        if d.is_dir():
+            real = d.resolve()
+            if real not in seen:
+                seen.add(real)
+                out.append(d)
     return out
 
 
