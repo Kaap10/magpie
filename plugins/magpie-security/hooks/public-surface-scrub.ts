@@ -166,7 +166,9 @@ export function parseProjectManifest(content: string): ProjectRepos {
   // Markdown table row: | `?upstream_repo`? | `?<slug>`? |
   const upstreamMatch =
     content.match(/\|\s*`?upstream_repo`?\s*\|\s*`?([^`|\r\n]+)`?/i) ??
-    content.match(/^\s*upstream_repo:\s*`?([^`\r\n#]+)`?/im);
+    content.match(/^\s*upstream_repo:\s*`?([^`\r\n#]+)`?/im) ??
+    content.match(/\|\s*`?local_upstream`?\s*\|\s*`?([^`|\r\n]+)`?/i) ??
+    content.match(/^\s*local_upstream:\s*`?([^`\r\n#]+)`?/im);
   const upstreamSlug = cleanRepoSlug(upstreamMatch?.[1]);
   if (upstreamSlug) {
     result.upstreamRepo = upstreamSlug;
@@ -197,6 +199,11 @@ export async function resolveProjectConfig(readFile?: FileReader, cwd?: string):
     '.apache-magpie-overrides/project.md',
     '../.apache-magpie-local/project.md',
     '../.apache-magpie-overrides/project.md',
+    `${prefix}.apache-magpie-local/user.md`,
+    `${prefix}.apache-magpie-overrides/user.md`,
+    '.apache-magpie-local/user.md',
+    '.apache-magpie-overrides/user.md',
+    '~/.config/apache-magpie/user.md',
   ];
 
   for (const path of candidatePaths) {
@@ -270,13 +277,24 @@ export function splitShellCommands(commandLine: string): string[] {
         current = '';
         continue;
       }
-      if (char === '&' && next === '&') {
-        if (current.trim()) {
-          commands.push(current.trim());
+      if (char === '&') {
+        if (next === '&') {
+          if (current.trim()) {
+            commands.push(current.trim());
+          }
+          current = '';
+          i++; // skip second &
+          continue;
         }
-        current = '';
-        i++; // skip second &
-        continue;
+        // Single & is a background separator (unless part of >& redirection)
+        const prev = i > 0 ? commandLine[i - 1] : '';
+        if (prev !== '>') {
+          if (current.trim()) {
+            commands.push(current.trim());
+          }
+          current = '';
+          continue;
+        }
       }
       if (char === '|' && next === '|') {
         if (current.trim()) {
@@ -412,6 +430,56 @@ export interface ParsedSubcommand {
  * Identifies git/gh invocations and extracts messages, referenced files,
  * target repositories, and git working directories.
  */
+/**
+ * Detects dynamic shell constructs that cannot be statically inspected:
+ * command substitution ($(...) or `...`), parameter expansion ($VAR or ${VAR}),
+ * process substitution (<(...)), and heredocs (<<).
+ * Correctly ignores literal $VAR inside single quotes (e.g. -m 'costs $HOME').
+ */
+export function hasDynamicShellConstructs(subcommand: string): boolean {
+  let inSingle = false;
+  let inDouble = false;
+  let isEscaped = false;
+
+  for (let i = 0; i < subcommand.length; i++) {
+    const char = subcommand[i];
+    if (isEscaped) {
+      isEscaped = false;
+      continue;
+    }
+    if (char === '\\' && !inSingle) {
+      isEscaped = true;
+      continue;
+    }
+    if (char === "'" && !inDouble) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (char === '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (!inSingle) {
+      if (char === '`') return true;
+      if (char === '$' && i + 1 < subcommand.length) {
+        const next = subcommand[i + 1];
+        if (next === '(' || next === '{' || /[a-zA-Z_]/.test(next)) {
+          return true;
+        }
+      }
+      if (!inDouble) {
+        if (char === '<' && i + 1 < subcommand.length) {
+          const next = subcommand[i + 1];
+          if (next === '<' || next === '(') {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
 export function parseSubcommand(subcommand: string): ParsedSubcommand {
   const result: ParsedSubcommand = {
     raw: subcommand,
@@ -427,9 +495,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     return result;
   }
 
-  // Detect dynamic inputs in the raw subcommand string:
-  // heredocs (<<), process substitution (<()), command substitution ($() or ``), variables ($VAR)
-  if (/<<|`|\$\(|\$[a-zA-Z_]|<\(/.test(trimmed)) {
+  if (hasDynamicShellConstructs(trimmed)) {
     result.hasDynamicInput = true;
   }
 
@@ -438,9 +504,14 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     return result;
   }
 
-  // Skip leading environment variable assignments (e.g. VAR=val cmd ...)
+  // Check leading environment variable assignments (e.g. GH_REPO=owner/repo cmd ...)
   let cmdIdx = 0;
   while (cmdIdx < tokens.length && /^[a-zA-Z_][a-zA-Z0-9_]*=/.test(tokens[cmdIdx])) {
+    const envToken = tokens[cmdIdx];
+    const ghRepoMatch = envToken.match(/^GH_REPO=([^\s]+)$/i);
+    if (ghRepoMatch) {
+      result.targetRepo = ghRepoMatch[1].toLowerCase();
+    }
     cmdIdx++;
   }
   if (cmdIdx >= tokens.length) {
@@ -717,10 +788,15 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
         result.targetRepo = token.slice(2).toLowerCase();
         continue;
       }
+      const urlMatch = token.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+)\/(?:pull|issues)\/\d+/i);
+      if (urlMatch) {
+        result.targetRepo = urlMatch[1].toLowerCase();
+        continue;
+      }
       // Skip flags that take an argument so body or title text cannot be mistaken for flags
       if ((token === '-b' || token === '--body' || token === '-t' || token === '--title' ||
            token === '-F' || token === '--body-file' || token === '-f' || token === '--field' ||
-           token === '--raw-field') && i + 1 < tokens.length) {
+           token === '--raw-field' || token === '--input') && i + 1 < tokens.length) {
         i++;
         continue;
       }
@@ -885,7 +961,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           result.extractedTexts.push(token.slice(2));
           continue;
         }
-        if (token === '-F' && i + 1 < tokens.length) {
+        if ((token === '--body-file' || token === '-F') && i + 1 < tokens.length) {
           const file = tokens[i + 1];
           if (file === '-') {
             result.hasDynamicInput = true;
@@ -893,6 +969,15 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
             result.referencedFiles.push(file);
           }
           i++;
+          continue;
+        }
+        if (token.startsWith('--body-file=')) {
+          const file = token.slice('--body-file='.length);
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
           continue;
         }
         if (token.startsWith('-F') && token.length > 2) {
@@ -964,6 +1049,8 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
 
     // gh api
     if (ghSub1 === 'api') {
+      const isGraphql = tokens.includes('graphql');
+
       for (let i = cmdIdx + 2; i < tokens.length; i++) {
         const token = tokens[i];
         if (token.startsWith('repos/')) {
@@ -976,22 +1063,58 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           continue;
         }
 
-        if ((token === '-f' || token === '-F' || token === '--field' || token === '--raw-field') && i + 1 < tokens.length) {
-          const fieldArg = tokens[i + 1];
-          const match = fieldArg.match(/^(?:body|title)=(.*)$/s);
-          if (match) {
-            result.extractedTexts.push(match[1]);
+        // Handle --input <file> / --input=<file>
+        if (token === '--input' && i + 1 < tokens.length) {
+          const file = tokens[i + 1];
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
           }
           i++;
           continue;
         }
-        const fieldMatch = token.match(/^(?:--field|--raw-field)=(?:body|title)=(.*)$/s);
+        if (token.startsWith('--input=')) {
+          const file = token.slice('--input='.length);
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
+          continue;
+        }
+
+        if ((token === '-f' || token === '-F' || token === '--field' || token === '--raw-field') && i + 1 < tokens.length) {
+          const fieldArg = tokens[i + 1];
+          const match = fieldArg.match(/^(?:body|title|query)=(.*)$/s);
+          if (match) {
+            const val = match[1];
+            if (val.startsWith('@')) {
+              result.referencedFiles.push(val.slice(1));
+            } else {
+              result.extractedTexts.push(val);
+            }
+          }
+          i++;
+          continue;
+        }
+        const fieldMatch = token.match(/^(?:--field|--raw-field)=(?:body|title|query)=(.*)$/s);
         if (fieldMatch) {
-          result.extractedTexts.push(fieldMatch[1]);
+          const val = fieldMatch[1];
+          if (val.startsWith('@')) {
+            result.referencedFiles.push(val.slice(1));
+          } else {
+            result.extractedTexts.push(val);
+          }
+          continue;
+        }
+
+        if (isGraphql && token.includes('mutation')) {
+          result.extractedTexts.push(token);
         }
       }
 
-      if (result.extractedTexts.length > 0) {
+      if (result.extractedTexts.length > 0 || result.referencedFiles.length > 0 || result.hasDynamicInput) {
         result.isPublicSurfaceCommand = true;
         result.commandType = 'gh api';
       }
@@ -1183,20 +1306,18 @@ export async function evaluatePublicSurfaceCommand(
 
     // 3. For commands without explicit repo flag, determine repository from git context
     if (!parsed.targetRepo) {
-      // If we are in the tracker repository checkout itself without upstream context, exempt it
-      if (projectConfig.isTrackerCheckout && !effectiveDir) {
-        continue;
-      }
-
-      // If an effective directory is targeted or we have git config, inspect its remote
       if (options?.readFile) {
         const remoteInfo = await inspectDirectoryRemote(effectiveDir, projectConfig, options.readFile);
         if (remoteInfo.determined) {
           if (remoteInfo.isTracker) {
             continue; // Safe tracker repository
           }
-          // If verified not upstream (and not a fork of upstream) and not tracker, allow
-          if (!remoteInfo.isUpstream && upstreamRepo) {
+          if (!remoteInfo.isUpstream) {
+            continue; // Known non-upstream remote (e.g. unrelated third-party repo, adopter docs), allow through
+          }
+        } else {
+          // If remote is not determined and no tracker/upstream is configured, allow unrelated repos
+          if (!trackerRepo && !upstreamRepo) {
             continue;
           }
         }
@@ -1284,12 +1405,17 @@ export async function evaluatePublicSurfaceCommand(
  * Event hook registration entry point for Claude Code.
  */
 export function register(on: any): void {
-  on('tool.call', async ($: any, e: any, next: any) => {
-    const toolName = (e?.tool || '').toLowerCase();
-    const command = e?.input?.command || e?.params?.command;
+  on('tool.call', { tool: 'Bash' }, async ($: any, e: any, next: any) => {
+    const command = e?.command;
 
-    if (toolName === 'bash' && typeof command === 'string') {
-      const hookEnv = e?.env ?? (typeof process !== 'undefined' ? process.env : {});
+    if (typeof command === 'string') {
+      let allowBypass: string | undefined;
+      try {
+        allowBypass = await $.env.get('MAGPIE_ALLOW_EMBARGO_TERMS');
+      } catch {
+        // $.env may be absent in mock harnesses
+      }
+      const hookEnv = allowBypass ? { MAGPIE_ALLOW_EMBARGO_TERMS: allowBypass } : (e?.env ?? {});
       const evaluation = await evaluatePublicSurfaceCommand(command, {
         env: hookEnv,
         readFile: async (filePath: string) => {
@@ -1303,7 +1429,7 @@ export function register(on: any): void {
 
       if (evaluation.blocked && evaluation.reason) {
         return {
-          error: evaluation.reason,
+          deny: evaluation.reason,
         };
       }
     }

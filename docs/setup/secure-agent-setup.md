@@ -1894,8 +1894,9 @@ and tracked by the pre-commit sync check).
 - **Human-only escape hatch**: When legitimate post-coordinated-disclosure
   maintenance requires mentioning CVE IDs or vulnerability terms on public surfaces,
   a human maintainer sets `MAGPIE_ALLOW_EMBARGO_TERMS=1` in the environment
-  before starting the session. The escape hatch cannot be invoked or faked from
-  inside the agent's command line or prompt.
+  before starting the session. The escape hatch serves as a zero-token deterministic
+  guard against accidental leaks; inline environment variables passed to the command
+  line (e.g. `MAGPIE_ALLOW_EMBARGO_TERMS=1 git commit ...`) are ignored by the hook.
 
 ## Sandbox-error hint hook
 
