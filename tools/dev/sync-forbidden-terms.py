@@ -4,12 +4,10 @@
 """Sync and check the canonical forbidden-term list for public surface scrubbing.
 
 Source of truth: `DEFAULT_TERMS` in `tools/vcs/src/magpie_vcs/publication.py`.
-Output targets:
-- `plugins/magpie-security/hooks/forbidden-terms.json`
-- `plugins/magpie-security/hooks/forbidden-terms.ts`
+Output target: `plugins/magpie-security/hooks/forbidden-terms.ts`
 
 Usage:
-    python tools/dev/sync-forbidden-terms.py          # Write updated files
+    python tools/dev/sync-forbidden-terms.py          # Write updated file
     python tools/dev/sync-forbidden-terms.py --check  # Fail if drifted
 """
 
@@ -22,7 +20,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 VCS_SRC = REPO_ROOT / "tools" / "vcs" / "src"
-TARGET_JSON = REPO_ROOT / "plugins" / "magpie-security" / "hooks" / "forbidden-terms.json"
 TARGET_TS = REPO_ROOT / "plugins" / "magpie-security" / "hooks" / "forbidden-terms.ts"
 
 if str(VCS_SRC) not in sys.path:
@@ -95,37 +92,34 @@ def main() -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Check if forbidden-terms files match DEFAULT_TERMS without writing.",
+        help="Check if forbidden-terms file matches DEFAULT_TERMS without writing.",
     )
     args = parser.parse_args()
 
     data = generate_terms_data()
-    json_serialized = json.dumps(data, indent=2) + "\n"
     ts_serialized = generate_ts_content(data)
 
     if args.check:
-        if not TARGET_JSON.exists() or not TARGET_TS.exists():
+        if not TARGET_TS.exists():
             sys.stderr.write(
-                "sync-forbidden-terms: target files do not exist. "
+                "sync-forbidden-terms: target file does not exist. "
                 "Run 'python tools/dev/sync-forbidden-terms.py' to generate.\n"
             )
             return 1
 
-        existing_json = TARGET_JSON.read_text(encoding="utf-8")
         existing_ts = TARGET_TS.read_text(encoding="utf-8")
-        if existing_json != json_serialized or existing_ts != ts_serialized:
+        if existing_ts != ts_serialized:
             sys.stderr.write(
-                "sync-forbidden-terms: targets have drifted from DEFAULT_TERMS. "
+                "sync-forbidden-terms: target has drifted from DEFAULT_TERMS. "
                 "Run 'python tools/dev/sync-forbidden-terms.py' to synchronize.\n"
             )
             return 1
 
         return 0
 
-    TARGET_JSON.parent.mkdir(parents=True, exist_ok=True)
-    TARGET_JSON.write_text(json_serialized, encoding="utf-8")
+    TARGET_TS.parent.mkdir(parents=True, exist_ok=True)
     TARGET_TS.write_text(ts_serialized, encoding="utf-8")
-    print(f"Synchronized {len(data)} canonical forbidden terms to {TARGET_JSON.name} and {TARGET_TS.name}")
+    print(f"Synchronized {len(data)} canonical forbidden terms to {TARGET_TS.name}")
     return 0
 
 

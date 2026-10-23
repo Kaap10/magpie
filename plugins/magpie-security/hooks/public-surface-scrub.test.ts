@@ -800,7 +800,7 @@ upstream_repo: apache/kafka
 | upstream_repo | apache/airflow |
 `;
       const res = await evaluatePublicSurfaceCommand(
-        'gh api graphql -f query=\'mutation{addComment(input:{body:"CVE-2026-1234 SSRF"})}\' -R apache/airflow',
+        'gh api graphql -f query="mutation{addComment(input:{body:\\\"CVE-2026-1234 SSRF\\\"})}"',
         { readFile: async () => mockProject }
       );
       assertStrictEqual(res.blocked, true);
@@ -952,6 +952,46 @@ upstream_repo: apache/kafka
       assertStrictEqual(result.forwarded.command, 'gh pr create -R apache/airflow -t "fix(generate-cve-json): handle CVE fields"');
     });
 
+    test('register() blocks leaking command in upstream clone resolved via user.md without project.md', async () => {
+      let registeredHook: any = null;
+      const on = (event: string, filterOrHandler: any, handler?: any) => {
+        if (event === 'tool.call') {
+          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
+        }
+      };
+
+      register(on);
+
+      const mockUserMd = '\n| Key | Value |\n| environment.upstream_clone | /home/dev/upstream-airflow |\n';
+      const mockGitConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow.git\n';
+      let nextCalled = false;
+      const mockEvent = {
+        command: 'git -C /home/dev/upstream-airflow commit -m "Fix CVE-2026-1234 SSRF"',
+      };
+      const next = () => {
+        nextCalled = true;
+      };
+
+      const result = await registeredHook(
+        {
+          fs: {
+            read: async (p: string) => {
+              if (p.includes('user.md')) return mockUserMd;
+              if (p.includes('/home/dev/upstream-airflow/.git/config')) return mockGitConfig;
+              return null;
+            },
+          },
+          env: { get: async () => undefined },
+        },
+        mockEvent,
+        next
+      );
+      assertStrictEqual(nextCalled, false, 'next() must NOT be called on blocked commands in upstream clone');
+      assert(result.deny, 'Deny explanation must be returned');
+      assert(result.deny.includes('CVE id'));
+      assert(result.deny.includes('SSRF'));
+    });
+
     test('passes non-string command through to next() unchanged', async () => {
       let registeredHook: any = null;
       const on = (event: string, filterOrHandler: any, handler?: any) => {
@@ -975,6 +1015,103 @@ upstream_repo: apache/kafka
         next
       );
       assertStrictEqual(nextCalled, true);
+    });
+  });
+
+  describe('Review #4 hardening & edge-case prevention', () => {
+    test('identifies upstream clone from user.md environment.upstream_clone without project.md', async () => {
+      const mockUserMd = `
+| Key | Value |
+| environment.upstream_clone | /home/dev/upstream-airflow |
+`;
+      const mockGitConfig = `
+[remote "origin"]
+  url = https://github.com/apache/airflow.git
+`;
+      const res = await evaluatePublicSurfaceCommand('git -C /home/dev/upstream-airflow commit -m "Fix CVE-2026-1234 SSRF"', {
+        readFile: async (p: string) => {
+          if (p.includes('user.md')) return mockUserMd;
+          if (p.includes('/home/dev/upstream-airflow/.git/config')) return mockGitConfig;
+          return null;
+        },
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+      assert(res.matchedTerms.includes('SSRF'));
+    });
+
+    test('never exempts gh api graphql mutations even when executed in tracker checkout', async () => {
+      const trackerGitConfig = `
+[remote "origin"]
+  url = https://github.com/airflow-s/airflow-s.git
+`;
+      const res = await evaluatePublicSurfaceCommand('git -C /tracker status && gh api graphql -f query=\'mutation{addComment(input:{body:"Fix SSRF"})}\'', {
+        readFile: async (p: string) => {
+          if (p.includes('.git/config')) return trackerGitConfig;
+          return null;
+        },
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('SSRF'));
+    });
+
+    test('inspects custom field names in gh api graphql mutations', async () => {
+      const res = await evaluatePublicSurfaceCommand("gh api graphql -f customVar='CVE-2026-9999 SSRF'", {
+        readFile: async () => null,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+      assert(res.matchedTerms.includes('SSRF'));
+    });
+
+    test('inspects git commit --trailer', async () => {
+      const res1 = await evaluatePublicSurfaceCommand('git commit -m "Clean message" --trailer "Fixes: CVE-2026-1234"', {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+      });
+      assertStrictEqual(res1.blocked, true);
+      assert(res1.matchedTerms.includes('CVE id'));
+
+      const res2 = await evaluatePublicSurfaceCommand('git commit -m "Clean message" --trailer="Fixes: SSRF"', {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+      });
+      assertStrictEqual(res2.blocked, true);
+      assert(res2.matchedTerms.includes('SSRF'));
+    });
+
+    test('marks message reuse flags as dynamic input (-C, -c, --reuse-message, --fixup, --squash)', async () => {
+      for (const flag of ['-C HEAD', '-c HEAD', '--reuse-message=HEAD', '--reedit-message=HEAD', '--fixup=HEAD', '--squash=HEAD']) {
+        const res = await evaluatePublicSurfaceCommand(`git commit ${flag}`, {
+          projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+        });
+        assertStrictEqual(res.blocked, true, `Expected ${flag} to be blocked as dynamic input`);
+        assert(res.matchedTerms.includes('dynamic input'));
+      }
+    });
+
+    test('inspects clustered git tag flags like git tag -am', async () => {
+      const res = await evaluatePublicSurfaceCommand('git tag -am "Release CVE-2026-1234" v1.0', {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('isolates cd across pipeline separator so pipe does not leak directory context', async () => {
+      const pipeCmd = 'cd ../tracker | gh pr comment 1 -R apache/airflow -b "Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(pipeCmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('marks same-command file redirection into message file as dynamic input', async () => {
+      const redirstr = 'printf "Fix CVE-2026-1234" > msg.txt; gh pr comment 1 -R apache/airflow -F msg.txt';
+      const res = await evaluatePublicSurfaceCommand(redirstr, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+        readFile: async () => 'stale neutral content',
+      });
+      assertStrictEqual(res.blocked, true);
     });
   });
 });

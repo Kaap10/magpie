@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -28,7 +27,6 @@ from types import ModuleType
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "sync-forbidden-terms.py"
 REPO_ROOT = Path(__file__).resolve().parents[3]
-TARGET_JSON = REPO_ROOT / "plugins" / "magpie-security" / "hooks" / "forbidden-terms.json"
 TARGET_TS = REPO_ROOT / "plugins" / "magpie-security" / "hooks" / "forbidden-terms.ts"
 
 
@@ -66,27 +64,11 @@ def test_sync_script_check_passes_on_current_tree() -> None:
     assert result.returncode == 0, f"sync-forbidden-terms --check failed: {result.stderr}"
 
 
-def test_sync_script_check_fails_on_json_drift(tmp_path: Path, monkeypatch) -> None:
-    mod = _load()
-    fake_json = tmp_path / "forbidden-terms.json"
-    fake_json.write_text("[]\n", encoding="utf-8")
-    fake_ts = tmp_path / "forbidden-terms.ts"
-    fake_ts.write_text(mod.generate_ts_content(mod.generate_terms_data()), encoding="utf-8")
-
-    monkeypatch.setattr(mod, "TARGET_JSON", fake_json)
-    monkeypatch.setattr(mod, "TARGET_TS", fake_ts)
-    monkeypatch.setattr(sys, "argv", [str(_SCRIPT), "--check"])
-    assert mod.main() == 1
-
-
 def test_sync_script_check_fails_on_ts_drift(tmp_path: Path, monkeypatch) -> None:
     mod = _load()
-    fake_json = tmp_path / "forbidden-terms.json"
-    fake_json.write_text(json.dumps(mod.generate_terms_data(), indent=2) + "\n", encoding="utf-8")
     fake_ts = tmp_path / "forbidden-terms.ts"
     fake_ts.write_text("// drifted\n", encoding="utf-8")
 
-    monkeypatch.setattr(mod, "TARGET_JSON", fake_json)
     monkeypatch.setattr(mod, "TARGET_TS", fake_ts)
     monkeypatch.setattr(sys, "argv", [str(_SCRIPT), "--check"])
     assert mod.main() == 1
