@@ -30,41 +30,9 @@ export const FORBIDDEN_TERM_RULES: ReadonlyArray<{ name: string; pattern: RegExp
   }));
 
 /**
- * Consecutive words a candidate public text may share with a private text
- * before it is reported as a verbatim copy. Aligned with magpie_vcs.publication.VERBATIM_WORDS.
- */
-export const VERBATIM_WORDS = 8;
-
-/**
- * Tokenizes text into lowercase alphanumeric words.
- */
-function extractWords(text: string): string[] {
-  const matches = text.toLowerCase().match(/[a-z0-9]+(?:'[a-z]+)?/g);
-  return matches ? Array.from(matches) : [];
-}
-
-/**
- * Computes consecutive n-grams (shingles) of words from text.
- */
-function computeShingles(text: string, width: number): Set<string> {
-  const words = extractWords(text);
-  const shingles = new Set<string>();
-  if (words.length < width) {
-    return shingles;
-  }
-  for (let i = 0; i <= words.length - width; i++) {
-    shingles.add(words.slice(i, i + width).join(' '));
-  }
-  return shingles;
-}
-
-/**
  * Finds all unique forbidden embargo terms that appear in the candidate text.
  */
-export function findForbiddenTerms(
-  text: string,
-  extraOptions?: { reporterNames?: string[]; privateTexts?: string[] }
-): string[] {
+export function findForbiddenTerms(text: string): string[] {
   if (!text || typeof text !== 'string') {
     return [];
   }
@@ -76,36 +44,6 @@ export function findForbiddenTerms(
     }
   }
 
-  // Check reporter names if provided
-  if (extraOptions?.reporterNames) {
-    for (const reporter of extraOptions.reporterNames) {
-      if (reporter && reporter.trim()) {
-        const escaped = reporter.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const reporterRx = new RegExp(`\\b${escaped}\\b`, 'i');
-        if (reporterRx.test(text)) {
-          matched.push('reporter name');
-        }
-      }
-    }
-  }
-
-  // Check verbatim private text shingles if provided
-  if (extraOptions?.privateTexts && extraOptions.privateTexts.length > 0) {
-    const candidateShingles = computeShingles(text, VERBATIM_WORDS);
-    if (candidateShingles.size > 0) {
-      for (const privateText of extraOptions.privateTexts) {
-        if (!privateText) continue;
-        const privateShingles = computeShingles(privateText, VERBATIM_WORDS);
-        for (const s of candidateShingles) {
-          if (privateShingles.has(s)) {
-            matched.push('verbatim private text');
-            break;
-          }
-        }
-      }
-    }
-  }
-
   return matched;
 }
 
@@ -114,9 +52,8 @@ export type FileReader = (filePath: string) => Promise<string | null | undefined
 export interface ProjectRepos {
   trackerRepo?: string;
   upstreamRepo?: string;
+  upstreamClonePath?: string;
   isTrackerCheckout?: boolean;
-  reporterNames?: string[];
-  privateTexts?: string[];
 }
 
 /**
@@ -145,8 +82,8 @@ export function cleanRepoSlug(raw: string | undefined): string | undefined {
 }
 
 /**
- * Parses project manifest content (Markdown table or YAML syntax) to extract
- * tracker_repo and upstream_repo slugs without assuming naming conventions.
+ * Parses project manifest or user config content (Markdown table or YAML syntax)
+ * to extract tracker_repo, upstream_repo, and environment.upstream_clone.
  */
 export function parseProjectManifest(content: string): ProjectRepos {
   const result: ProjectRepos = {};
@@ -166,30 +103,48 @@ export function parseProjectManifest(content: string): ProjectRepos {
   // Markdown table row: | `?upstream_repo`? | `?<slug>`? |
   const upstreamMatch =
     content.match(/\|\s*`?upstream_repo`?\s*\|\s*`?([^`|\r\n]+)`?/i) ??
-    content.match(/^\s*upstream_repo:\s*`?([^`\r\n#]+)`?/im) ??
-    content.match(/\|\s*`?local_upstream`?\s*\|\s*`?([^`|\r\n]+)`?/i) ??
-    content.match(/^\s*local_upstream:\s*`?([^`\r\n#]+)`?/im);
+    content.match(/^\s*upstream_repo:\s*`?([^`\r\n#]+)`?/im);
   const upstreamSlug = cleanRepoSlug(upstreamMatch?.[1]);
   if (upstreamSlug) {
     result.upstreamRepo = upstreamSlug;
+  }
+
+  // user.md declares environment.upstream_clone or upstream_clone as a filesystem path
+  const upstreamCloneMatch =
+    content.match(/\|\s*`?(?:environment\.)?upstream_clone`?\s*\|\s*`?([^`|\r\n]+)`?/i) ??
+    content.match(/^\s*(?:environment\.)?upstream_clone:\s*`?([^`\r\n#]+)`?/im) ??
+    content.match(/^\s*upstream_clone:\s*`?([^`\r\n#]+)`?/im);
+  if (upstreamCloneMatch?.[1]) {
+    const rawPath = upstreamCloneMatch[1].trim().replace(/^[`'"]+|[`'"]+$/g, '').trim();
+    if (rawPath && !rawPath.startsWith('TODO') && !rawPath.startsWith('<')) {
+      result.upstreamClonePath = rawPath;
+    }
   }
 
   return result;
 }
 
 /**
- * Resolves repository identity from <project-config>/project.md in precedence order:
+ * Resolves repository identity from <project-config>/project.md and user.md in precedence order:
  * 1. .apache-magpie-local/project.md
- * 2. .git/apache-magpie/project.md
+ * 2. .git/apache-magpie/project.md (and worktree common dir)
  * 3. .apache-magpie-overrides/project.md
  * 4. ../.apache-magpie-overrides/project.md (if in sibling directory)
+ * 5. user.md layers (including ~/.config/apache-magpie/user.md with $HOME expanded)
  */
-export async function resolveProjectConfig(readFile?: FileReader, cwd?: string): Promise<ProjectRepos> {
+export async function resolveProjectConfig(
+  readFile?: FileReader,
+  cwd?: string,
+  env?: { [key: string]: string | undefined }
+): Promise<ProjectRepos> {
   if (!readFile) {
     return {};
   }
 
   const prefix = cwd ? `${cwd.replace(/[\\/]+$/, '')}/` : '';
+  const procEnv = typeof process !== 'undefined' ? process.env : undefined;
+  const homeDir = (env?.HOME || procEnv?.HOME || procEnv?.USERPROFILE || '').replace(/[\\/]+$/, '');
+
   const candidatePaths = [
     `${prefix}.apache-magpie-local/project.md`,
     `${prefix}.git/apache-magpie/project.md`,
@@ -203,19 +158,54 @@ export async function resolveProjectConfig(readFile?: FileReader, cwd?: string):
     `${prefix}.apache-magpie-overrides/user.md`,
     '.apache-magpie-local/user.md',
     '.apache-magpie-overrides/user.md',
-    '~/.config/apache-magpie/user.md',
   ];
+
+  if (homeDir) {
+    candidatePaths.push(`${homeDir}/.config/apache-magpie/user.md`);
+  }
+  candidatePaths.push('~/.config/apache-magpie/user.md');
+
+  // Check git worktree gitdir pointer
+  try {
+    const gitFilePath = `${prefix}.git`;
+    const gitFileContent = await readFile(gitFilePath);
+    if (gitFileContent && typeof gitFileContent === 'string') {
+      const gitDirMatch = gitFileContent.match(/gitdir:\s*([^\r\n]+)/i);
+      if (gitDirMatch) {
+        const resolvedGitDir = resolvePath(cwd, gitDirMatch[1].trim());
+        // In a worktree, gitdir is <commondir>/worktrees/<name>; the common dir is two levels up
+        const commonDir = resolvedGitDir.replace(/[\\/]worktrees[\\/][^\\/]+$/, '');
+        candidatePaths.unshift(`${commonDir}/apache-magpie/project.md`);
+      }
+    }
+  } catch {
+    // Continue
+  }
+
+  let merged: ProjectRepos = {};
 
   for (const path of candidatePaths) {
     try {
       const content = await readFile(path);
       if (content && typeof content === 'string') {
         const repos = parseProjectManifest(content);
-        if (repos.trackerRepo || repos.upstreamRepo) {
-          // isTrackerCheckout is only true if project.md was found directly in the current checkout,
-          // never when probing parent/sibling directories (../) or external directories
-          repos.isTrackerCheckout = !path.startsWith('..') && !path.includes('/..');
-          return repos;
+        if (repos.trackerRepo && !merged.trackerRepo) {
+          merged.trackerRepo = repos.trackerRepo;
+          merged.isTrackerCheckout = !path.startsWith('..') && !path.includes('/..');
+        }
+        if (repos.upstreamRepo && !merged.upstreamRepo) {
+          merged.upstreamRepo = repos.upstreamRepo;
+        }
+        if (repos.upstreamClonePath && !merged.upstreamClonePath) {
+          // Expand ~ in upstreamClonePath if needed
+          let clonePath = repos.upstreamClonePath;
+          if (clonePath.startsWith('~/') && homeDir) {
+            clonePath = `${homeDir}/${clonePath.slice(2)}`;
+          }
+          merged.upstreamClonePath = clonePath;
+        }
+        if (merged.trackerRepo && merged.upstreamRepo) {
+          return merged;
         }
       }
     } catch {
@@ -223,23 +213,35 @@ export async function resolveProjectConfig(readFile?: FileReader, cwd?: string):
     }
   }
 
-  return {};
+  return merged;
+}
+
+export interface ShellSubcommand {
+  raw: string;
+  separatorAfter?: string;
 }
 
 /**
- * Splits a composite shell command line into individual subcommands on
- * separators (;, &&, ||, |, \n, \r), respecting single and double quotes.
+ * Splits a composite shell command line into individual subcommands along with
+ * the trailing separator (&&, ;, \n, |, ||, &), respecting quoting rules.
  */
-export function splitShellCommands(commandLine: string): string[] {
-  const commands: string[] = [];
+export function splitShellSubcommands(commandLine: string): ShellSubcommand[] {
+  const result: ShellSubcommand[] = [];
   if (!commandLine || typeof commandLine !== 'string') {
-    return commands;
+    return result;
   }
 
   let current = '';
   let inSingle = false;
   let inDouble = false;
   let isEscaped = false;
+
+  const pushCurrent = (sep?: string) => {
+    if (current.trim()) {
+      result.push({ raw: current.trim(), separatorAfter: sep });
+    }
+    current = '';
+  };
 
   for (let i = 0; i < commandLine.length; i++) {
     const char = commandLine[i];
@@ -270,45 +272,34 @@ export function splitShellCommands(commandLine: string): string[] {
     }
 
     if (!inSingle && !inDouble) {
-      if (char === '\n' || char === '\r' || char === ';') {
-        if (current.trim()) {
-          commands.push(current.trim());
-        }
-        current = '';
+      if (char === '\n' || char === '\r') {
+        pushCurrent('\n');
+        continue;
+      }
+      if (char === ';') {
+        pushCurrent(';');
         continue;
       }
       if (char === '&') {
         if (next === '&') {
-          if (current.trim()) {
-            commands.push(current.trim());
-          }
-          current = '';
+          pushCurrent('&&');
           i++; // skip second &
           continue;
         }
-        // Single & is a background separator (unless part of >& redirection)
+        // Single & is background separator unless part of >& redirection
         const prev = i > 0 ? commandLine[i - 1] : '';
         if (prev !== '>') {
-          if (current.trim()) {
-            commands.push(current.trim());
-          }
-          current = '';
+          pushCurrent('&');
           continue;
         }
       }
       if (char === '|' && next === '|') {
-        if (current.trim()) {
-          commands.push(current.trim());
-        }
-        current = '';
+        pushCurrent('||');
         i++; // skip second |
         continue;
       }
       if (char === '|') {
-        if (current.trim()) {
-          commands.push(current.trim());
-        }
-        current = '';
+        pushCurrent('|');
         continue;
       }
     }
@@ -316,18 +307,20 @@ export function splitShellCommands(commandLine: string): string[] {
     current += char;
   }
 
-  if (current.trim()) {
-    commands.push(current.trim());
-  }
+  pushCurrent(undefined);
+  return result;
+}
 
-  return commands;
+/**
+ * Splits a composite shell command line into individual subcommand strings.
+ */
+export function splitShellCommands(commandLine: string): string[] {
+  return splitShellSubcommands(commandLine).map((s) => s.raw);
 }
 
 /**
  * Tokenizes a single subcommand line into an argv array according to POSIX shell
  * quoting and escaping rules.
- * Handles single quotes ('...'), double quotes ("..." with \", \\, \$, \`),
- * and unquoted whitespace separation.
  */
 export function tokenizeShellWords(subcommand: string): string[] {
   const tokens: string[] = [];
@@ -353,7 +346,6 @@ export function tokenizeShellWords(subcommand: string): string[] {
 
     if (char === '\\' && !inSingle) {
       if (inDouble) {
-        // In double quotes, only \", \\, \$, \`, \newline are escape sequences
         const next = subcommand[i + 1];
         if (next === '"' || next === '\\' || next === '$' || next === '`' || next === '\n') {
           isEscaped = true;
@@ -422,14 +414,11 @@ export interface ParsedSubcommand {
   cdDir?: string;
   extractedTexts: string[];
   referencedFiles: string[];
+  redirectedFiles: string[];
   hasDynamicInput: boolean;
+  isGraphqlMutation?: boolean;
 }
 
-/**
- * Parses a single subcommand using the shell-words argv tokenizer.
- * Identifies git/gh invocations and extracts messages, referenced files,
- * target repositories, and git working directories.
- */
 /**
  * Detects dynamic shell constructs that cannot be statically inspected:
  * command substitution ($(...) or `...`), parameter expansion ($VAR or ${VAR}),
@@ -487,6 +476,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     commandType: '',
     extractedTexts: [],
     referencedFiles: [],
+    redirectedFiles: [],
     hasDynamicInput: false,
   };
 
@@ -502,6 +492,20 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
   const tokens = tokenizeShellWords(trimmed);
   if (tokens.length === 0) {
     return result;
+  }
+
+  // Detect file redirection operators in subcommand (> or >>)
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if ((t === '>' || t === '>>' || t === '1>' || t === '1>>') && i + 1 < tokens.length) {
+      result.redirectedFiles.push(tokens[i + 1]);
+      i++;
+    } else if (t.startsWith('>') || t.startsWith('>>') || t.startsWith('1>') || t.startsWith('1>>')) {
+      const target = t.replace(/^(?:1?>{1,2})/, '');
+      if (target) {
+        result.redirectedFiles.push(target);
+      }
+    }
   }
 
   // Check leading environment variable assignments (e.g. GH_REPO=owner/repo cmd ...)
@@ -535,14 +539,15 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     for (let i = cmdIdx + 1; i < tokens.length; i++) {
       const token = tokens[i];
 
-      // -C <dir> or -C=<dir> (case-sensitive!)
+      // -C <dir> or -C=<dir> (case-sensitive; repeated -Cs compose!)
       if (token === '-C' && i + 1 < tokens.length) {
-        gitCwd = tokens[i + 1];
+        gitCwd = gitCwd ? resolvePath(gitCwd, tokens[i + 1]) : tokens[i + 1];
         i++; // skip directory argument
         continue;
       }
       if (token.startsWith('-C=')) {
-        gitCwd = token.slice(3);
+        const nextDir = token.slice(3);
+        gitCwd = gitCwd ? resolvePath(gitCwd, nextDir) : nextDir;
         continue;
       }
 
@@ -580,6 +585,32 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
       for (let i = subcmdIndex + 1; i < tokens.length; i++) {
         const token = tokens[i];
 
+        // Message reuse options: dynamically reuse text from history -> flag as dynamic input (fail closed)
+        if (
+          token === '-C' ||
+          token.startsWith('-C=') ||
+          token === '-c' ||
+          token.startsWith('-c=') ||
+          token === '--reuse-message' ||
+          token.startsWith('--reuse-message=') ||
+          token === '--reedit-message' ||
+          token.startsWith('--reedit-message=') ||
+          token === '--fixup' ||
+          token.startsWith('--fixup=') ||
+          token === '--squash' ||
+          token.startsWith('--squash=')
+        ) {
+          result.hasDynamicInput = true;
+          if (
+            (token === '-C' || token === '-c' || token === '--reuse-message' || token === '--reedit-message' || token === '--fixup' || token === '--squash') &&
+            i + 1 < tokens.length &&
+            !tokens[i + 1].startsWith('-')
+          ) {
+            i++;
+          }
+          continue;
+        }
+
         if (token === '--amend') {
           // If amending without explicit message or file, flag as dynamic reuse
           const hasExplicitMessage = tokens.slice(subcmdIndex + 1).some((t) =>
@@ -589,6 +620,17 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           if (!hasExplicitMessage) {
             result.hasDynamicInput = true;
           }
+          continue;
+        }
+
+        // --trailer <val>, --trailer=<val>
+        if (token === '--trailer' && i + 1 < tokens.length) {
+          result.extractedTexts.push(tokens[i + 1]);
+          i++;
+          continue;
+        }
+        if (token.startsWith('--trailer=')) {
+          result.extractedTexts.push(token.slice('--trailer='.length));
           continue;
         }
 
@@ -641,29 +683,36 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           continue;
         }
 
-        // Clustered flags with boolean commit flags preceding m or F (e.g. -am, -sam, -aF, -saF)
-        const clusteredMatch = token.match(/^-[asvqenS]+([mF])(.*)$/);
-        if (clusteredMatch) {
-          const flag = clusteredMatch[1];
-          const rest = clusteredMatch[2];
-          if (flag === 'm') {
-            if (rest.length > 0) {
-              result.extractedTexts.push(rest);
+        // Handle clustered short flags ending in m or F: e.g. -am"msg", -am msg
+        if (token.startsWith('-') && !token.startsWith('--') && (token.includes('m') || token.includes('F'))) {
+          const mIdx = token.indexOf('m');
+          const fIdx = token.indexOf('F');
+          if (mIdx !== -1) {
+            if (mIdx < token.length - 1) {
+              result.extractedTexts.push(token.slice(mIdx + 1));
             } else if (i + 1 < tokens.length) {
               result.extractedTexts.push(tokens[i + 1]);
               i++;
             }
-            continue;
-          }
-          if (flag === 'F') {
-            const file = rest.length > 0 ? rest : (i + 1 < tokens.length ? tokens[++i] : '');
-            if (file === '-') {
-              result.hasDynamicInput = true;
-            } else if (file) {
-              result.referencedFiles.push(file);
+          } else if (fIdx !== -1) {
+            if (fIdx < token.length - 1) {
+              const file = token.slice(fIdx + 1);
+              if (file === '-') {
+                result.hasDynamicInput = true;
+              } else {
+                result.referencedFiles.push(file);
+              }
+            } else if (i + 1 < tokens.length) {
+              const file = tokens[i + 1];
+              if (file === '-') {
+                result.hasDynamicInput = true;
+              } else {
+                result.referencedFiles.push(file);
+              }
+              i++;
             }
-            continue;
           }
+          continue;
         }
       }
 
@@ -673,7 +722,8 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     // 2. git tag
     if (subcmd === 'tag') {
       const hasMsg = tokens.slice(subcmdIndex + 1).some((t) =>
-        t === '-m' || t === '-F' || t.startsWith('-m') || t.startsWith('-F') ||
+        t === '-m' || t === '-F' ||
+        (t.startsWith('-') && !t.startsWith('--') && (t.includes('m') || t.includes('F'))) ||
         t.startsWith('--message') || t.startsWith('--file')
       );
       if (hasMsg) {
@@ -732,101 +782,104 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
             continue;
           }
 
-          // Clustered flags
-          const clusteredMatch = token.match(/^-[asvqenS]+([mF])(.*)$/);
-          if (clusteredMatch) {
-            const flag = clusteredMatch[1];
-            const rest = clusteredMatch[2];
-            if (flag === 'm') {
-              if (rest.length > 0) {
-                result.extractedTexts.push(rest);
+          // Handle clustered flags like -am '...', -sm '...'
+          if (token.startsWith('-') && !token.startsWith('--') && (token.includes('m') || token.includes('F'))) {
+            const mIdx = token.indexOf('m');
+            const fIdx = token.indexOf('F');
+            if (mIdx !== -1) {
+              if (mIdx < token.length - 1) {
+                result.extractedTexts.push(token.slice(mIdx + 1));
               } else if (i + 1 < tokens.length) {
                 result.extractedTexts.push(tokens[i + 1]);
                 i++;
               }
-              continue;
-            }
-            if (flag === 'F') {
-              const file = rest.length > 0 ? rest : (i + 1 < tokens.length ? tokens[++i] : '');
-              if (file === '-') {
-                result.hasDynamicInput = true;
-              } else if (file) {
-                result.referencedFiles.push(file);
+            } else if (fIdx !== -1) {
+              if (fIdx < token.length - 1) {
+                const file = token.slice(fIdx + 1);
+                if (file === '-') {
+                  result.hasDynamicInput = true;
+                } else {
+                  result.referencedFiles.push(file);
+                }
+              } else if (i + 1 < tokens.length) {
+                const file = tokens[i + 1];
+                if (file === '-') {
+                  result.hasDynamicInput = true;
+                } else {
+                  result.referencedFiles.push(file);
+                }
+                i++;
               }
-              continue;
             }
+            continue;
           }
         }
 
         return result;
       }
     }
-
-    return result;
   }
 
-  // Handle gh binary in tokens
+  // Find gh binary in tokens
   if (binary === 'gh') {
-    // Extract target repo: -R <repo>, -R=<repo>, --repo <repo>, --repo=<repo>, -R<repo>
-    // Linear scan skipping arguments to other flags to prevent reading --repo from inside body/title
+    if (cmdIdx + 1 >= tokens.length) {
+      return result;
+    }
+
+    // Extract repository flag (-R owner/repo, --repo owner/repo, -R=..., --repo=...)
     for (let i = cmdIdx + 1; i < tokens.length; i++) {
       const token = tokens[i];
       if ((token === '-R' || token === '--repo') && i + 1 < tokens.length) {
         result.targetRepo = tokens[i + 1].toLowerCase();
-        i++;
-        continue;
-      }
-      if (token.startsWith('-R=')) {
-        result.targetRepo = token.slice(3).toLowerCase();
-        continue;
+        break;
       }
       if (token.startsWith('--repo=')) {
-        result.targetRepo = token.slice(7).toLowerCase();
-        continue;
+        result.targetRepo = token.slice('--repo='.length).toLowerCase();
+        break;
       }
-      if (token.startsWith('-R') && token.length > 2) {
-        result.targetRepo = token.slice(2).toLowerCase();
-        continue;
-      }
-      const urlMatch = token.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+)\/(?:pull|issues)\/\d+/i);
-      if (urlMatch) {
-        result.targetRepo = urlMatch[1].toLowerCase();
-        continue;
-      }
-      // Skip flags that take an argument so body or title text cannot be mistaken for flags
-      if ((token === '-b' || token === '--body' || token === '-t' || token === '--title' ||
-           token === '-F' || token === '--body-file' || token === '-f' || token === '--field' ||
-           token === '--raw-field' || token === '--input') && i + 1 < tokens.length) {
-        i++;
-        continue;
+      if (token.startsWith('-R=') || (token.startsWith('-R') && token.length > 2)) {
+        result.targetRepo = token.slice(token.startsWith('-R=') ? 3 : 2).toLowerCase();
+        break;
       }
     }
 
-    const ghSub1 = tokens[cmdIdx + 1];
-    const ghSub2 = tokens[cmdIdx + 2];
+    // Check PR/Issue URLs (https://github.com/owner/repo/pull/123 or issues/123)
+    if (!result.targetRepo) {
+      for (let i = cmdIdx + 1; i < tokens.length; i++) {
+        const token = tokens[i];
+        const urlMatch = token.match(/https?:\/\/github\.com\/([a-z0-9_.-]+\/[a-z0-9_.-]+)\/(?:pull|issues)\/\d+/i);
+        if (urlMatch) {
+          result.targetRepo = urlMatch[1].toLowerCase();
+          break;
+        }
+      }
+    }
 
-    // gh pr create
-    if (ghSub1 === 'pr' && ghSub2 === 'create') {
+    const sub1 = tokens[cmdIdx + 1];
+    const sub2 = cmdIdx + 2 < tokens.length ? tokens[cmdIdx + 2] : '';
+
+    // 1. gh pr create
+    if (sub1 === 'pr' && sub2 === 'create') {
       result.isPublicSurfaceCommand = true;
       result.commandType = 'gh pr create';
 
-      if (tokens.some((t) => t === '--fill' || t === '--fill-first')) {
-        result.hasDynamicInput = true;
-      }
-
       for (let i = cmdIdx + 3; i < tokens.length; i++) {
         const token = tokens[i];
+        if (token === '--fill' || token === '--fill-first') {
+          result.hasDynamicInput = true;
+          continue;
+        }
         if ((token === '-t' || token === '--title') && i + 1 < tokens.length) {
           result.extractedTexts.push(tokens[i + 1]);
           i++;
           continue;
         }
-        if (token.startsWith('--title=')) {
-          result.extractedTexts.push(token.slice('--title='.length));
-          continue;
-        }
         if (token.startsWith('-t') && token.length > 2) {
           result.extractedTexts.push(token.slice(2));
+          continue;
+        }
+        if (token.startsWith('--title=')) {
+          result.extractedTexts.push(token.slice('--title='.length));
           continue;
         }
         if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
@@ -834,12 +887,12 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           i++;
           continue;
         }
-        if (token.startsWith('--body=')) {
-          result.extractedTexts.push(token.slice('--body='.length));
-          continue;
-        }
         if (token.startsWith('-b') && token.length > 2) {
           result.extractedTexts.push(token.slice(2));
+          continue;
+        }
+        if (token.startsWith('--body=')) {
+          result.extractedTexts.push(token.slice('--body='.length));
           continue;
         }
         if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
@@ -852,15 +905,6 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           i++;
           continue;
         }
-        if (token.startsWith('--body-file=')) {
-          const file = token.slice('--body-file='.length);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
         if (token.startsWith('-F') && token.length > 2) {
           const file = token.slice(2);
           if (file === '-') {
@@ -870,13 +914,21 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           }
           continue;
         }
+        if (token.startsWith('--body-file=')) {
+          const file = token.slice('--body-file='.length);
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
+          continue;
+        }
       }
-
       return result;
     }
 
-    // gh pr edit
-    if (ghSub1 === 'pr' && ghSub2 === 'edit') {
+    // 2. gh pr edit
+    if (sub1 === 'pr' && sub2 === 'edit') {
       result.isPublicSurfaceCommand = true;
       result.commandType = 'gh pr edit';
 
@@ -887,12 +939,12 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           i++;
           continue;
         }
-        if (token.startsWith('--title=')) {
-          result.extractedTexts.push(token.slice('--title='.length));
-          continue;
-        }
         if (token.startsWith('-t') && token.length > 2) {
           result.extractedTexts.push(token.slice(2));
+          continue;
+        }
+        if (token.startsWith('--title=')) {
+          result.extractedTexts.push(token.slice('--title='.length));
           continue;
         }
         if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
@@ -900,12 +952,12 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           i++;
           continue;
         }
-        if (token.startsWith('--body=')) {
-          result.extractedTexts.push(token.slice('--body='.length));
-          continue;
-        }
         if (token.startsWith('-b') && token.length > 2) {
           result.extractedTexts.push(token.slice(2));
+          continue;
+        }
+        if (token.startsWith('--body=')) {
+          result.extractedTexts.push(token.slice('--body='.length));
           continue;
         }
         if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
@@ -918,15 +970,6 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           i++;
           continue;
         }
-        if (token.startsWith('--body-file=')) {
-          const file = token.slice('--body-file='.length);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
         if (token.startsWith('-F') && token.length > 2) {
           const file = token.slice(2);
           if (file === '-') {
@@ -936,13 +979,21 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           }
           continue;
         }
+        if (token.startsWith('--body-file=')) {
+          const file = token.slice('--body-file='.length);
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
+          continue;
+        }
       }
-
       return result;
     }
 
-    // gh pr review
-    if (ghSub1 === 'pr' && ghSub2 === 'review') {
+    // 3. gh pr review
+    if (sub1 === 'pr' && sub2 === 'review') {
       result.isPublicSurfaceCommand = true;
       result.commandType = 'gh pr review';
 
@@ -953,65 +1004,12 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           i++;
           continue;
         }
-        if (token.startsWith('--body=')) {
-          result.extractedTexts.push(token.slice('--body='.length));
-          continue;
-        }
         if (token.startsWith('-b') && token.length > 2) {
           result.extractedTexts.push(token.slice(2));
           continue;
         }
-        if ((token === '--body-file' || token === '-F') && i + 1 < tokens.length) {
-          const file = tokens[i + 1];
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          i++;
-          continue;
-        }
-        if (token.startsWith('--body-file=')) {
-          const file = token.slice('--body-file='.length);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
-        if (token.startsWith('-F') && token.length > 2) {
-          const file = token.slice(2);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
-      }
-
-      return result;
-    }
-
-    // gh pr comment / gh issue comment
-    if ((ghSub1 === 'pr' || ghSub1 === 'issue') && ghSub2 === 'comment') {
-      result.isPublicSurfaceCommand = true;
-      result.commandType = 'gh pr comment';
-
-      for (let i = cmdIdx + 3; i < tokens.length; i++) {
-        const token = tokens[i];
-        if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
-          result.extractedTexts.push(tokens[i + 1]);
-          i++;
-          continue;
-        }
         if (token.startsWith('--body=')) {
           result.extractedTexts.push(token.slice('--body='.length));
-          continue;
-        }
-        if (token.startsWith('-b') && token.length > 2) {
-          result.extractedTexts.push(token.slice(2));
           continue;
         }
         if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
@@ -1024,6 +1022,15 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           i++;
           continue;
         }
+        if (token.startsWith('-F') && token.length > 2) {
+          const file = token.slice(2);
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
+          continue;
+        }
         if (token.startsWith('--body-file=')) {
           const file = token.slice('--body-file='.length);
           if (file === '-') {
@@ -1031,6 +1038,40 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           } else {
             result.referencedFiles.push(file);
           }
+          continue;
+        }
+      }
+      return result;
+    }
+
+    // 4. gh pr comment
+    if (sub1 === 'pr' && sub2 === 'comment') {
+      result.isPublicSurfaceCommand = true;
+      result.commandType = 'gh pr comment';
+
+      for (let i = cmdIdx + 3; i < tokens.length; i++) {
+        const token = tokens[i];
+        if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
+          result.extractedTexts.push(tokens[i + 1]);
+          i++;
+          continue;
+        }
+        if (token.startsWith('-b') && token.length > 2) {
+          result.extractedTexts.push(token.slice(2));
+          continue;
+        }
+        if (token.startsWith('--body=')) {
+          result.extractedTexts.push(token.slice('--body='.length));
+          continue;
+        }
+        if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
+          const file = tokens[i + 1];
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
+          i++;
           continue;
         }
         if (token.startsWith('-F') && token.length > 2) {
@@ -1042,28 +1083,94 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           }
           continue;
         }
+        if (token.startsWith('--body-file=')) {
+          const file = token.slice('--body-file='.length);
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
+          continue;
+        }
       }
-
       return result;
     }
 
-    // gh api
-    if (ghSub1 === 'api') {
-      const isGraphql = tokens.includes('graphql');
+    // 5. gh issue comment
+    if (sub1 === 'issue' && sub2 === 'comment') {
+      result.isPublicSurfaceCommand = true;
+      result.commandType = 'gh pr comment';
+
+      for (let i = cmdIdx + 3; i < tokens.length; i++) {
+        const token = tokens[i];
+        if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
+          result.extractedTexts.push(tokens[i + 1]);
+          i++;
+          continue;
+        }
+        if (token.startsWith('-b') && token.length > 2) {
+          result.extractedTexts.push(token.slice(2));
+          continue;
+        }
+        if (token.startsWith('--body=')) {
+          result.extractedTexts.push(token.slice('--body='.length));
+          continue;
+        }
+        if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
+          const file = tokens[i + 1];
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
+          i++;
+          continue;
+        }
+        if (token.startsWith('-F') && token.length > 2) {
+          const file = token.slice(2);
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
+          continue;
+        }
+        if (token.startsWith('--body-file=')) {
+          const file = token.slice('--body-file='.length);
+          if (file === '-') {
+            result.hasDynamicInput = true;
+          } else {
+            result.referencedFiles.push(file);
+          }
+          continue;
+        }
+      }
+      return result;
+    }
+
+    // 6. gh api
+    if (sub1 === 'api') {
+      const isGraphql = tokens.some((t) => t === 'graphql' || t.includes('/graphql'));
 
       for (let i = cmdIdx + 2; i < tokens.length; i++) {
         const token = tokens[i];
         if (token.startsWith('repos/')) {
-          const slug = token.slice('repos/'.length).split('/')[0] + '/' + token.slice('repos/'.length).split('/')[1];
-          result.targetRepo = slug.toLowerCase();
-          continue;
+          const parts = token.slice('repos/'.length).split('/');
+          if (parts.length >= 2) {
+            result.targetRepo = `${parts[0]}/${parts[1]}`.toLowerCase();
+          }
+          break;
         }
         if (/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+/.test(token) && !token.startsWith('-')) {
           result.targetRepo = token.toLowerCase();
-          continue;
+          break;
         }
+      }
 
-        // Handle --input <file> / --input=<file>
+      for (let i = cmdIdx + 2; i < tokens.length; i++) {
+        const token = tokens[i];
+
+        // --input <file>, --input=<file>
         if (token === '--input' && i + 1 < tokens.length) {
           const file = tokens[i + 1];
           if (file === '-') {
@@ -1084,37 +1191,59 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           continue;
         }
 
+        // -f <name>=<val>, -F <name>=<val>, --field <name>=<val>, --raw-field <name>=<val>
         if ((token === '-f' || token === '-F' || token === '--field' || token === '--raw-field') && i + 1 < tokens.length) {
           const fieldArg = tokens[i + 1];
-          const match = fieldArg.match(/^(?:body|title|query)=(.*)$/s);
-          if (match) {
-            const val = match[1];
+          const eqIdx = fieldArg.indexOf('=');
+          if (eqIdx !== -1) {
+            const fieldName = fieldArg.slice(0, eqIdx);
+            const val = fieldArg.slice(eqIdx + 1);
+
+            // In GraphQL, inspect EVERY field argument (variables, query, etc.)
+            // In REST calls, inspect body and title
+            if (isGraphql || fieldName === 'body' || fieldName === 'title' || fieldName === 'query') {
+              if (val.startsWith('@')) {
+                result.referencedFiles.push(val.slice(1));
+              } else {
+                result.extractedTexts.push(val);
+              }
+            }
+          }
+          i++;
+          continue;
+        }
+
+        const fieldMatch = token.match(/^(?:--field|--raw-field)=(.*?)=(.*)$/s);
+        if (fieldMatch) {
+          const fieldName = fieldMatch[1];
+          const val = fieldMatch[2];
+          if (isGraphql || fieldName === 'body' || fieldName === 'title' || fieldName === 'query') {
             if (val.startsWith('@')) {
               result.referencedFiles.push(val.slice(1));
             } else {
               result.extractedTexts.push(val);
             }
           }
-          i++;
-          continue;
-        }
-        const fieldMatch = token.match(/^(?:--field|--raw-field)=(?:body|title|query)=(.*)$/s);
-        if (fieldMatch) {
-          const val = fieldMatch[1];
-          if (val.startsWith('@')) {
-            result.referencedFiles.push(val.slice(1));
-          } else {
-            result.extractedTexts.push(val);
-          }
           continue;
         }
 
         if (isGraphql && token.includes('mutation')) {
           result.extractedTexts.push(token);
+          result.isGraphqlMutation = true;
         }
       }
 
-      if (result.extractedTexts.length > 0 || result.referencedFiles.length > 0 || result.hasDynamicInput) {
+      // Check if GraphQL query string specifies a mutation
+      if (isGraphql) {
+        for (const t of result.extractedTexts) {
+          if (/\bmutation\b/i.test(t)) {
+            result.isGraphqlMutation = true;
+            break;
+          }
+        }
+      }
+
+      if (result.extractedTexts.length > 0 || result.referencedFiles.length > 0 || result.hasDynamicInput || result.isGraphqlMutation) {
         result.isPublicSurfaceCommand = true;
         result.commandType = 'gh api';
       }
@@ -1126,39 +1255,16 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
   return result;
 }
 
-export interface EvaluationOptions {
-  readFile?: FileReader;
-  env?: Record<string, string | undefined>;
-  projectConfig?: ProjectRepos;
-  privateTexts?: string[];
-  reporterNames?: string[];
-}
-
 /**
- * Generates an actionable, maintainer-aligned blocking explanation.
- * Does NOT teach the agent how to bypass; instructs asking the maintainer.
+ * Inspects a directory's .git/config to determine if it points to tracker_repo or upstream_repo.
+ * Strict exact owner/repo slug matching is enforced (no substring .includes).
+ * If both remotes exist, upstream takes precedence.
  */
-function generateBlockingReason(commandType: string, terms: string[]): string {
-  const termList = terms.map((t) => `\`${t}\``).join(', ');
-  return [
-    `⛔ Apache Magpie Security Guard: Blocked public-surface command (${commandType}).`,
-    `Found forbidden security disclosure term(s): ${termList}.`,
-    '',
-    'Confidentiality Rule (AGENTS.md & docs/security/fixing-security-issues.md):',
-    'Public commits, tags, PR descriptions, and comments on upstream repositories must describe the change in neutral functional terms without mentioning CVE IDs or vulnerability classes before the coordinated disclosure advisory has shipped.',
-    'If this is legitimate post-coordinated-disclosure maintenance, consult an Apache Magpie security-team maintainer to review and set the environment bypass.',
-  ].join('\n');
-}
-
-/**
- * Inspects a directory's git remote URLs to determine if it is tracker, upstream, or third-party.
- * Compares against declared trackerRepo and upstreamRepo (including contributor forks).
- */
-async function inspectDirectoryRemote(
+export async function inspectDirectoryRemote(
   dir: string | undefined,
   projectConfig: ProjectRepos,
   readFile?: FileReader
-): Promise<{ isTracker: boolean; isUpstream: boolean; determined: boolean }> {
+): Promise<{ isTracker: boolean; isUpstream: boolean; determined: boolean; detectedUpstreamSlug?: string }> {
   if (!readFile) {
     return { isTracker: false, isUpstream: false, determined: false };
   }
@@ -1201,7 +1307,6 @@ async function inspectDirectoryRemote(
 
   try {
     const configLower = configContent.toLowerCase();
-    // Extract url lines under [remote ...]
     const urlMatches = configLower.matchAll(/url\s*=\s*([^\r\n]+)/g);
     const urls: string[] = [];
     for (const m of urlMatches) {
@@ -1217,36 +1322,74 @@ async function inspectDirectoryRemote(
     const upstreamRepoName = upstreamSlug?.includes('/') ? upstreamSlug.split('/')[1] : upstreamSlug;
     const trackerRepoName = trackerSlug?.includes('/') ? trackerSlug.split('/')[1] : trackerSlug;
 
-    const matchesRepo = (url: string, slug?: string, repoName?: string): boolean => {
-      if (!url) return false;
+    const extractSlugFromUrl = (url: string): string | undefined => {
+      if (!url) return undefined;
       const cleanUrl = url.toLowerCase().replace(/\.git$/, '');
-      if (slug && cleanUrl.includes(slug)) {
-        return true;
-      }
-      if (repoName && (cleanUrl.endsWith(`/${repoName}`) || cleanUrl.endsWith(`:${repoName}`))) {
-        return true;
-      }
-      return false;
+      const match = cleanUrl.match(/(?:[:/])([a-z0-9_.-]+\/[a-z0-9_.-]+)$/);
+      return match ? match[1] : undefined;
     };
 
-    const isTracker = trackerSlug ? urls.some((u) => matchesRepo(u, trackerSlug, trackerRepoName)) : false;
-    const isUpstream = upstreamSlug ? urls.some((u) => matchesRepo(u, upstreamSlug, upstreamRepoName)) : false;
+    let detectedUpstreamSlug: string | undefined = undefined;
+    for (const u of urls) {
+      const s = extractSlugFromUrl(u);
+      if (s && s !== trackerSlug) {
+        detectedUpstreamSlug = s;
+        break;
+      }
+    }
+
+    // Upstream match takes precedence over tracker match
+    const isUpstream = upstreamSlug
+      ? urls.some((u) => {
+          const extracted = extractSlugFromUrl(u);
+          return extracted === upstreamSlug || (upstreamRepoName && extracted?.endsWith(`/${upstreamRepoName}`));
+        })
+      : false;
+
+    const isTracker = !isUpstream && trackerSlug
+      ? urls.some((u) => {
+          const extracted = extractSlugFromUrl(u);
+          return extracted === trackerSlug || (trackerRepoName && extracted?.endsWith(`/${trackerRepoName}`));
+        })
+      : false;
 
     return {
       isTracker,
       isUpstream,
       determined: true,
+      detectedUpstreamSlug,
     };
   } catch {
     return { isTracker: false, isUpstream: false, determined: false };
   }
 }
 
+export interface EvaluationOptions {
+  env?: { [key: string]: string | undefined };
+  readFile?: FileReader;
+  projectConfig?: ProjectRepos;
+}
+
+/**
+ * Generates user-facing blocking reason without instructing agent how to bypass.
+ */
+export function generateBlockingReason(commandType: string, terms: string[]): string {
+  const termList = terms.map((t) => `\`${t}\``).join(', ');
+  return [
+    `⛔ Apache Magpie Security Guard: Blocked public-surface command (${commandType}).`,
+    `Found forbidden security disclosure term(s): ${termList}.`,
+    '',
+    'Confidentiality Rule (AGENTS.md & docs/security/fixing-security-issues.md):',
+    'Public commits, tags, PR descriptions, and comments on upstream repositories must describe the change in neutral functional terms without mentioning CVE IDs or vulnerability classes before the coordinated disclosure advisory has shipped.',
+    'If this is legitimate post-coordinated-disclosure maintenance, consult an Apache Magpie security-team maintainer to review and set the environment bypass.',
+  ].join('\n');
+}
+
 /**
  * Evaluates whether a public-surface command violates embargo terms.
  * Evaluates per subcommand, respects project.md config for tracker/upstream resolution,
- * tracks cd directory transitions across subcommands, fails closed on unreadable files
- * and indeterminate repositories, and honours only human-set environment escape hatches.
+ * tracks cd directory transitions across subcommands, fails closed on unreadable files,
+ * dynamic pipelines, and indeterminate repositories, and honours only human-set environment escape hatches.
  */
 export async function evaluatePublicSurfaceCommand(
   commandLine: string,
@@ -1261,38 +1404,88 @@ export async function evaluatePublicSurfaceCommand(
     return { blocked: false, matchedTerms: [] };
   }
 
-  // Split command line into individual subcommands
-  const subcommands = splitShellCommands(commandLine);
+  // Split command line into individual subcommands preserving operators
+  const subcommands = splitShellSubcommands(commandLine);
 
   let virtualCwd: string | undefined = undefined;
+  const seenRedirectedFiles = new Set<string>();
 
-  for (const rawSub of subcommands) {
+  for (const item of subcommands) {
+    const rawSub = item.raw;
     const parsed = parseSubcommand(rawSub);
 
-    // Track cd transitions
+    // Track cd transitions: only update virtualCwd across sequential operators (&&, ;, \n)
     if (parsed.cdDir) {
-      virtualCwd = resolvePath(virtualCwd, parsed.cdDir);
+      if (item.separatorAfter === '&&' || item.separatorAfter === ';' || item.separatorAfter === '\n' || !item.separatorAfter) {
+        virtualCwd = resolvePath(virtualCwd, parsed.cdDir);
+      }
       continue;
+    }
+
+    // Check if any referenced file was redirected into earlier in the same composite command
+    for (const ref of parsed.referencedFiles) {
+      const resolved = resolvePath(virtualCwd, ref);
+      if (seenRedirectedFiles.has(resolved) || seenRedirectedFiles.has(ref)) {
+        parsed.hasDynamicInput = true;
+      }
+    }
+
+    // Record newly redirected files from this subcommand
+    for (const red of parsed.redirectedFiles) {
+      seenRedirectedFiles.add(resolvePath(virtualCwd, red));
+      seenRedirectedFiles.add(red);
     }
 
     if (!parsed.isPublicSurfaceCommand) {
       continue;
     }
 
-    const effectiveDir = parsed.gitCwd || virtualCwd;
+    // Resolve git -C relative to virtualCwd, not bare
+    const effectiveDir = parsed.gitCwd ? resolvePath(virtualCwd, parsed.gitCwd) : virtualCwd;
 
-    // Resolve project configuration (tracker_repo, upstream_repo) for this subcommand's scope
-    const projectConfig = options?.projectConfig ?? (await resolveProjectConfig(options?.readFile, effectiveDir));
+    // Resolve project configuration (tracker_repo, upstream_repo, upstream_clone) for this subcommand's scope
+    const projectConfig = options?.projectConfig ?? (await resolveProjectConfig(options?.readFile, effectiveDir, options?.env));
     const trackerRepo = projectConfig.trackerRepo?.toLowerCase();
-    const upstreamRepo = projectConfig.upstreamRepo?.toLowerCase();
-    const upstreamRepoName = upstreamRepo?.includes('/') ? upstreamRepo.split('/')[1] : upstreamRepo;
+    let upstreamRepo = projectConfig.upstreamRepo?.toLowerCase();
 
     // 1. Exemption: Subcommand explicitly targets the private security tracker
     if (parsed.targetRepo && trackerRepo && parsed.targetRepo === trackerRepo) {
       continue;
     }
 
-    // 2. Repository scoping: Subcommands targeting upstream or a contributor's fork of upstream must be scrubbed.
+    // 2. Check if working directory is inside the configured upstream_clone path
+    let isWorkingDirUpstreamClone = false;
+    if (projectConfig.upstreamClonePath) {
+      const normClone = projectConfig.upstreamClonePath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      const normDir = (effectiveDir || '.').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+      if (normDir === normClone || normDir.startsWith(`${normClone}/`)) {
+        isWorkingDirUpstreamClone = true;
+      }
+    }
+
+    // 3. Inspect directory remote from .git/config
+    let remoteInfo: { isTracker: boolean; isUpstream: boolean; determined: boolean; detectedUpstreamSlug?: string } = {
+      isTracker: false,
+      isUpstream: isWorkingDirUpstreamClone,
+      determined: isWorkingDirUpstreamClone,
+    };
+
+    if (options?.readFile) {
+      const inspected = await inspectDirectoryRemote(effectiveDir, projectConfig, options.readFile);
+      if (inspected.determined) {
+        remoteInfo = inspected;
+        if (isWorkingDirUpstreamClone) {
+          remoteInfo.isUpstream = true;
+        }
+      }
+      if (!upstreamRepo && remoteInfo.detectedUpstreamSlug) {
+        upstreamRepo = remoteInfo.detectedUpstreamSlug.toLowerCase();
+      }
+    }
+
+    const upstreamRepoName = upstreamRepo?.includes('/') ? upstreamRepo.split('/')[1] : upstreamRepo;
+
+    // 4. Repository scoping: Subcommands targeting upstream or a contributor's fork of upstream must be scrubbed.
     // Subcommands targeting an explicit unrelated repository (e.g. adopter docs, framework) pass unchecked.
     const isTargetUpstreamOrFork =
       parsed.targetRepo &&
@@ -1304,33 +1497,26 @@ export async function evaluatePublicSurfaceCommand(
       continue;
     }
 
-    // 3. For commands without explicit repo flag, determine repository from git context
+    // 5. For commands without explicit repo flag, determine repository from git context
     if (!parsed.targetRepo) {
-      if (options?.readFile) {
-        const remoteInfo = await inspectDirectoryRemote(effectiveDir, projectConfig, options.readFile);
-        if (remoteInfo.determined) {
-          if (remoteInfo.isTracker) {
-            continue; // Safe tracker repository
-          }
-          if (!remoteInfo.isUpstream) {
-            continue; // Known non-upstream remote (e.g. unrelated third-party repo, adopter docs), allow through
-          }
-        } else {
-          // If remote is not determined and no tracker/upstream is configured, allow unrelated repos
-          if (!trackerRepo && !upstreamRepo) {
-            continue;
-          }
+      // GraphQL mutations address resources by global Node IDs, which the hook cannot resolve.
+      // Therefore, a GraphQL mutation is NEVER exempt, regardless of whether cwd is the tracker.
+      if (parsed.isGraphqlMutation) {
+        // Proceed directly to inspection
+      } else if (remoteInfo.determined) {
+        if (remoteInfo.isTracker) {
+          continue; // Safe tracker repository
+        }
+        if (!remoteInfo.isUpstream) {
+          continue; // Known non-upstream remote (e.g. unrelated third-party repo, adopter docs), allow through
         }
       }
     }
 
-    // If dynamic input (stdin -, heredoc, command substitution, variable, pipe, gh pr create --fill, git commit --amend without message) is present
+    // If dynamic input (stdin -, heredoc, command substitution, variable, pipe, gh pr create --fill, git commit --amend/reuse) is present
     if (parsed.hasDynamicInput) {
       // First check if the commandLine itself explicitly carries forbidden terms
-      const dynamicTerms = findForbiddenTerms(commandLine, {
-        reporterNames: options?.reporterNames ?? projectConfig.reporterNames,
-        privateTexts: options?.privateTexts ?? projectConfig.privateTexts,
-      });
+      const dynamicTerms = findForbiddenTerms(commandLine);
       if (dynamicTerms.length > 0) {
         const uniqueTerms = Array.from(new Set(dynamicTerms));
         return {
@@ -1339,7 +1525,8 @@ export async function evaluatePublicSurfaceCommand(
           reason: generateBlockingReason(parsed.commandType, uniqueTerms),
         };
       }
-      // If the published content cannot be determined statically, fail closed
+
+      // Dynamic input without explicit terms in command line: fail closed
       return {
         blocked: true,
         matchedTerms: ['dynamic input'],
@@ -1347,10 +1534,9 @@ export async function evaluatePublicSurfaceCommand(
       };
     }
 
-    // Collect all text candidates for this subcommand
     const candidateTexts: string[] = [...parsed.extractedTexts];
 
-    // Read and inspect any referenced message files (-F / --body-file)
+    // Read and verify referenced message files
     for (const file of parsed.referencedFiles) {
       const resolvedPath = resolvePath(effectiveDir, file);
       if (!options?.readFile) {
@@ -1380,15 +1566,11 @@ export async function evaluatePublicSurfaceCommand(
       }
     }
 
-    // Check for forbidden terms, reporter names, and verbatim private text
+    // Check for forbidden terms
     const combinedText = candidateTexts.join('\n');
-    const matched = findForbiddenTerms(combinedText, {
-      reporterNames: options?.reporterNames ?? projectConfig.reporterNames,
-      privateTexts: options?.privateTexts ?? projectConfig.privateTexts,
-    });
+    const matched = findForbiddenTerms(combinedText);
 
     if (matched.length > 0) {
-      // If scope could not be determined deterministically as tracker, fail closed
       const uniqueTerms = Array.from(new Set(matched));
       return {
         blocked: true,
@@ -1402,7 +1584,9 @@ export async function evaluatePublicSurfaceCommand(
 }
 
 /**
- * Event hook registration entry point for Claude Code.
+ * Registers the PreToolUse hook for Claude Code.
+ * Intercepts Bash tool calls, parses commands, verifies embargo terms,
+ * and returns { deny: reason } when embargo terms are detected.
  */
 export function register(on: any): void {
   on('tool.call', { tool: 'Bash' }, async ($: any, e: any, next: any) => {
@@ -1415,7 +1599,7 @@ export function register(on: any): void {
       } catch {
         // $.env may be absent in mock harnesses
       }
-      const hookEnv = allowBypass ? { MAGPIE_ALLOW_EMBARGO_TERMS: allowBypass } : (e?.env ?? {});
+      const hookEnv = allowBypass ? { MAGPIE_ALLOW_EMBARGO_TERMS: allowBypass } : {};
       const evaluation = await evaluatePublicSurfaceCommand(command, {
         env: hookEnv,
         readFile: async (filePath: string) => {
