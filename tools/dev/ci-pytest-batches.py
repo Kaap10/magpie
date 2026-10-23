@@ -214,11 +214,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     changed = None
     if args.changed_file:
-        changed = [
-            line.strip()
-            for line in args.changed_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        if str(args.changed_file) == "-":
+            raw_lines = sys.stdin.read().splitlines()
+        else:
+            raw_lines = args.changed_file.read_text(encoding="utf-8").splitlines()
+        changed = [line.strip().replace("\\", "/") for line in raw_lines if line.strip()]
     paths = select(args.root, changed)
     if args.paths:
         for path in paths:
