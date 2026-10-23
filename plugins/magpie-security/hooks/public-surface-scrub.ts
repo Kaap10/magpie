@@ -469,6 +469,57 @@ export function hasDynamicShellConstructs(subcommand: string): boolean {
   return false;
 }
 
+/**
+ * Extracts a target repository slug from positional PR or issue URLs:
+ * https://github.com/<owner>/<repo>/pull/<id> or /issues/<id>
+ * Ignores URLs that appear inside flag values or body arguments.
+ */
+function extractPositionalUrlRepo(tokens: string[], startIndex: number): string | undefined {
+  const urlRegex = /^https?:\/\/github\.com\/([a-z0-9_.-]+\/[a-z0-9_.-]+)\/(?:pull|issues)\/\d+$/i;
+  for (let i = startIndex; i < tokens.length; i++) {
+    const token = tokens[i];
+    // Skip flags that take an argument
+    if (
+      (token === '-b' ||
+        token === '--body' ||
+        token === '-t' ||
+        token === '--title' ||
+        token === '-F' ||
+        token === '--body-file' ||
+        token === '-R' ||
+        token === '--repo' ||
+        token === '-c' ||
+        token === '--comment' ||
+        token === '-a' ||
+        token === '--assignee' ||
+        token === '-B' ||
+        token === '--base' ||
+        token === '-H' ||
+        token === '--head' ||
+        token === '-l' ||
+        token === '--label' ||
+        token === '-m' ||
+        token === '--milestone' ||
+        token === '-p' ||
+        token === '--project' ||
+        token === '-r' ||
+        token === '--reviewer') &&
+      i + 1 < tokens.length
+    ) {
+      i++; // Skip the flag argument
+      continue;
+    }
+    if (token.startsWith('-')) {
+      continue;
+    }
+    const match = token.match(urlRegex);
+    if (match) {
+      return match[1].toLowerCase();
+    }
+  }
+  return undefined;
+}
+
 export function parseSubcommand(subcommand: string): ParsedSubcommand {
   const result: ParsedSubcommand = {
     raw: subcommand,
@@ -480,7 +531,15 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     hasDynamicInput: false,
   };
 
-  const trimmed = subcommand.trim();
+  let trimmed = subcommand.trim();
+  if (!trimmed) {
+    return result;
+  }
+
+  // Strip subshell parentheses: ( cmd ) or (( cmd ))
+  while (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
   if (!trimmed) {
     return result;
   }
@@ -489,16 +548,16 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     result.hasDynamicInput = true;
   }
 
-  const tokens = tokenizeShellWords(trimmed);
-  if (tokens.length === 0) {
+  const rawTokens = tokenizeShellWords(trimmed);
+  if (rawTokens.length === 0) {
     return result;
   }
 
   // Detect file redirection operators in subcommand (> or >>)
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
-    if ((t === '>' || t === '>>' || t === '1>' || t === '1>>') && i + 1 < tokens.length) {
-      result.redirectedFiles.push(tokens[i + 1]);
+  for (let i = 0; i < rawTokens.length; i++) {
+    const t = rawTokens[i];
+    if ((t === '>' || t === '>>' || t === '1>' || t === '1>>') && i + 1 < rawTokens.length) {
+      result.redirectedFiles.push(rawTokens[i + 1]);
       i++;
     } else if (t.startsWith('>') || t.startsWith('>>') || t.startsWith('1>') || t.startsWith('1>>')) {
       const target = t.replace(/^(?:1?>{1,2})/, '');
@@ -508,21 +567,64 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     }
   }
 
-  // Check leading environment variable assignments (e.g. GH_REPO=owner/repo cmd ...)
+  // Unwrap common command wrappers (command, env) and environment variable assignments
+  let tokens = rawTokens;
+  const leadingEnv: Record<string, string> = {};
   let cmdIdx = 0;
-  while (cmdIdx < tokens.length && /^[a-zA-Z_][a-zA-Z0-9_]*=/.test(tokens[cmdIdx])) {
-    const envToken = tokens[cmdIdx];
-    const ghRepoMatch = envToken.match(/^GH_REPO=([^\s]+)$/i);
-    if (ghRepoMatch) {
-      result.targetRepo = ghRepoMatch[1].toLowerCase();
+  while (cmdIdx < tokens.length) {
+    const t = tokens[cmdIdx];
+    if (t === 'command') {
+      cmdIdx++;
+      if (cmdIdx < tokens.length && tokens[cmdIdx] === '-p') {
+        cmdIdx++;
+      }
+    } else if (t === 'env') {
+      cmdIdx++;
+      while (cmdIdx < tokens.length && tokens[cmdIdx].startsWith('-')) {
+        if (tokens[cmdIdx] === '-u' && cmdIdx + 1 < tokens.length) {
+          cmdIdx += 2;
+        } else {
+          cmdIdx++;
+        }
+      }
+    } else if (/^[a-zA-Z_][a-zA-Z0-9_]*=/.test(t)) {
+      const eq = t.indexOf('=');
+      leadingEnv[t.slice(0, eq)] = t.slice(eq + 1);
+      cmdIdx++;
+    } else {
+      break;
     }
-    cmdIdx++;
   }
-  if (cmdIdx >= tokens.length) {
+
+  tokens = tokens.slice(cmdIdx);
+  cmdIdx = 0;
+
+  if (tokens.length === 0) {
     return result;
   }
 
-  const binary = tokens[cmdIdx];
+  const binary = tokens[0];
+
+  // If binary is neither 'git' nor 'gh' nor 'cd', but 'git' or 'gh' appears in rawTokens,
+  // fail closed on unrecognized wrapper (e.g. sudo git, nohup git, etc.)
+  if (binary !== 'git' && binary !== 'gh' && binary !== 'cd') {
+    const hasGitOrGh = rawTokens.some((t) => t === 'git' || t === 'gh');
+    if (hasGitOrGh) {
+      result.isPublicSurfaceCommand = true;
+      result.hasDynamicInput = true;
+      result.commandType = 'wrapped command';
+      return result;
+    }
+    return result;
+  }
+
+  // Check GH_REPO= environment variable: only apply to gh commands, NOT git, and NOT gh api!
+  if (leadingEnv['GH_REPO'] && binary === 'gh') {
+    const sub1 = tokens.length > 1 ? tokens[1] : '';
+    if (sub1 !== 'api') {
+      result.targetRepo = leadingEnv['GH_REPO'].toLowerCase();
+    }
+  }
 
   // Handle cd command for tracking directory state
   if (binary === 'cd' && cmdIdx + 1 < tokens.length) {
@@ -586,11 +688,11 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
         const token = tokens[i];
 
         // Message reuse options: dynamically reuse text from history -> flag as dynamic input (fail closed)
+        // Matches -C, -c, attached -CHEAD, -cHEAD, --reuse-message, etc.
         if (
           token === '-C' ||
-          token.startsWith('-C=') ||
           token === '-c' ||
-          token.startsWith('-c=') ||
+          /^-[Cc].+/.test(token) ||
           token === '--reuse-message' ||
           token.startsWith('--reuse-message=') ||
           token === '--reedit-message' ||
@@ -843,15 +945,12 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
       }
     }
 
-    // Check PR/Issue URLs (https://github.com/owner/repo/pull/123 or issues/123)
+    // Check PR/Issue URLs from positional arguments only (https://github.com/owner/repo/pull/123 or issues/123)
+    // Never matches URLs embedded inside -b/--body, -t/--title, or other flag arguments
     if (!result.targetRepo) {
-      for (let i = cmdIdx + 1; i < tokens.length; i++) {
-        const token = tokens[i];
-        const urlMatch = token.match(/https?:\/\/github\.com\/([a-z0-9_.-]+\/[a-z0-9_.-]+)\/(?:pull|issues)\/\d+/i);
-        if (urlMatch) {
-          result.targetRepo = urlMatch[1].toLowerCase();
-          break;
-        }
+      const positionalRepo = extractPositionalUrlRepo(tokens, cmdIdx + 1);
+      if (positionalRepo) {
+        result.targetRepo = positionalRepo;
       }
     }
 
@@ -865,7 +964,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
 
       for (let i = cmdIdx + 3; i < tokens.length; i++) {
         const token = tokens[i];
-        if (token === '--fill' || token === '--fill-first') {
+        if (token === '-f' || token === '--fill' || token.startsWith('--fill-')) {
           result.hasDynamicInput = true;
           continue;
         }
@@ -1157,7 +1256,11 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
         if (token.startsWith('repos/')) {
           const parts = token.slice('repos/'.length).split('/');
           if (parts.length >= 2) {
-            result.targetRepo = `${parts[0]}/${parts[1]}`.toLowerCase();
+            const rawSlug = `${parts[0]}/${parts[1]}`.toLowerCase();
+            // Do NOT treat literal placeholders like repos/{owner}/{repo}/... as an explicit target
+            if (!rawSlug.includes('{')) {
+              result.targetRepo = rawSlug;
+            }
           }
           break;
         }
@@ -1210,6 +1313,21 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
             }
           }
           i++;
+          continue;
+        }
+
+        // Attached short field forms: -fbody="...", -Fbody=@file, -fquery="...", etc.
+        const attachedFieldMatch = token.match(/^-([fF])([a-zA-Z0-9_.-]+)=(.*)$/s);
+        if (attachedFieldMatch) {
+          const fieldName = attachedFieldMatch[2];
+          const val = attachedFieldMatch[3];
+          if (isGraphql || fieldName === 'body' || fieldName === 'title' || fieldName === 'query') {
+            if (val.startsWith('@')) {
+              result.referencedFiles.push(val.slice(1));
+            } else {
+              result.extractedTexts.push(val);
+            }
+          }
           continue;
         }
 
@@ -1449,8 +1567,12 @@ export async function evaluatePublicSurfaceCommand(
     let upstreamRepo = projectConfig.upstreamRepo?.toLowerCase();
 
     // 1. Exemption: Subcommand explicitly targets the private security tracker
+    // GraphQL mutations address resources by global Node IDs, which the hook cannot resolve;
+    // therefore a GraphQL mutation is NEVER exempt, even if targeted at tracker or with GH_REPO=<tracker>
     if (parsed.targetRepo && trackerRepo && parsed.targetRepo === trackerRepo) {
-      continue;
+      if (!parsed.isGraphqlMutation) {
+        continue;
+      }
     }
 
     // 2. Check if working directory is inside the configured upstream_clone path
@@ -1478,7 +1600,7 @@ export async function evaluatePublicSurfaceCommand(
           remoteInfo.isUpstream = true;
         }
       }
-      if (!upstreamRepo && remoteInfo.detectedUpstreamSlug) {
+      if (!upstreamRepo && isWorkingDirUpstreamClone && remoteInfo.detectedUpstreamSlug) {
         upstreamRepo = remoteInfo.detectedUpstreamSlug.toLowerCase();
       }
     }

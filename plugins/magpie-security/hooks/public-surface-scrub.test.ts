@@ -1114,4 +1114,130 @@ upstream_repo: apache/kafka
       assertStrictEqual(res.blocked, true);
     });
   });
+
+  describe('Review #5 hardening & shape fixes', () => {
+    test('tracker URL in PR/issue comment body does not exempt upstream command', async () => {
+      const cmd =
+        'gh pr comment 1 -R apache/airflow -b "Fix CVE-2026-1234, see https://github.com/airflow-s/airflow-s/issues/9"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+      });
+      assertStrictEqual(res.blocked, true, 'Must block disclosure text even when body cites tracker issue URL');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('positional PR/issue URL still correctly sets target repo', async () => {
+      // Positional tracker URL is exempt
+      const trackerCmd = 'gh pr comment https://github.com/airflow-s/airflow-s/pull/9 -b "Fix CVE-2026-1234"';
+      const resTracker = await evaluatePublicSurfaceCommand(trackerCmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+      });
+      assertStrictEqual(resTracker.blocked, false);
+
+      // Positional upstream URL is blocked
+      const upstreamCmd = 'gh pr comment https://github.com/apache/airflow/pull/9 -b "Fix CVE-2026-1234"';
+      const resUpstream = await evaluatePublicSurfaceCommand(upstreamCmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+      });
+      assertStrictEqual(resUpstream.blocked, true);
+      assert(resUpstream.matchedTerms.includes('CVE id'));
+    });
+
+    test('GH_REPO= is ignored for git commands (git ignores GH_REPO)', async () => {
+      const cmd = 'GH_REPO=airflow-s/airflow-s git commit -m "Fix CVE-2026-1234 SSRF"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+        readFile: async (p) => (p.includes('.git/config') ? '[remote "origin"]\nurl = https://github.com/apache/airflow.git' : ''),
+      });
+      assertStrictEqual(res.blocked, true, 'GH_REPO before git must not exempt commit in upstream repo');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('GH_REPO= does not exempt gh api graphql mutation', async () => {
+      const cmd =
+        'GH_REPO=airflow-s/airflow-s gh api graphql -f query=\'mutation{addComment(input:{subjectId:"node123",body:"Fix CVE-2026-1234 SSRF"})}\'';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+      });
+      assertStrictEqual(res.blocked, true, 'GraphQL mutation must not be exempted by GH_REPO or targetRepo');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('gh api repos/{owner}/{repo}/... placeholders inherit cwd remote and do not bypass', async () => {
+      const cmd = 'gh api repos/{owner}/{repo}/issues/1/comments -f body="Fix CVE-2026-1234 SSRF"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+        readFile: async (p) => (p.includes('.git/config') ? '[remote "origin"]\nurl = https://github.com/apache/airflow.git' : ''),
+      });
+      assertStrictEqual(res.blocked, true, 'Literal {owner}/{repo} must inherit upstream cwd remote and block disclosure');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('gh pr create -f and --fill-verbose are recognized as dynamic input', async () => {
+      for (const flag of ['-f', '--fill-verbose']) {
+        const cmd = `gh pr create -R apache/airflow ${flag}`;
+        const res = await evaluatePublicSurfaceCommand(cmd, {
+          projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+        });
+        assertStrictEqual(res.blocked, true, `Expected ${flag} to be blocked as dynamic input`);
+        assert(res.matchedTerms.includes('dynamic input'));
+      }
+    });
+
+    test('git commit attached reuse flags -CHEAD and -cHEAD are recognized as dynamic input', async () => {
+      for (const flag of ['-CHEAD', '-cHEAD']) {
+        const cmd = `git commit ${flag}`;
+        const res = await evaluatePublicSurfaceCommand(cmd, {
+          projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+        });
+        assertStrictEqual(res.blocked, true, `Expected ${flag} to be blocked as dynamic input`);
+        assert(res.matchedTerms.includes('dynamic input'));
+      }
+    });
+
+    test('gh api attached field forms -fbody=... and -Fbody=@file are parsed', async () => {
+      const inlineCmd = 'gh api repos/apache/airflow/issues/1/comments -fbody="Fix CVE-2026-1234 SSRF"';
+      const resInline = await evaluatePublicSurfaceCommand(inlineCmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+      });
+      assertStrictEqual(resInline.blocked, true, 'Attached -fbody= must be inspected');
+      assert(resInline.matchedTerms.includes('CVE id'));
+
+      const fileCmd = 'gh api repos/apache/airflow/issues/1/comments -Fbody=@cve_msg.txt';
+      const resFile = await evaluatePublicSurfaceCommand(fileCmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+        readFile: async () => 'Fix CVE-2026-1234 SSRF',
+      });
+      assertStrictEqual(resFile.blocked, true, 'Attached -Fbody=@file must read referenced file and block');
+      assert(resFile.matchedTerms.includes('CVE id'));
+    });
+
+    test('unwraps command wrappers and subshells (command, env, parentheses)', async () => {
+      const cmds = [
+        '( git commit -m "Fix CVE-2026-1234" )',
+        'command git commit -m "Fix CVE-2026-1234"',
+        'command -p git commit -m "Fix CVE-2026-1234"',
+        'env FOO=bar git commit -m "Fix CVE-2026-1234"',
+      ];
+
+      for (const cmd of cmds) {
+        const res = await evaluatePublicSurfaceCommand(cmd, {
+          projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+          readFile: async (p) => (p.includes('.git/config') ? '[remote "origin"]\nurl = https://github.com/apache/airflow.git' : ''),
+        });
+        assertStrictEqual(res.blocked, true, `Command wrapper/subshell "${cmd}" must be unwrapped and inspected`);
+        assert(res.matchedTerms.includes('CVE id'));
+      }
+    });
+
+    test('fails closed when git or gh is invoked via unknown wrapper (e.g. sudo git)', async () => {
+      const cmd = 'sudo git commit -m "Neutral message"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s', upstreamRepo: 'apache/airflow' },
+        readFile: async (p) => (p.includes('.git/config') ? '[remote "origin"]\nurl = https://github.com/apache/airflow.git' : ''),
+      });
+      assertStrictEqual(res.blocked, true, 'Unknown command wrapper with git must fail closed');
+      assert(res.matchedTerms.includes('dynamic input'));
+    });
+  });
 });
