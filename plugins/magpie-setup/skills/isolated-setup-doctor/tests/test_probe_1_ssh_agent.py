@@ -69,9 +69,7 @@ class ProbeOneSshAgent(unittest.TestCase):
             "SSH_AUTH_SOCK": str(self.sock_path),
             "TMPDIR": str(self.tmp),
         }
-        result = subprocess.run(
-            ["bash", str(PROBE)], env=env, capture_output=True, text=True, check=True
-        )
+        result = subprocess.run(["bash", str(PROBE)], env=env, capture_output=True, text=True, check=True)
         return result.stdout.strip()
 
     def test_counts_listed_identities(self) -> None:
