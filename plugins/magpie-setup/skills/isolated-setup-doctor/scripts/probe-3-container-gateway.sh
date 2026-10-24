@@ -100,11 +100,12 @@ for rt in podman docker; do
     echo "PROBE: ${rt}-runtime → ✗ (gateway socket missing at $sock — container gateway not running)"
     continue
   fi
-  if _probe_timeout 15 "$rt" info > /dev/null 2>"${TMPDIR:-/tmp}/$rt-probe.err"; then
+  # Held in a variable, not a file: /tmp is read-only inside the sandbox.
+  out=$(_probe_timeout 15 "$rt" info 2>&1); rc=$?
+  if [ $rc -eq 0 ]; then
     echo "PROBE: ${rt}-runtime → ✓ ($rt reaches the container gateway at $sock)"
   else
-    rc=$?
-    err=$(head -1 "${TMPDIR:-/tmp}/$rt-probe.err")
+    err=$(printf '%s\n' "$out" | head -1)
     case "$rc" in
       137|143)
         # The shell-fallback branch of _probe_timeout kills the child with
