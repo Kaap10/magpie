@@ -23,44 +23,23 @@ variable rather than redirecting to a file under /tmp.
 from __future__ import annotations
 
 import os
-import shutil
 import stat
-import subprocess
+import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from helpers import find_bash, run_probe_script, to_posix
+
 PROBE = Path(__file__).resolve().parents[1] / "scripts" / "probe-5-signing-key.sh"
 OLD_OUTPUT = Path("/tmp/signing-key.err")
 
 
-def _find_bash() -> str | None:
-    if os.name == "nt":
-        for candidate in [
-            Path("C:/Program Files/Git/bin/bash.exe"),
-            Path("C:/Program Files/Git/usr/bin/bash.exe"),
-            Path("C:/Program Files (x86)/Git/bin/bash.exe"),
-        ]:
-            if candidate.is_file():
-                return str(candidate)
-        w = shutil.which("bash")
-        if w and "system32" not in w.lower():
-            return w
-        return None
-    return shutil.which("bash") or "bash"
-
-
-def _to_posix(path: Path | str) -> str:
-    s = Path(path).as_posix()
-    if os.name == "nt" and len(s) >= 2 and s[1] == ":":
-        return f"/{s[0].lower()}{s[2:]}"
-    return s
-
-
 class ProbeFiveSigningKey(unittest.TestCase):
     def setUp(self) -> None:
-        self.bash = _find_bash()
+        self.bash = find_bash()
         if not self.bash:
             self.skipTest("bash is not available on this platform")
         self._tmp = tempfile.TemporaryDirectory()
@@ -80,28 +59,11 @@ class ProbeFiveSigningKey(unittest.TestCase):
 
     def run_probe(self, env_overrides: dict[str, str] | None = None) -> str:
         env = {
-            "PATH": f"{self.bin}{os.pathsep}{os.environ.get('PATH', '')}",
             "TMPDIR": str(self.tmp),
             "HOME": str(self.tmp),
             **(env_overrides or {}),
         }
-        if os.name == "nt":
-            posix_bin = _to_posix(self.bin)
-            posix_probe = _to_posix(PROBE)
-            cmd = [self.bash, "-c", f'PATH="{posix_bin}:$PATH" bash "{posix_probe}"']
-            result = subprocess.run(
-                cmd, env=env, capture_output=True, text=True, encoding="utf-8", check=True
-            )
-        else:
-            result = subprocess.run(
-                [self.bash, str(PROBE)],
-                env=env,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=True,
-            )
-        return result.stdout.strip()
+        return run_probe_script(PROBE, env, bin_dir=self.bin).strip()
 
     def test_gpg_format_not_ssh(self) -> None:
         self.fake_git({"gpg.format": "openpgp"})
@@ -123,7 +85,7 @@ class ProbeFiveSigningKey(unittest.TestCase):
     def test_readable_key_file(self) -> None:
         key_file = self.tmp / "id_ed25519.pub"
         key_file.write_text("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...")
-        key_arg = _to_posix(key_file) if os.name == "nt" else str(key_file)
+        key_arg = to_posix(key_file) if os.name == "nt" else str(key_file)
         self.fake_git({"gpg.format": "ssh", "user.signingkey": key_arg})
         self.assertEqual(
             self.run_probe(),
@@ -132,14 +94,14 @@ class ProbeFiveSigningKey(unittest.TestCase):
 
     def test_unreadable_key_file(self) -> None:
         key_file = self.tmp / "missing_key.pub"
-        key_arg = _to_posix(key_file) if os.name == "nt" else str(key_file)
+        key_arg = to_posix(key_file) if os.name == "nt" else str(key_file)
         self.fake_git({"gpg.format": "ssh", "user.signingkey": key_arg})
         out = self.run_probe()
         self.assertTrue(out.startswith(f"PROBE: signing-key → ✗ ({key_arg} not readable inside sandbox:"))
 
     def test_writes_nothing_under_tmp(self) -> None:
         key_file = self.tmp / "missing_key.pub"
-        key_arg = _to_posix(key_file) if os.name == "nt" else str(key_file)
+        key_arg = to_posix(key_file) if os.name == "nt" else str(key_file)
         self.fake_git({"gpg.format": "ssh", "user.signingkey": key_arg})
         started = time.time()
         self.run_probe()

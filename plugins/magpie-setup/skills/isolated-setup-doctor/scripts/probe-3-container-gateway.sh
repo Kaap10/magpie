@@ -52,7 +52,7 @@ _probe_timeout() {  # seconds cmd...; portable across GNU timeout, macOS Homebre
   else
     "$@" &
     local cmd_pid=$!
-    (sleep "$secs" && kill "$cmd_pid" 2> /dev/null) &
+    (sleep "$secs" && kill "$cmd_pid" 2> /dev/null) > /dev/null 2>&1 &
     local watchdog_pid=$!
     wait "$cmd_pid" 2> /dev/null
     local rc=$?
@@ -101,7 +101,7 @@ for rt in podman docker; do
     continue
   fi
   # Held in a variable, not a file: /tmp is read-only inside the sandbox.
-  out=$(_probe_timeout 15 "$rt" info 2>&1); rc=$?
+  out=$(_probe_timeout 15 "$rt" info 2>&1 > /dev/null); rc=$?
   if [ $rc -eq 0 ]; then
     echo "PROBE: ${rt}-runtime → ✓ ($rt reaches the container gateway at $sock)"
   else

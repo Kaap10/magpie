@@ -22,46 +22,26 @@ variable rather than redirecting to a file under /tmp.
 
 from __future__ import annotations
 
-import os
-import shutil
+import json
+import socket
 import stat
-import subprocess
+import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from helpers import find_bash, run_probe_script, to_posix
 
 PROBE = Path(__file__).resolve().parents[1] / "scripts" / "probe-3-container-gateway.sh"
 OLD_PODMAN_ERR = Path("/tmp/podman-probe.err")
 OLD_DOCKER_ERR = Path("/tmp/docker-probe.err")
 
 
-def _find_bash() -> str | None:
-    if os.name == "nt":
-        for candidate in [
-            Path("C:/Program Files/Git/bin/bash.exe"),
-            Path("C:/Program Files/Git/usr/bin/bash.exe"),
-            Path("C:/Program Files (x86)/Git/bin/bash.exe"),
-        ]:
-            if candidate.is_file():
-                return str(candidate)
-        w = shutil.which("bash")
-        if w and "system32" not in w.lower():
-            return w
-        return None
-    return shutil.which("bash") or "bash"
-
-
-def _to_posix(path: Path | str) -> str:
-    s = Path(path).as_posix()
-    if os.name == "nt" and len(s) >= 2 and s[1] == ":":
-        return f"/{s[0].lower()}{s[2:]}"
-    return s
-
-
 class ProbeThreeContainerGateway(unittest.TestCase):
     def setUp(self) -> None:
-        self.bash = _find_bash()
+        self.bash = find_bash()
         if not self.bash:
             self.skipTest("bash is not available on this platform")
         self._tmp = tempfile.TemporaryDirectory()
@@ -76,34 +56,41 @@ class ProbeThreeContainerGateway(unittest.TestCase):
         script.chmod(script.stat().st_mode | stat.S_IXUSR)
         return script
 
-    def run_probe(self, env_overrides: dict[str, str] | None = None) -> str:
+    def setup_stub_gateway(self, serving: list[str]) -> None:
+        gw_pkg = self.tmp / "tools" / "container-gateway" / "src" / "container_gateway"
+        gw_pkg.mkdir(parents=True, exist_ok=True)
+        (gw_pkg / "__init__.py").write_text("", encoding="utf-8")
+        status_payload = json.dumps({"running": True, "serving": serving})
+        (gw_pkg / "__main__.py").write_text(
+            f"import json\nprint({status_payload!r})\n",
+            encoding="utf-8",
+        )
+
+    def bind_unix_socket(self, name: str) -> Path:
+        if not hasattr(socket, "AF_UNIX"):
+            self.skipTest("AF_UNIX is not supported on this platform")
+        sock_path = self.tmp / name
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(sock.close)
+        try:
+            sock.bind(str(sock_path))
+        except OSError as e:
+            self.skipTest(f"cannot bind unix socket: {e}")
+        return sock_path
+
+    def run_probe(
+        self,
+        env_overrides: dict[str, str] | None = None,
+        cwd: Path | None = None,
+    ) -> str:
         env = {
-            "PATH": f"{self.bin}{os.pathsep}{os.environ.get('PATH', '')}",
             "TMPDIR": str(self.tmp),
             "HOME": str(self.tmp),
             **(env_overrides or {}),
         }
-        if os.name == "nt":
-            posix_bin = _to_posix(self.bin)
-            posix_probe = _to_posix(PROBE)
-            cmd = [self.bash, "-c", f'PATH="{posix_bin}:$PATH" bash "{posix_probe}"']
-            result = subprocess.run(
-                cmd, env=env, capture_output=True, text=True, encoding="utf-8", check=True
-            )
-        else:
-            result = subprocess.run(
-                [self.bash, str(PROBE)],
-                env=env,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=True,
-            )
-        return result.stdout.strip()
+        return run_probe_script(PROBE, env, bin_dir=self.bin, cwd=cwd).strip()
 
     def test_runtimes_not_on_path(self) -> None:
-        # Run with an isolated PATH containing only essential shell commands if possible
-        # but without podman or docker
         out = self.run_probe(
             {
                 "PATH": str(self.bin),
@@ -140,15 +127,48 @@ class ProbeThreeContainerGateway(unittest.TestCase):
         )
 
     def test_writes_nothing_under_tmp(self) -> None:
-        self.fake_cmd("podman")
+        self.setup_stub_gateway(["podman"])
+        sock_path = self.bind_unix_socket("podman.sock")
+        posix_sock = to_posix(sock_path)
+        self.fake_cmd(
+            "podman",
+            'printf "connect: operation not permitted\\n" >&2\nexit 1\n',
+        )
         started = time.time()
-        self.run_probe({"CONTAINER_HOST": "unix:///var/run/podman.sock"})
+        out = self.run_probe(
+            {"CONTAINER_HOST": f"unix://{posix_sock}"},
+            cwd=self.tmp,
+        )
+        self.assertIn(
+            f"PROBE: podman-runtime → ✗ (connect to {posix_sock} denied — add it to sandbox.network.allowUnixSockets)",
+            out,
+        )
         if OLD_PODMAN_ERR.exists():
             self.assertLess(OLD_PODMAN_ERR.stat().st_mtime, started)
         if OLD_DOCKER_ERR.exists():
             self.assertLess(OLD_DOCKER_ERR.stat().st_mtime, started)
         self.assertFalse((self.tmp / "podman-probe.err").exists())
         self.assertFalse((self.tmp / "docker-probe.err").exists())
+
+    def test_docker_stdout_does_not_mask_stderr_error(self) -> None:
+        self.setup_stub_gateway(["docker"])
+        sock_path = self.bind_unix_socket("docker.sock")
+        posix_sock = to_posix(sock_path)
+        self.fake_cmd(
+            "docker",
+            'printf "Client: Docker Engine - Community\\n Version: 25.0.0\\n"\n'
+            'printf "connect: 502 Bad Gateway\\n" >&2\n'
+            "exit 1\n",
+        )
+        out = self.run_probe(
+            {"DOCKER_HOST": f"unix://{posix_sock}"},
+            cwd=self.tmp,
+        )
+        self.assertIn(
+            "PROBE: docker-runtime → ✗ (gateway up, backend down: connect: 502 Bad Gateway)",
+            out,
+        )
+        self.assertNotIn("Client:", out)
 
 
 if __name__ == "__main__":
