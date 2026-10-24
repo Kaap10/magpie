@@ -1830,6 +1830,16 @@ and tracked by the pre-commit sync check).
 
 ### Trade-offs and runtime characteristics
 
+The public-surface scrub mod is a deterministic guard against **accidental**
+public disclosure of embargoed security information, not a boundary against
+deliberate circumvention. A command running in a shell can always write to
+temporary files, pipe through external helpers, or execute dynamic subshells
+that cannot be fully predicted before execution. The hook documents these
+boundaries rather than chasing dynamic time-of-check-to-time-of-use (TOCTOU)
+scenarios: it fails closed on unresolvable shapes and indeterminate inputs,
+while relying on collaborator review for anything outside its deterministic
+static scope.
+
 - **Unsandboxed execution**: Claude Code mods and hooks execute directly in the
   local Node runtime outside the container sandbox.
 - **File inspection**: The hook inspects message files specified by `-F <file>`

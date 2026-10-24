@@ -222,8 +222,103 @@ export interface ShellSubcommand {
 }
 
 /**
+ * Helper to check if a string is completely enclosed in a matching pair of
+ * outer parentheses (...) or braces {...}.
+ */
+function isEnclosedInMatchingGroup(str: string): boolean {
+  const trimmed = str.trim();
+  if (
+    (!trimmed.startsWith('(') || !trimmed.endsWith(')')) &&
+    (!trimmed.startsWith('{') || !trimmed.endsWith('}'))
+  ) {
+    return false;
+  }
+  const openChar = trimmed[0];
+  const closeChar = openChar === '(' ? ')' : '}';
+  let depth = 0;
+  let inS = false;
+  let inD = false;
+  let isEsc = false;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (isEsc) {
+      isEsc = false;
+      continue;
+    }
+    if (ch === '\\' && !inS) {
+      isEsc = true;
+      continue;
+    }
+    if (ch === "'" && !inD) {
+      inS = !inS;
+      continue;
+    }
+    if (ch === '"' && !inS) {
+      inD = !inD;
+      continue;
+    }
+    if (!inS && !inD) {
+      if (ch === openChar) {
+        depth++;
+      } else if (ch === closeChar) {
+        depth--;
+        if (depth === 0 && i < trimmed.length - 1) {
+          return false;
+        }
+      }
+    }
+  }
+  return depth === 0;
+}
+
+/**
+ * Checks if a string has unbalanced parentheses or braces.
+ */
+function hasUnbalancedGroupDelimiters(str: string): boolean {
+  let p = 0;
+  let b = 0;
+  let inS = false;
+  let inD = false;
+  let isEsc = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (isEsc) {
+      isEsc = false;
+      continue;
+    }
+    if (ch === '\\' && !inS) {
+      isEsc = true;
+      continue;
+    }
+    if (ch === "'" && !inD) {
+      inS = !inS;
+      continue;
+    }
+    if (ch === '"' && !inS) {
+      inD = !inD;
+      continue;
+    }
+    if (!inS && !inD) {
+      if (ch === '(') p++;
+      else if (ch === ')') {
+        p--;
+        if (p < 0) return true;
+      } else if (ch === '{') b++;
+      else if (ch === '}') {
+        b--;
+        if (b < 0) return true;
+      }
+    }
+  }
+  return p !== 0 || b !== 0;
+}
+
+/**
  * Splits a composite shell command line into individual subcommands along with
- * the trailing separator (&&, ;, \n, |, ||, &), respecting quoting rules.
+ * the trailing separator (&&, ;, \n, |, ||, &), respecting quoting rules and
+ * subshell grouping parentheses and braces.
  */
 export function splitShellSubcommands(commandLine: string): ShellSubcommand[] {
   const result: ShellSubcommand[] = [];
@@ -235,10 +330,23 @@ export function splitShellSubcommands(commandLine: string): ShellSubcommand[] {
   let inSingle = false;
   let inDouble = false;
   let isEscaped = false;
+  let parenDepth = 0;
+  let braceDepth = 0;
 
   const pushCurrent = (sep?: string) => {
-    if (current.trim()) {
-      result.push({ raw: current.trim(), separatorAfter: sep });
+    const trimmed = current.trim();
+    if (trimmed) {
+      if (isEnclosedInMatchingGroup(trimmed)) {
+        // Strip outer group delimiters and recursively split subcommands inside the group
+        const inner = trimmed.slice(1, -1).trim();
+        const innerSubs = splitShellSubcommands(inner);
+        if (innerSubs.length > 0) {
+          innerSubs[innerSubs.length - 1].separatorAfter = sep;
+          result.push(...innerSubs);
+        }
+      } else {
+        result.push({ raw: trimmed, separatorAfter: sep });
+      }
     }
     current = '';
   };
@@ -272,35 +380,59 @@ export function splitShellSubcommands(commandLine: string): ShellSubcommand[] {
     }
 
     if (!inSingle && !inDouble) {
-      if (char === '\n' || char === '\r') {
-        pushCurrent('\n');
+      if (char === '(') {
+        parenDepth++;
+        current += char;
         continue;
       }
-      if (char === ';') {
-        pushCurrent(';');
+      if (char === ')') {
+        if (parenDepth > 0) parenDepth--;
+        current += char;
         continue;
       }
-      if (char === '&') {
-        if (next === '&') {
-          pushCurrent('&&');
-          i++; // skip second &
+      if (char === '{') {
+        braceDepth++;
+        current += char;
+        continue;
+      }
+      if (char === '}') {
+        if (braceDepth > 0) braceDepth--;
+        current += char;
+        continue;
+      }
+
+      // Only split on operators when NOT inside parentheses or braces
+      if (parenDepth === 0 && braceDepth === 0) {
+        if (char === '\n' || char === '\r') {
+          pushCurrent('\n');
           continue;
         }
-        // Single & is background separator unless part of >& redirection
-        const prev = i > 0 ? commandLine[i - 1] : '';
-        if (prev !== '>') {
-          pushCurrent('&');
+        if (char === ';') {
+          pushCurrent(';');
           continue;
         }
-      }
-      if (char === '|' && next === '|') {
-        pushCurrent('||');
-        i++; // skip second |
-        continue;
-      }
-      if (char === '|') {
-        pushCurrent('|');
-        continue;
+        if (char === '&') {
+          if (next === '&') {
+            pushCurrent('&&');
+            i++; // skip second &
+            continue;
+          }
+          // Single & is background separator unless part of >& redirection
+          const prev = i > 0 ? commandLine[i - 1] : '';
+          if (prev !== '>') {
+            pushCurrent('&');
+            continue;
+          }
+        }
+        if (char === '|' && next === '|') {
+          pushCurrent('||');
+          i++; // skip second |
+          continue;
+        }
+        if (char === '|') {
+          pushCurrent('|');
+          continue;
+        }
       }
     }
 
@@ -540,7 +672,18 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
   while (trimmed.startsWith('(') && trimmed.endsWith(')')) {
     trimmed = trimmed.slice(1, -1).trim();
   }
+  while (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
   if (!trimmed) {
+    return result;
+  }
+
+  // Fail closed if group delimiters are unbalanced (opens a group it does not close, or closes without open)
+  if (hasUnbalancedGroupDelimiters(trimmed)) {
+    result.isPublicSurfaceCommand = true;
+    result.hasDynamicInput = true;
+    result.commandType = 'unresolvable subshell';
     return result;
   }
 
@@ -603,17 +746,50 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     return result;
   }
 
-  const binary = tokens[0];
+  const getCommandBasename = (cmd: string): string => {
+    return cmd.split(/[/\\]/).pop()?.toLowerCase().replace(/\.exe$/, '') ?? cmd.toLowerCase();
+  };
 
-  // If binary is neither 'git' nor 'gh' nor 'cd', but 'git' or 'gh' appears in rawTokens,
-  // fail closed on unrecognized wrapper (e.g. sudo git, nohup git, etc.)
+  const binary = getCommandBasename(tokens[0]);
+
+  // Known command wrappers that might invoke git or gh
+  const KNOWN_WRAPPERS = new Set([
+    'sudo',
+    'nohup',
+    'time',
+    'nice',
+    'timeout',
+    'exec',
+    'xargs',
+    'builtin',
+    'strace',
+    'ltrace',
+    'watch',
+    'setsid',
+  ]);
+
+  // If binary is neither 'git' nor 'gh' nor 'cd':
+  // If it's a known wrapper, check if git or gh appears in command position after wrapper options.
+  // Otherwise, ignore git/gh plain arguments (e.g. grep git notes.md, which gh, brew upgrade gh).
   if (binary !== 'git' && binary !== 'gh' && binary !== 'cd') {
-    const hasGitOrGh = rawTokens.some((t) => t === 'git' || t === 'gh');
-    if (hasGitOrGh) {
-      result.isPublicSurfaceCommand = true;
-      result.hasDynamicInput = true;
-      result.commandType = 'wrapped command';
-      return result;
+    if (KNOWN_WRAPPERS.has(binary)) {
+      for (let i = 1; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.startsWith('-')) {
+          continue; // skip wrapper options
+        }
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*=/.test(t)) {
+          continue; // skip inline env assignments
+        }
+        const innerCmd = getCommandBasename(t);
+        if (innerCmd === 'git' || innerCmd === 'gh') {
+          result.isPublicSurfaceCommand = true;
+          result.hasDynamicInput = true;
+          result.commandType = `wrapped command (${binary} ${innerCmd})`;
+          return result;
+        }
+        break; // First command-position argument after wrapper was not git/gh
+      }
     }
     return result;
   }
@@ -634,6 +810,14 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
 
   // Find git binary in tokens
   if (binary === 'git') {
+    // Fail closed if GIT_DIR or GIT_WORK_TREE environment variables are supplied
+    if (leadingEnv['GIT_DIR'] || leadingEnv['GIT_WORK_TREE']) {
+      result.isPublicSurfaceCommand = true;
+      result.hasDynamicInput = true;
+      result.commandType = 'git (with GIT_DIR/GIT_WORK_TREE)';
+      return result;
+    }
+
     let subcmdIndex = -1;
     let gitCwd: string | undefined = undefined;
 
@@ -651,6 +835,22 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
         const nextDir = token.slice(3);
         gitCwd = gitCwd ? resolvePath(gitCwd, nextDir) : nextDir;
         continue;
+      }
+
+      // --git-dir <path>, --git-dir=<path>, --work-tree <path>, --work-tree=<path>
+      // Fail closed as repository context is redirected and cannot be verified statically
+      if (token === '--git-dir' || token === '--work-tree') {
+        result.isPublicSurfaceCommand = true;
+        result.hasDynamicInput = true;
+        result.commandType = `git (with ${token})`;
+        return result;
+      }
+      if (token.startsWith('--git-dir=') || token.startsWith('--work-tree=')) {
+        const flag = token.split('=')[0];
+        result.isPublicSurfaceCommand = true;
+        result.hasDynamicInput = true;
+        result.commandType = `git (with ${flag})`;
+        return result;
       }
 
       // Skip options that take an argument: -c <name>=<val>, --config-env <name>=<envvar>, etc.
@@ -1251,8 +1451,37 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     if (sub1 === 'api') {
       const isGraphql = tokens.some((t) => t === 'graphql' || t.includes('/graphql'));
 
+      // Option flags for `gh api` that consume the next token as their value
+      const GH_API_VALUE_FLAGS = new Set([
+        '--input',
+        '-f',
+        '-F',
+        '--field',
+        '--raw-field',
+        '-H',
+        '--header',
+        '-X',
+        '--method',
+        '-q',
+        '--jq',
+        '-t',
+        '--template',
+        '--cache',
+        '-p',
+        '--preview',
+      ]);
+
       for (let i = cmdIdx + 2; i < tokens.length; i++) {
         const token = tokens[i];
+
+        if (token.startsWith('-')) {
+          if (GH_API_VALUE_FLAGS.has(token) && i + 1 < tokens.length) {
+            i++; // skip option argument
+          }
+          continue;
+        }
+
+        // First non-flag positional argument is the API endpoint
         if (token.startsWith('repos/')) {
           const parts = token.slice('repos/'.length).split('/');
           if (parts.length >= 2) {
@@ -1264,10 +1493,13 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           }
           break;
         }
-        if (/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+/.test(token) && !token.startsWith('-')) {
+        if (/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+/.test(token)) {
           result.targetRepo = token.toLowerCase();
           break;
         }
+
+        // First positional argument encountered is not an endpoint (e.g. 'graphql')
+        break;
       }
 
       for (let i = cmdIdx + 2; i < tokens.length; i++) {
@@ -1359,6 +1591,12 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
             break;
           }
         }
+        // If a GraphQL query is loaded from a file (--input or @file),
+        // we cannot verify statically without reading the file.
+        // Treat as a mutation so it is NEVER exempted from the tracker checkout.
+        if (!result.isGraphqlMutation && result.referencedFiles.length > 0) {
+          result.isGraphqlMutation = true;
+        }
       }
 
       if (result.extractedTexts.length > 0 || result.referencedFiles.length > 0 || result.hasDynamicInput || result.isGraphqlMutation) {
@@ -1442,7 +1680,21 @@ export async function inspectDirectoryRemote(
 
     const extractSlugFromUrl = (url: string): string | undefined => {
       if (!url) return undefined;
-      const cleanUrl = url.toLowerCase().replace(/\.git$/, '');
+      let cleanUrl = url.trim();
+      // Strip surrounding quotes
+      if (
+        (cleanUrl.startsWith('"') && cleanUrl.endsWith('"')) ||
+        (cleanUrl.startsWith("'") && cleanUrl.endsWith("'"))
+      ) {
+        cleanUrl = cleanUrl.slice(1, -1).trim();
+      }
+      // Strip trailing inline comments (e.g. # comment or ; comment)
+      cleanUrl = cleanUrl.replace(/\s+[#;].*$/, '').trim();
+      // Strip trailing slashes
+      cleanUrl = cleanUrl.replace(/\/+$/, '');
+      // Strip trailing .git extension
+      cleanUrl = cleanUrl.replace(/\.git$/, '');
+      cleanUrl = cleanUrl.toLowerCase();
       const match = cleanUrl.match(/(?:[:/])([a-z0-9_.-]+\/[a-z0-9_.-]+)$/);
       return match ? match[1] : undefined;
     };
@@ -1471,10 +1723,12 @@ export async function inspectDirectoryRemote(
         })
       : false;
 
+    const anySlugParsed = urls.some((u) => extractSlugFromUrl(u) !== undefined);
+
     return {
       isTracker,
       isUpstream,
-      determined: true,
+      determined: anySlugParsed,
       detectedUpstreamSlug,
     };
   } catch {
@@ -1497,11 +1751,37 @@ export function generateBlockingReason(commandType: string, terms: string[]): st
     `⛔ Apache Magpie Security Guard: Blocked public-surface command (${commandType}).`,
     `Found forbidden security disclosure term(s): ${termList}.`,
     '',
+    'This hook is an automated guard against accidental public disclosure of embargoed security information,',
+    'not a perimeter against deliberate circumvention.',
+    '',
     'Confidentiality Rule (AGENTS.md & docs/security/fixing-security-issues.md):',
     'Public commits, tags, PR descriptions, and comments on upstream repositories must describe the change in neutral functional terms without mentioning CVE IDs or vulnerability classes before the coordinated disclosure advisory has shipped.',
     'If this is legitimate post-coordinated-disclosure maintenance, consult an Apache Magpie security-team maintainer to review and set the environment bypass.',
   ].join('\n');
 }
+
+/**
+ * Commands known to be purely read-only or harmless environment manipulations.
+ * If any preceding command on a composite shell line is NOT in this set,
+ * subsequent file reads (-F <file>) fail closed as dynamic input.
+ */
+const SAFE_READONLY_COMMANDS = new Set([
+  'cd',
+  'pwd',
+  'test',
+  '[',
+  'echo',
+  'printf',
+  'cat',
+  'ls',
+  'true',
+  'false',
+  ':',
+  'export',
+  'set',
+  'unset',
+  'readonly',
+]);
 
 /**
  * Evaluates whether a public-surface command violates embargo terms.
@@ -1527,6 +1807,7 @@ export async function evaluatePublicSurfaceCommand(
 
   let virtualCwd: string | undefined = undefined;
   const seenRedirectedFiles = new Set<string>();
+  let hasPotentiallyMutatingPriorCommand = false;
 
   for (const item of subcommands) {
     const rawSub = item.raw;
@@ -1540,11 +1821,17 @@ export async function evaluatePublicSurfaceCommand(
       continue;
     }
 
-    // Check if any referenced file was redirected into earlier in the same composite command
-    for (const ref of parsed.referencedFiles) {
-      const resolved = resolvePath(virtualCwd, ref);
-      if (seenRedirectedFiles.has(resolved) || seenRedirectedFiles.has(ref)) {
+    // Check if any referenced file was redirected into earlier in the same composite command,
+    // or if an earlier command in the same line could have modified files (e.g. cp, mv, tee)
+    if (parsed.referencedFiles.length > 0) {
+      if (hasPotentiallyMutatingPriorCommand) {
         parsed.hasDynamicInput = true;
+      }
+      for (const ref of parsed.referencedFiles) {
+        const resolved = resolvePath(virtualCwd, ref);
+        if (seenRedirectedFiles.has(resolved) || seenRedirectedFiles.has(ref)) {
+          parsed.hasDynamicInput = true;
+        }
       }
     }
 
@@ -1554,7 +1841,18 @@ export async function evaluatePublicSurfaceCommand(
       seenRedirectedFiles.add(red);
     }
 
+    // If this subcommand is not a public surface command, check if it could mutate files
     if (!parsed.isPublicSurfaceCommand) {
+      const subWords = tokenizeShellWords(rawSub.trim());
+      let priorBinary = '';
+      for (const w of subWords) {
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*=/.test(w)) continue;
+        priorBinary = w.split(/[/\\]/).pop()?.toLowerCase().replace(/\.exe$/, '') ?? w.toLowerCase();
+        break;
+      }
+      if (!priorBinary || !SAFE_READONLY_COMMANDS.has(priorBinary) || parsed.redirectedFiles.length > 0) {
+        hasPotentiallyMutatingPriorCommand = true;
+      }
       continue;
     }
 
@@ -1616,7 +1914,15 @@ export async function evaluatePublicSurfaceCommand(
         (upstreamRepoName && parsed.targetRepo.endsWith(`/${upstreamRepoName}`)));
 
     if (parsed.targetRepo && !isTargetUpstreamOrFork) {
-      continue;
+      // If the target repository contains shell variables ($VAR, `cmd`) or cannot be verified
+      // because upstream_repo is not configured, do NOT exempt! Fail closed as dynamic input.
+      const isDynamicTarget = /[$`]/.test(parsed.targetRepo);
+      const cannotVerifyTarget = !upstreamRepo;
+      if (isDynamicTarget || cannotVerifyTarget) {
+        parsed.hasDynamicInput = true;
+      } else {
+        continue;
+      }
     }
 
     // 5. For commands without explicit repo flag, determine repository from git context
@@ -1625,6 +1931,14 @@ export async function evaluatePublicSurfaceCommand(
       // Therefore, a GraphQL mutation is NEVER exempt, regardless of whether cwd is the tracker.
       if (parsed.isGraphqlMutation) {
         // Proceed directly to inspection
+      } else if (
+        parsed.commandType.includes('git-dir') ||
+        parsed.commandType.includes('work-tree') ||
+        parsed.commandType.includes('GIT_DIR') ||
+        parsed.commandType.includes('wrapped')
+      ) {
+        // Repository context is redirected or indeterminate — cwd remoteInfo cannot exempt it
+        // Proceed directly to inspection and dynamic-input fail-closed check
       } else if (remoteInfo.determined) {
         if (remoteInfo.isTracker) {
           continue; // Safe tracker repository
@@ -1645,6 +1959,15 @@ export async function evaluatePublicSurfaceCommand(
           blocked: true,
           matchedTerms: uniqueTerms,
           reason: generateBlockingReason(parsed.commandType, uniqueTerms),
+        };
+      }
+
+      // If this was a wrapped command (e.g. sudo git, nohup git), provide specific message
+      if (parsed.commandType.startsWith('wrapped command')) {
+        return {
+          blocked: true,
+          matchedTerms: ['dynamic input', 'wrapped command'],
+          reason: `⛔ Apache Magpie Security Guard: Blocked public-surface command (${parsed.commandType}). Invocations wrapped by sudo, nohup, timeout, xargs, etc. cannot be verified deterministically before publication. Run the git or gh command directly.`,
         };
       }
 
