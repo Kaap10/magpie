@@ -1240,4 +1240,230 @@ upstream_repo: apache/kafka
       assert(res.matchedTerms.includes('dynamic input'));
     });
   });
+
+  describe('Review #6 hardening & fail-closed defaults', () => {
+    const config = {
+      trackerRepo: 'airflow-s/airflow-s',
+      upstreamRepo: 'apache/airflow',
+      upstreamClonePath: '/home/user/upstream',
+    };
+
+    const trackerGitConfig = '[remote "origin"]\nurl = https://github.com/airflow-s/airflow-s.git';
+    const upstreamGitConfig = '[remote "origin"]\nurl = https://github.com/apache/airflow.git';
+
+    // 1. Subshell grouping and directory transition tracking
+    test('tracks cd across subshell parentheses and blocks leaking commit inside subshell', async () => {
+      const cmd = '(cd /home/user/upstream && git commit -m "Fix CVE-2026-1234")';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async (p) => (p.includes('/home/user/upstream') ? upstreamGitConfig : trackerGitConfig),
+      });
+      assertStrictEqual(res.blocked, true, 'Subshell group with cd to upstream must update directory and block commit');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('tracks cd across brace grouping { ... } and blocks leaking commit', async () => {
+      const cmd = '{ cd /home/user/upstream; git commit -m "Fix CVE-2026-1234"; }';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async (p) => (p.includes('/home/user/upstream') ? upstreamGitConfig : trackerGitConfig),
+      });
+      assertStrictEqual(res.blocked, true, 'Brace group with cd to upstream must update directory and block commit');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    // 2. Binary basename matching (/usr/bin/git, ~/bin/gh, ./git)
+    test('recognizes absolute and relative binary paths as git and gh commands', async () => {
+      const testCases = [
+        '/usr/bin/git commit -m "Fix CVE-2026-1234"',
+        '~/bin/gh pr comment 1 -R apache/airflow -b "Fix CVE-2026-1234"',
+        './git commit -m "Fix CVE-2026-1234"',
+      ];
+
+      for (const cmd of testCases) {
+        const res = await evaluatePublicSurfaceCommand(cmd, {
+          projectConfig: config,
+          readFile: async () => upstreamGitConfig,
+        });
+        assertStrictEqual(res.blocked, true, `Binary path invocation "${cmd}" must be recognized and scrubbed`);
+        assert(res.matchedTerms.includes('CVE id'));
+      }
+    });
+
+    // 3. Command-position checking: arguments to non-wrappers are allowed
+    test('allows git and gh as plain arguments to non-wrapper commands', async () => {
+      const allowedCmds = [
+        'grep git notes.md',
+        'which gh',
+        'brew upgrade gh',
+        'cat git_guide.txt',
+      ];
+
+      for (const cmd of allowedCmds) {
+        const res = await evaluatePublicSurfaceCommand(cmd, {
+          projectConfig: config,
+          readFile: async () => upstreamGitConfig,
+        });
+        assertStrictEqual(res.blocked, false, `Command "${cmd}" with git/gh argument must not be blocked`);
+      }
+    });
+
+    test('wrapped git/gh command gives specific wrapped-command blocking message', async () => {
+      const cmd = 'sudo git commit -m "Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.reason?.includes('sudo') || res.reason?.includes('wrapped'));
+    });
+
+    // 4. Git repository redirection flags (--git-dir, --work-tree, GIT_DIR, GIT_WORK_TREE)
+    test('fails closed on --git-dir and --work-tree redirection flags', async () => {
+      const redirectionCmds = [
+        'git --git-dir=/up/.git --work-tree=/up commit -m "Fix CVE-2026-1234"',
+        'git --git-dir /up/.git commit -m "Fix CVE-2026-1234"',
+        'GIT_DIR=/up/.git git commit -m "Fix CVE-2026-1234"',
+        'GIT_WORK_TREE=/up git commit -m "Fix CVE-2026-1234"',
+      ];
+
+      for (const cmd of redirectionCmds) {
+        const res = await evaluatePublicSurfaceCommand(cmd, {
+          projectConfig: config,
+          readFile: async () => trackerGitConfig,
+        });
+        assertStrictEqual(res.blocked, true, `Git redirection command "${cmd}" must fail closed`);
+      }
+    });
+
+    // 5. Option values in gh api are skipped when extracting target repository
+    test('skips gh api option values before extracting target repository', async () => {
+      const files: Record<string, string> = {
+        'payloads/comment.json': JSON.stringify({ body: 'Fix CVE-2026-1234 vulnerability' }),
+      };
+      const cmd = 'gh api --input payloads/comment.json repos/apache/airflow/issues/1/comments';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async (p) => {
+          for (const [k, v] of Object.entries(files)) {
+            if (p.endsWith(k) || p === k) return v;
+          }
+          return trackerGitConfig;
+        },
+      });
+      assertStrictEqual(res.blocked, true, 'gh api with --input must extract real endpoint and scrub payload');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    // 6. GraphQL mutation in --input or @file treated as mutation (never exempt)
+    test('treats gh api graphql with --input as mutation and blocks on forbidden terms from tracker', async () => {
+      const files: Record<string, string> = {
+        'query.json': JSON.stringify({ query: 'mutation { addComment(input: { body: "Fix CVE-2026-1234" }) { clientMutationId } }' }),
+      };
+      const cmd = 'gh api graphql --input query.json';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async (p) => {
+          if (p.endsWith('query.json') || p === 'query.json') return files['query.json'];
+          return trackerGitConfig;
+        },
+      });
+      assertStrictEqual(res.blocked, true, 'GraphQL query in --input file must be treated as mutation and scrubbed');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    // 7. Git remote URL parsing in inspectDirectoryRemote
+    test('inspectDirectoryRemote handles quoted URLs, trailing slashes, and comments', async () => {
+      const configs = [
+        '[remote "origin"]\nurl = "https://github.com/apache/airflow.git"',
+        '[remote "origin"]\nurl = https://github.com/apache/airflow/',
+        '[remote "origin"]\nurl = https://github.com/apache/airflow.git # primary remote',
+      ];
+
+      for (const cfg of configs) {
+        const cmd = 'git commit -m "Fix CVE-2026-1234"';
+        const res = await evaluatePublicSurfaceCommand(cmd, {
+          projectConfig: config,
+          readFile: async () => cfg,
+        });
+        assertStrictEqual(res.blocked, true, `Commit with config "${cfg}" must match upstream and be blocked`);
+      }
+    });
+
+    test('inspectDirectoryRemote returns determined: false for unparsable remote URLs', async () => {
+      const cmd = 'git commit -m "Clean commit message"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: { trackerRepo: 'airflow-s/airflow-s' },
+        readFile: async () => '[remote "origin"]\nurl = invalid-remote-url-without-slug',
+      });
+      // In unparsable remote without project.md upstream, clean commit passes without false positive
+      assertStrictEqual(res.blocked, false);
+    });
+
+    // 8. Fails closed when public surface command reads file modified earlier on same line
+    test('fails closed when file read via -F was written earlier on the same line', async () => {
+      const files: Record<string, string> = {
+        'msg.md': 'Neutral text initially',
+      };
+
+      const cmd = 'cp private.md msg.md; gh pr comment 1 -R apache/airflow -F msg.md';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async (p) => {
+          if (p.endsWith('msg.md') || p === 'msg.md') return files['msg.md'];
+          return trackerGitConfig;
+        },
+      });
+      assertStrictEqual(res.blocked, true, 'cp before gh -F on same line must fail closed as dynamic input');
+      assert(res.matchedTerms.includes('dynamic input'));
+    });
+
+    test('allows safe read-only commands before file read on same line', async () => {
+      const files: Record<string, string> = {
+        'msg.md': 'Safe functional fix description',
+      };
+
+      const cmd = 'echo "Logging step"; gh pr comment 1 -R apache/airflow -F msg.md';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async (p) => {
+          if (p.endsWith('msg.md') || p === 'msg.md') return files['msg.md'];
+          return trackerGitConfig;
+        },
+      });
+      assertStrictEqual(res.blocked, false, 'echo before gh -F with neutral message should be allowed');
+    });
+
+    // 9. Unresolved target repo (-R "$REPO") falls through to dynamic input check
+    test('fails closed when target repository is dynamic variable -R "$REPO"', async () => {
+      const cmd = 'gh pr comment 1 -R "$REPO" -b "Neutral text"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => trackerGitConfig,
+      });
+      assertStrictEqual(res.blocked, true, 'Dynamic target -R "$REPO" must fail closed');
+      assert(res.matchedTerms.includes('dynamic input'));
+    });
+
+    test('blocks forbidden terms even when target repo is dynamic -R "$REPO"', async () => {
+      const cmd = 'gh pr comment 1 -R "$REPO" -b "Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => trackerGitConfig,
+      });
+      assertStrictEqual(res.blocked, true, 'Dynamic target with CVE must block on CVE');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    // 10. Accidental-leak framing in blocking reason
+    test('blocking reason includes accidental-leak non-perimeter framing', async () => {
+      const cmd = 'git commit -m "Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.reason?.includes('guard against accidental public disclosure'));
+    });
+  });
 });
