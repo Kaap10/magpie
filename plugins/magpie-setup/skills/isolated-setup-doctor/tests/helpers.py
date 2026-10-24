@@ -60,7 +60,12 @@ def run_probe_script(
     if not bash:
         raise RuntimeError("bash not found")
 
-    env = dict(os.environ)
+    # A minimal base, not the host environment: the host's CONTAINER_HOST /
+    # DOCKER_HOST, or a gateway running on this machine, must not decide a test.
+    keep = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR"]
+    if os.name == "nt":
+        keep += ["SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP", "USERPROFILE"]
+    env = {name: os.environ[name] for name in keep if name in os.environ}
     env.update(env_vars)
 
     if bin_dir is not None:
