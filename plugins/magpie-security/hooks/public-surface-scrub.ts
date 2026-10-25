@@ -219,6 +219,9 @@ export async function resolveProjectConfig(
 export interface ShellSubcommand {
   raw: string;
   separatorAfter?: string;
+  subshellDepthDeltaBefore?: number;
+  subshellDepthDeltaAfter?: number;
+  hasUnclosedQuoteWithBinary?: boolean;
 }
 
 /**
@@ -332,15 +335,22 @@ export function splitShellSubcommands(commandLine: string): ShellSubcommand[] {
   let isEscaped = false;
   let parenDepth = 0;
   let braceDepth = 0;
+  const pendingHeredocs: { delim: string; stripTabs: boolean }[] = [];
 
   const pushCurrent = (sep?: string) => {
     const trimmed = current.trim();
     if (trimmed) {
       if (isEnclosedInMatchingGroup(trimmed)) {
+        const isSubshell = trimmed.startsWith('(') && trimmed.endsWith(')');
         // Strip outer group delimiters and recursively split subcommands inside the group
         const inner = trimmed.slice(1, -1).trim();
         const innerSubs = splitShellSubcommands(inner);
         if (innerSubs.length > 0) {
+          if (isSubshell) {
+            innerSubs[0].subshellDepthDeltaBefore = (innerSubs[0].subshellDepthDeltaBefore || 0) + 1;
+            innerSubs[innerSubs.length - 1].subshellDepthDeltaAfter =
+              (innerSubs[innerSubs.length - 1].subshellDepthDeltaAfter || 0) + 1;
+          }
           innerSubs[innerSubs.length - 1].separatorAfter = sep;
           result.push(...innerSubs);
         }
@@ -380,6 +390,47 @@ export function splitShellSubcommands(commandLine: string): ShellSubcommand[] {
     }
 
     if (!inSingle && !inDouble) {
+      // Check for heredoc operator << or <<- (excluding <<< herestring)
+      if (char === '<' && next === '<' && commandLine[i + 2] !== '<') {
+        let pos = i + 2;
+        let stripTabs = false;
+        if (commandLine[pos] === '-') {
+          stripTabs = true;
+          pos++;
+        }
+        while (pos < commandLine.length && (commandLine[pos] === ' ' || commandLine[pos] === '\t')) {
+          pos++;
+        }
+        let delim = '';
+        if (pos < commandLine.length) {
+          const q = commandLine[pos];
+          if (q === "'" || q === '"') {
+            pos++;
+            while (pos < commandLine.length && commandLine[pos] !== q) {
+              delim += commandLine[pos];
+              pos++;
+            }
+            if (pos < commandLine.length && commandLine[pos] === q) {
+              pos++;
+            }
+          } else {
+            while (
+              pos < commandLine.length &&
+              !/[\s;&|()<>]/.test(commandLine[pos])
+            ) {
+              delim += commandLine[pos];
+              pos++;
+            }
+          }
+        }
+        if (delim) {
+          pendingHeredocs.push({ delim, stripTabs });
+        }
+        current += commandLine.slice(i, pos);
+        i = pos - 1;
+        continue;
+      }
+
       if (char === '(') {
         parenDepth++;
         current += char;
@@ -404,6 +455,37 @@ export function splitShellSubcommands(commandLine: string): ShellSubcommand[] {
       // Only split on operators when NOT inside parentheses or braces
       if (parenDepth === 0 && braceDepth === 0) {
         if (char === '\n' || char === '\r') {
+          // If there is a pending heredoc, consume its body line by line
+          if (pendingHeredocs.length > 0) {
+            current += char;
+            if (char === '\r' && next === '\n') {
+              current += next;
+              i++;
+            }
+            while (pendingHeredocs.length > 0 && i + 1 < commandLine.length) {
+              const target = pendingHeredocs[0];
+              const lineStart = i + 1;
+              let lineEnd = commandLine.indexOf('\n', lineStart);
+              let hasCr = false;
+              if (lineEnd === -1) {
+                lineEnd = commandLine.length;
+              } else if (lineEnd > lineStart && commandLine[lineEnd - 1] === '\r') {
+                hasCr = true;
+              }
+              const rawLine = commandLine.slice(lineStart, hasCr ? lineEnd - 1 : lineEnd);
+              const checkLine = target.stripTabs ? rawLine.replace(/^\t+/, '') : rawLine.trim();
+
+              current += commandLine.slice(lineStart, lineEnd === commandLine.length ? lineEnd : lineEnd + 1);
+              i = lineEnd === commandLine.length ? lineEnd - 1 : lineEnd;
+
+              if (checkLine === target.delim) {
+                pendingHeredocs.shift();
+              }
+            }
+            pushCurrent('\n');
+            continue;
+          }
+
           pushCurrent('\n');
           continue;
         }
@@ -440,6 +522,16 @@ export function splitShellSubcommands(commandLine: string): ShellSubcommand[] {
   }
 
   pushCurrent(undefined);
+
+  // Fail closed if a quote is still open at the end and commandLine contains git or gh
+  if ((inSingle || inDouble) && /\b(?:git|gh)\b/i.test(commandLine)) {
+    if (result.length > 0) {
+      result[result.length - 1].hasUnclosedQuoteWithBinary = true;
+    } else {
+      result.push({ raw: commandLine, hasUnclosedQuoteWithBinary: true });
+    }
+  }
+
   return result;
 }
 
@@ -549,6 +641,8 @@ export interface ParsedSubcommand {
   redirectedFiles: string[];
   hasDynamicInput: boolean;
   isGraphqlMutation?: boolean;
+  isLiteralUnknownEndpoint?: boolean;
+  hasGitDirOrWorkTree?: boolean;
 }
 
 /**
@@ -710,13 +804,29 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     }
   }
 
+  // Transparent shell control prefixes that precede command invocations
+  const TRANSPARENT_SHELL_PREFIXES = new Set([
+    'then',
+    'do',
+    'else',
+    'elif',
+    '!',
+    'if',
+    'while',
+    'until',
+    '{',
+    '}',
+  ]);
+
   // Unwrap common command wrappers (command, env) and environment variable assignments
   let tokens = rawTokens;
   const leadingEnv: Record<string, string> = {};
   let cmdIdx = 0;
   while (cmdIdx < tokens.length) {
     const t = tokens[cmdIdx];
-    if (t === 'command') {
+    if (TRANSPARENT_SHELL_PREFIXES.has(t)) {
+      cmdIdx++;
+    } else if (t === 'command') {
       cmdIdx++;
       if (cmdIdx < tokens.length && tokens[cmdIdx] === '-p') {
         cmdIdx++;
@@ -752,6 +862,30 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
 
   const binary = getCommandBasename(tokens[0]);
 
+  // Check for eval and sh/bash/zsh -c executing git or gh
+  if (binary === 'eval') {
+    const evalStr = tokens.slice(1).join(' ');
+    if (/\b(?:git|gh)\b/i.test(evalStr)) {
+      result.isPublicSurfaceCommand = true;
+      result.hasDynamicInput = true;
+      result.commandType = 'eval (invoking git/gh)';
+      return result;
+    }
+  }
+
+  if (binary === 'sh' || binary === 'bash' || binary === 'zsh') {
+    const cIndex = tokens.findIndex((tok, idx) => idx > 0 && /-[a-zA-Z]*c/.test(tok));
+    if (cIndex !== -1) {
+      const cmdStr = tokens.slice(cIndex + 1).join(' ');
+      if (/\b(?:git|gh)\b/i.test(cmdStr)) {
+        result.isPublicSurfaceCommand = true;
+        result.hasDynamicInput = true;
+        result.commandType = `${binary} -c (invoking git/gh)`;
+        return result;
+      }
+    }
+  }
+
   // Known command wrappers that might invoke git or gh
   const KNOWN_WRAPPERS = new Set([
     'sudo',
@@ -769,26 +903,18 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
   ]);
 
   // If binary is neither 'git' nor 'gh' nor 'cd':
-  // If it's a known wrapper, check if git or gh appears in command position after wrapper options.
+  // If it's a known wrapper, check if git or gh appears in command position after wrapper options or arguments.
   // Otherwise, ignore git/gh plain arguments (e.g. grep git notes.md, which gh, brew upgrade gh).
   if (binary !== 'git' && binary !== 'gh' && binary !== 'cd') {
     if (KNOWN_WRAPPERS.has(binary)) {
       for (let i = 1; i < tokens.length; i++) {
-        const t = tokens[i];
-        if (t.startsWith('-')) {
-          continue; // skip wrapper options
-        }
-        if (/^[a-zA-Z_][a-zA-Z0-9_]*=/.test(t)) {
-          continue; // skip inline env assignments
-        }
-        const innerCmd = getCommandBasename(t);
+        const innerCmd = getCommandBasename(tokens[i]);
         if (innerCmd === 'git' || innerCmd === 'gh') {
           result.isPublicSurfaceCommand = true;
           result.hasDynamicInput = true;
           result.commandType = `wrapped command (${binary} ${innerCmd})`;
           return result;
         }
-        break; // First command-position argument after wrapper was not git/gh
       }
     }
     return result;
@@ -810,12 +936,8 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
 
   // Find git binary in tokens
   if (binary === 'git') {
-    // Fail closed if GIT_DIR or GIT_WORK_TREE environment variables are supplied
     if (leadingEnv['GIT_DIR'] || leadingEnv['GIT_WORK_TREE']) {
-      result.isPublicSurfaceCommand = true;
-      result.hasDynamicInput = true;
-      result.commandType = 'git (with GIT_DIR/GIT_WORK_TREE)';
-      return result;
+      result.hasGitDirOrWorkTree = true;
     }
 
     let subcmdIndex = -1;
@@ -838,19 +960,16 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
       }
 
       // --git-dir <path>, --git-dir=<path>, --work-tree <path>, --work-tree=<path>
-      // Fail closed as repository context is redirected and cannot be verified statically
       if (token === '--git-dir' || token === '--work-tree') {
-        result.isPublicSurfaceCommand = true;
-        result.hasDynamicInput = true;
-        result.commandType = `git (with ${token})`;
-        return result;
+        result.hasGitDirOrWorkTree = true;
+        if (i + 1 < tokens.length) {
+          i++; // skip path argument
+        }
+        continue;
       }
       if (token.startsWith('--git-dir=') || token.startsWith('--work-tree=')) {
-        const flag = token.split('=')[0];
-        result.isPublicSurfaceCommand = true;
-        result.hasDynamicInput = true;
-        result.commandType = `git (with ${flag})`;
-        return result;
+        result.hasGitDirOrWorkTree = true;
+        continue;
       }
 
       // Skip options that take an argument: -c <name>=<val>, --config-env <name>=<envvar>, etc.
@@ -882,7 +1001,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     // 1. git commit
     if (subcmd === 'commit') {
       result.isPublicSurfaceCommand = true;
-      result.commandType = 'git commit';
+      result.commandType = result.hasGitDirOrWorkTree ? 'git commit (with --git-dir/GIT_DIR)' : 'git commit';
 
       for (let i = subcmdIndex + 1; i < tokens.length; i++) {
         const token = tokens[i];
@@ -1030,7 +1149,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
       );
       if (hasMsg) {
         result.isPublicSurfaceCommand = true;
-        result.commandType = 'git tag';
+        result.commandType = result.hasGitDirOrWorkTree ? 'git tag (with --git-dir/GIT_DIR)' : 'git tag';
 
         for (let i = subcmdIndex + 1; i < tokens.length; i++) {
           const token = tokens[i];
@@ -1398,7 +1517,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     // 5. gh issue comment
     if (sub1 === 'issue' && sub2 === 'comment') {
       result.isPublicSurfaceCommand = true;
-      result.commandType = 'gh pr comment';
+      result.commandType = 'gh issue comment';
 
       for (let i = cmdIdx + 3; i < tokens.length; i++) {
         const token = tokens[i];
@@ -1482,8 +1601,10 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
         }
 
         // First non-flag positional argument is the API endpoint
-        if (token.startsWith('repos/')) {
-          const parts = token.slice('repos/'.length).split('/');
+        const endpoint = token.replace(/^(?:https?:\/\/[^/]+)?\/+/, '');
+
+        if (endpoint.startsWith('repos/')) {
+          const parts = endpoint.slice('repos/'.length).split('/');
           if (parts.length >= 2) {
             const rawSlug = `${parts[0]}/${parts[1]}`.toLowerCase();
             // Do NOT treat literal placeholders like repos/{owner}/{repo}/... as an explicit target
@@ -1493,12 +1614,15 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           }
           break;
         }
-        if (/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+/.test(token)) {
-          result.targetRepo = token.toLowerCase();
+        if (/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+/.test(endpoint)) {
+          result.targetRepo = endpoint.toLowerCase();
           break;
         }
 
-        // First positional argument encountered is not an endpoint (e.g. 'graphql')
+        // If literal endpoint is not graphql and has no placeholders, mark it so cwd remote does not exempt it
+        if (token !== 'graphql') {
+          result.isLiteralUnknownEndpoint = true;
+        }
         break;
       }
 
@@ -1531,17 +1655,11 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           const fieldArg = tokens[i + 1];
           const eqIdx = fieldArg.indexOf('=');
           if (eqIdx !== -1) {
-            const fieldName = fieldArg.slice(0, eqIdx);
             const val = fieldArg.slice(eqIdx + 1);
-
-            // In GraphQL, inspect EVERY field argument (variables, query, etc.)
-            // In REST calls, inspect body and title
-            if (isGraphql || fieldName === 'body' || fieldName === 'title' || fieldName === 'query') {
-              if (val.startsWith('@')) {
-                result.referencedFiles.push(val.slice(1));
-              } else {
-                result.extractedTexts.push(val);
-              }
+            if (val.startsWith('@')) {
+              result.referencedFiles.push(val.slice(1));
+            } else {
+              result.extractedTexts.push(val);
             }
           }
           i++;
@@ -1551,28 +1669,22 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
         // Attached short field forms: -fbody="...", -Fbody=@file, -fquery="...", etc.
         const attachedFieldMatch = token.match(/^-([fF])([a-zA-Z0-9_.-]+)=(.*)$/s);
         if (attachedFieldMatch) {
-          const fieldName = attachedFieldMatch[2];
           const val = attachedFieldMatch[3];
-          if (isGraphql || fieldName === 'body' || fieldName === 'title' || fieldName === 'query') {
-            if (val.startsWith('@')) {
-              result.referencedFiles.push(val.slice(1));
-            } else {
-              result.extractedTexts.push(val);
-            }
+          if (val.startsWith('@')) {
+            result.referencedFiles.push(val.slice(1));
+          } else {
+            result.extractedTexts.push(val);
           }
           continue;
         }
 
         const fieldMatch = token.match(/^(?:--field|--raw-field)=(.*?)=(.*)$/s);
         if (fieldMatch) {
-          const fieldName = fieldMatch[1];
           const val = fieldMatch[2];
-          if (isGraphql || fieldName === 'body' || fieldName === 'title' || fieldName === 'query') {
-            if (val.startsWith('@')) {
-              result.referencedFiles.push(val.slice(1));
-            } else {
-              result.extractedTexts.push(val);
-            }
+          if (val.startsWith('@')) {
+            result.referencedFiles.push(val.slice(1));
+          } else {
+            result.extractedTexts.push(val);
           }
           continue;
         }
@@ -1737,6 +1849,7 @@ export async function inspectDirectoryRemote(
 }
 
 export interface EvaluationOptions {
+  cwd?: string;
   env?: { [key: string]: string | undefined };
   readFile?: FileReader;
   projectConfig?: ProjectRepos;
@@ -1805,11 +1918,35 @@ export async function evaluatePublicSurfaceCommand(
   // Split command line into individual subcommands preserving operators
   const subcommands = splitShellSubcommands(commandLine);
 
-  let virtualCwd: string | undefined = undefined;
+  let virtualCwd: string | undefined = options?.cwd;
+  const subshellCwdStack: (string | undefined)[] = [];
   const seenRedirectedFiles = new Set<string>();
   let hasPotentiallyMutatingPriorCommand = false;
 
   for (const item of subcommands) {
+    if (item.subshellDepthDeltaBefore) {
+      for (let d = 0; d < item.subshellDepthDeltaBefore; d++) {
+        subshellCwdStack.push(virtualCwd);
+      }
+    }
+
+    if (item.hasUnclosedQuoteWithBinary) {
+      return {
+        blocked: true,
+        matchedTerms: ['unclosed quote', 'dynamic input'],
+        reason:
+          '⛔ Apache Magpie Security Guard: Blocked command with unclosed quote containing git/gh binary to prevent quote-blinded bypass.',
+      };
+    }
+
+    const finishSubcommand = () => {
+      if (item.subshellDepthDeltaAfter) {
+        for (let d = 0; d < item.subshellDepthDeltaAfter; d++) {
+          virtualCwd = subshellCwdStack.pop();
+        }
+      }
+    };
+
     const rawSub = item.raw;
     const parsed = parseSubcommand(rawSub);
 
@@ -1818,6 +1955,7 @@ export async function evaluatePublicSurfaceCommand(
       if (item.separatorAfter === '&&' || item.separatorAfter === ';' || item.separatorAfter === '\n' || !item.separatorAfter) {
         virtualCwd = resolvePath(virtualCwd, parsed.cdDir);
       }
+      finishSubcommand();
       continue;
     }
 
@@ -1853,6 +1991,7 @@ export async function evaluatePublicSurfaceCommand(
       if (!priorBinary || !SAFE_READONLY_COMMANDS.has(priorBinary) || parsed.redirectedFiles.length > 0) {
         hasPotentiallyMutatingPriorCommand = true;
       }
+      finishSubcommand();
       continue;
     }
 
@@ -1869,6 +2008,7 @@ export async function evaluatePublicSurfaceCommand(
     // therefore a GraphQL mutation is NEVER exempt, even if targeted at tracker or with GH_REPO=<tracker>
     if (parsed.targetRepo && trackerRepo && parsed.targetRepo === trackerRepo) {
       if (!parsed.isGraphqlMutation) {
+        finishSubcommand();
         continue;
       }
     }
@@ -1914,14 +2054,15 @@ export async function evaluatePublicSurfaceCommand(
         (upstreamRepoName && parsed.targetRepo.endsWith(`/${upstreamRepoName}`)));
 
     if (parsed.targetRepo && !isTargetUpstreamOrFork) {
-      // If the target repository contains shell variables ($VAR, `cmd`) or cannot be verified
-      // because upstream_repo is not configured, do NOT exempt! Fail closed as dynamic input.
+      // If the target repository contains shell variables ($VAR, `cmd`), fail closed as dynamic input.
       const isDynamicTarget = /[$`]/.test(parsed.targetRepo);
-      const cannotVerifyTarget = !upstreamRepo;
-      if (isDynamicTarget || cannotVerifyTarget) {
+      if (isDynamicTarget) {
         parsed.hasDynamicInput = true;
+      } else if (!upstreamRepo) {
+        // Upstream repo is not configured: cannot exempt, fall through to term scan instead of blocking
       } else {
-        continue;
+        finishSubcommand();
+        continue; // Verified non-upstream target repo
       }
     }
 
@@ -1940,10 +2081,12 @@ export async function evaluatePublicSurfaceCommand(
         // Repository context is redirected or indeterminate — cwd remoteInfo cannot exempt it
         // Proceed directly to inspection and dynamic-input fail-closed check
       } else if (remoteInfo.determined) {
-        if (remoteInfo.isTracker) {
+        if (remoteInfo.isTracker && !parsed.isLiteralUnknownEndpoint) {
+          finishSubcommand();
           continue; // Safe tracker repository
         }
-        if (!remoteInfo.isUpstream) {
+        if (!remoteInfo.isUpstream && !parsed.isLiteralUnknownEndpoint) {
+          finishSubcommand();
           continue; // Known non-upstream remote (e.g. unrelated third-party repo, adopter docs), allow through
         }
       }
@@ -2023,6 +2166,8 @@ export async function evaluatePublicSurfaceCommand(
         reason: generateBlockingReason(parsed.commandType, uniqueTerms),
       };
     }
+
+    finishSubcommand();
   }
 
   return { blocked: false, matchedTerms: [] };
@@ -2038,6 +2183,14 @@ export function register(on: any): void {
     const command = e?.command;
 
     if (typeof command === 'string') {
+      let initialCwd: string | undefined = e?.cwd || e?.directory;
+      if (!initialCwd) {
+        try {
+          initialCwd = await $.session.root();
+        } catch {
+          // $.session may be absent in mock harnesses
+        }
+      }
       let allowBypass: string | undefined;
       try {
         allowBypass = await $.env.get('MAGPIE_ALLOW_EMBARGO_TERMS');
@@ -2046,6 +2199,7 @@ export function register(on: any): void {
       }
       const hookEnv = allowBypass ? { MAGPIE_ALLOW_EMBARGO_TERMS: allowBypass } : {};
       const evaluation = await evaluatePublicSurfaceCommand(command, {
+        cwd: initialCwd,
         env: hookEnv,
         readFile: async (filePath: string) => {
           try {

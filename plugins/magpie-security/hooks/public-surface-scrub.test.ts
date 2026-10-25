@@ -265,7 +265,7 @@ upstream_repo: apache/kafka
     test('identifies gh issue comment', () => {
       const comment = parseSubcommand('gh issue comment 456 --body "Under investigation"');
       assertStrictEqual(comment.isPublicSurfaceCommand, true);
-      assertStrictEqual(comment.commandType, 'gh pr comment');
+      assertStrictEqual(comment.commandType, 'gh issue comment');
       assertDeepStrictEqual(comment.extractedTexts, ['Under investigation']);
     });
 
@@ -992,6 +992,49 @@ upstream_repo: apache/kafka
       assert(result.deny.includes('SSRF'));
     });
 
+    test('intercepts bare git commit in upstream clone seeded from $.session.root() or e.cwd', async () => {
+      let registeredHook: any = null;
+      const on = (event: string, filterOrHandler: any, handler?: any) => {
+        if (event === 'tool.call') {
+          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
+        }
+      };
+      register(on);
+
+      const mockUserMd = '\n| Key | Value |\n| environment.upstream_clone | /home/dev/upstream-airflow |\n';
+      const mockGitConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow.git\n';
+      let nextCalled = false;
+      const mockEvent = {
+        command: 'git commit -m "Fix CVE-2026-1234 SSRF"',
+        cwd: '/home/dev/upstream-airflow',
+      };
+      const next = () => {
+        nextCalled = true;
+      };
+
+      const result = await registeredHook(
+        {
+          fs: {
+            read: async (p: string) => {
+              if (p.includes('user.md')) return mockUserMd;
+              if (p.includes('/home/dev/upstream-airflow/.git/config')) return mockGitConfig;
+              return null;
+            },
+          },
+          session: {
+            root: async () => '/home/dev/upstream-airflow',
+          },
+          env: { get: async () => undefined },
+        },
+        mockEvent,
+        next
+      );
+      assertStrictEqual(nextCalled, false, 'next() must NOT be called on bare commit in upstream clone');
+      assert(result.deny, 'Deny explanation must be returned');
+      assert(result.deny.includes('CVE id'));
+      assert(result.deny.includes('SSRF'));
+    });
+
     test('passes non-string command through to next() unchanged', async () => {
       let registeredHook: any = null;
       const on = (event: string, filterOrHandler: any, handler?: any) => {
@@ -1464,6 +1507,300 @@ upstream_repo: apache/kafka
       });
       assertStrictEqual(res.blocked, true);
       assert(res.reason?.includes('guard against accidental public disclosure'));
+    });
+  });
+
+  describe('Review #7 maintainer feedback & edge-case hardening', () => {
+    const config = {
+      trackerRepo: 'airflow-s/airflow-s',
+      upstreamRepo: 'apache/airflow',
+      upstreamClonePath: '/home/user/upstream',
+    };
+
+    const trackerGitConfig = '[remote "origin"]\nurl = https://github.com/airflow-s/airflow-s.git';
+    const upstreamGitConfig = '[remote "origin"]\nurl = https://github.com/apache/airflow.git';
+
+    // 1. Bare commands with seeded cwd
+    test('bare git commit in upstream clone with no project.md blocks on CVE using options.cwd', async () => {
+      const cmd = 'git commit -m "Fix CVE-2026-1234 SSRF"';
+      const mockUserMd = '\n| Key | Value |\n| environment.upstream_clone | /home/dev/upstream-airflow |\n';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/home/dev/upstream-airflow',
+        readFile: async (p) => {
+          if (p.includes('user.md')) return mockUserMd;
+          if (p.includes('/home/dev/upstream-airflow/.git/config')) return upstreamGitConfig;
+          return null;
+        },
+      });
+      assertStrictEqual(res.blocked, true, 'Bare git commit in upstream clone must be evaluated against upstream');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    // 2. Subshell ( ... ) vs brace group { ...; } cwd persistence
+    test('restores virtualCwd after subshell group (cd ...) so subsequent command is evaluated in upstream', async () => {
+      const cmd = '(cd ../tracker && gh issue view 1); git commit -m "Fix CVE-2026-1234 SSRF"';
+      const mockUserMd = '\n| Key | Value |\n| environment.upstream_clone | /home/dev/upstream-airflow |\n';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/home/dev/upstream-airflow',
+        readFile: async (p) => {
+          if (p.includes('user.md')) return mockUserMd;
+          if (p.includes('/home/dev/upstream-airflow/.git/config')) return upstreamGitConfig;
+          if (p.includes('tracker/.git/config')) return trackerGitConfig;
+          return null;
+        },
+      });
+      assertStrictEqual(res.blocked, true, 'Subshell cd must not carry over; subsequent commit runs in upstream and blocks');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('preserves virtualCwd across brace group { cd ...; } so subsequent command runs in tracker', async () => {
+      const cmd = '{ cd ../tracker; gh issue view 1; }; git commit -m "Fix CVE-2026-1234 SSRF"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/home/dev/upstream-airflow',
+        projectConfig: config,
+        readFile: async (p) => {
+          if (p.includes('tracker/.git/config')) return trackerGitConfig;
+          return upstreamGitConfig;
+        },
+      });
+      assertStrictEqual(res.blocked, false, 'Brace group cd must carry over; subsequent commit runs in tracker and is allowed');
+    });
+
+    // 3. Wrapper arguments (timeout 30 git, nice -n 10 git, sudo -u x git)
+    test('treats line as wrapped when git appears after wrapper arguments (timeout 30 git)', async () => {
+      const cmd = 'timeout 30 git commit -m "Neutral functional change"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('wrapped command'));
+    });
+
+    test('treats line as wrapped when git appears after nice options (nice -n 10 git)', async () => {
+      const cmd = 'nice -n 10 git commit -m "Neutral functional change"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('wrapped command'));
+    });
+
+    test('treats line as wrapped when git appears after sudo flags (sudo -u dev git)', async () => {
+      const cmd = 'sudo -u dev git commit -m "Neutral functional change"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('wrapped command'));
+    });
+
+    test('treats line as wrapped when gh appears after timeout options (timeout 30 gh pr comment)', async () => {
+      const cmd = 'timeout 30 gh pr comment 1 -R apache/airflow -b "Neutral comment"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('wrapped command'));
+    });
+
+    // 4. Shell control transparent prefixes and eval / bash -c
+    test('inspects git commit following shell control prefix (if ... then git commit)', async () => {
+      const cmd = 'if true; then git commit -m "Fix CVE-2026-1234"; fi';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('inspects gh following shell loop prefix (for ... do gh pr comment)', async () => {
+      const cmd = 'for x in 1; do gh pr comment 1 -R apache/airflow -b "Fix CVE-2026-1234"; done';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('inspects git commit following negation prefix (! git commit)', async () => {
+      const cmd = '! git commit -m "Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('fails closed on bash -c invoking git', async () => {
+      const cmd = 'bash -c "git commit -m \\"Routine functional change\\""';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('dynamic input'));
+    });
+
+    test('fails closed on eval invoking git', async () => {
+      const cmd = 'eval "git commit -m \\"Routine functional change\\""';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('dynamic input'));
+    });
+
+    // 5. gh api leading slash and API host normalization
+    test('normalizes gh api leading slash (/repos/apache/airflow/...) and blocks on CVE', async () => {
+      const cmd = 'gh api /repos/apache/airflow/issues/1/comments -f body="Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('normalizes gh api full URL (https://api.github.com/repos/apache/airflow/...) and blocks on CVE', async () => {
+      const cmd = 'gh api https://api.github.com/repos/apache/airflow/issues/1/comments -f body="Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('scans, not exempts, literal gh api endpoint without owner/repo placeholders from tracker checkout', async () => {
+      const cmd = 'gh api /user -f note="Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => trackerGitConfig,
+      });
+      assertStrictEqual(res.blocked, true, 'Literal unparsed endpoint must not be exempted by tracker cwd');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('allows neutral literal gh api endpoint without owner/repo placeholders', async () => {
+      const cmd = 'gh api /user -f note="Routine status update"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => trackerGitConfig,
+      });
+      assertStrictEqual(res.blocked, false, 'Neutral literal endpoint should pass');
+    });
+
+    // 6. REST calls scan all field names
+    test('scans non-body/title REST field (-f summary=...) and blocks on CVE', async () => {
+      const cmd = 'gh api repos/apache/airflow/issues -f summary="Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('scans attached non-body/title REST field (-fnote=...) and blocks on CVE', async () => {
+      const cmd = 'gh api repos/apache/airflow/issues -fnote="Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true);
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    // 7. Heredoc bodies and unclosed quotes
+    test('consumes heredoc body with internal quote and checks subsequent file-reading command', async () => {
+      const files: Record<string, string> = { 'msg.md': 'Body content' };
+      const cmd = "cat > msg.md <<'EOF'\nIt doesn't matter\nEOF\ngh pr create -t ok --body-file msg.md -R apache/airflow";
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async (p) => {
+          if (p.endsWith('msg.md') || p === 'msg.md') return files['msg.md'];
+          return upstreamGitConfig;
+        },
+      });
+      assertStrictEqual(res.blocked, true, 'Heredoc write to file on same line must fail closed as dynamic input');
+      assert(res.matchedTerms.includes('dynamic input'));
+    });
+
+    test('consumes heredoc body with internal quote and evaluates subsequent git commit', async () => {
+      const cmd = "cat > msg.md <<'EOF'\nIt doesn't matter\nEOF\ngit commit -m \"Fix CVE-2026-1234 SSRF\"";
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true, 'Subsequent git commit must be parsed and blocked on CVE');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('fails closed on unclosed quote when git appears on command line', async () => {
+      const cmd = 'git commit -m "Fix CVE-2026-1234';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true, 'Unclosed quote with git binary must fail closed');
+      assert(res.matchedTerms.includes('unclosed quote'));
+    });
+
+    // 8. Repository without Magpie config (unknown upstream)
+    test('in unconfigured repository, gh command with neutral message passes term scan', async () => {
+      const cmd = 'gh pr comment 1 -R someone/other -b "thanks"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: {}, // No upstreamRepo configured
+        readFile: async () => null,
+      });
+      assertStrictEqual(res.blocked, false, 'Neutral comment in unconfigured repo should pass');
+    });
+
+    test('in unconfigured repository, gh command with CVE is blocked by term scan', async () => {
+      const cmd = 'gh pr comment 1 -R someone/other -b "Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: {}, // No upstreamRepo configured
+        readFile: async () => null,
+      });
+      assertStrictEqual(res.blocked, true, 'CVE in unconfigured repo should be caught by term scan');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    // 9. Scope-restricted --git-dir and GIT_DIR
+    test('allows non-public-surface git command using --git-dir (git --git-dir=.git status)', async () => {
+      const cmd = 'git --git-dir=.git status';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => trackerGitConfig,
+      });
+      assertStrictEqual(res.blocked, false, 'git status is not a public-surface command and should pass');
+    });
+
+    test('allows neutral git commit using --git-dir', async () => {
+      const cmd = 'git --git-dir=.git commit -m "Refactor parser utilities"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => trackerGitConfig,
+      });
+      assertStrictEqual(res.blocked, false, 'Neutral commit with --git-dir should pass term scan');
+    });
+
+    test('blocks git commit using --git-dir when commit message contains forbidden term', async () => {
+      const cmd = 'git --git-dir=.git commit -m "Fix CVE-2026-1234 SSRF"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => trackerGitConfig,
+      });
+      assertStrictEqual(res.blocked, true, 'Commit with --git-dir must be checked and blocked on CVE');
+      assert(res.matchedTerms.includes('CVE id'));
     });
   });
 });
