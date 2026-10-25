@@ -1035,6 +1035,88 @@ upstream_repo: apache/kafka
       assert(result.deny.includes('SSRF'));
     });
 
+    test('intercepts bare git commit when only $.session.root() is provided (e.cwd undefined)', async () => {
+      let registeredHook: any = null;
+      const on = (event: string, filterOrHandler: any, handler?: any) => {
+        if (event === 'tool.call') {
+          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
+        }
+      };
+      register(on);
+
+      const mockUserMd = '\n| Key | Value |\n| environment.upstream_clone | /home/dev/upstream-airflow |\n';
+      const mockGitConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow.git\n';
+      let nextCalled = false;
+      const mockEvent = {
+        command: 'git commit -m "Fix CVE-2026-1234 SSRF"',
+      };
+      const next = () => {
+        nextCalled = true;
+      };
+
+      const result = await registeredHook(
+        {
+          fs: {
+            read: async (p: string) => {
+              if (p.includes('user.md')) return mockUserMd;
+              if (p.includes('/home/dev/upstream-airflow/.git/config')) return mockGitConfig;
+              return null;
+            },
+          },
+          session: {
+            root: async () => '/home/dev/upstream-airflow',
+          },
+          env: { get: async () => undefined },
+        },
+        mockEvent,
+        next
+      );
+      assertStrictEqual(nextCalled, false, 'next() must NOT be called on bare commit in upstream clone');
+      assert(result.deny, 'Deny explanation must be returned');
+      assert(result.deny.includes('CVE id'));
+      assert(result.deny.includes('SSRF'));
+    });
+
+    test('allows bare git commit on private tracker repo when session root is tracker checkout', async () => {
+      let registeredHook: any = null;
+      const on = (event: string, filterOrHandler: any, handler?: any) => {
+        if (event === 'tool.call') {
+          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
+        }
+      };
+      register(on);
+
+      const mockProjectMd = 'tracker_repo: apache/airflow-security\nupstream_repo: apache/airflow\n';
+      const mockTrackerGitConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow-security.git\n';
+      let nextCalled = false;
+      const mockEvent = {
+        command: 'git commit -m "Fix CVE-2026-1234 SSRF in private tracker"',
+      };
+      const next = (e: any) => {
+        nextCalled = true;
+        return { success: true };
+      };
+
+      const result = await registeredHook(
+        {
+          fs: {
+            read: async (p: string) => {
+              if (p.includes('project.md')) return mockProjectMd;
+              if (p.includes('/home/dev/tracker/.git/config') || p === '.git/config') return mockTrackerGitConfig;
+              return null;
+            },
+          },
+          session: {
+            root: async () => '/home/dev/tracker',
+          },
+          env: { get: async () => undefined },
+        },
+        mockEvent,
+        next
+      );
+      assertStrictEqual(nextCalled, true, 'next() must be called for safe commit in private tracker repo');
+    });
+
     test('passes non-string command through to next() unchanged', async () => {
       let registeredHook: any = null;
       const on = (event: string, filterOrHandler: any, handler?: any) => {
