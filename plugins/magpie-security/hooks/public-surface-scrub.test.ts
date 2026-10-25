@@ -1914,4 +1914,74 @@ upstream_repo: apache/kafka
       assert(res.matchedTerms.includes('CVE id'));
     });
   });
+
+  describe('Proactive Maintainer Hardening (Round 8)', () => {
+    const config = {
+      trackerRepo: 'apache/magpie-tracker',
+      upstreamRepo: 'apache/airflow',
+      upstreamClonePath: '/home/dev/upstream',
+    };
+    const trackerGitConfig = '[remote "origin"]\nurl = https://github.com/apache/magpie-tracker\n';
+    const upstreamGitConfig = '[remote "origin"]\nurl = https://github.com/apache/airflow\n';
+
+    const mockFs: Record<string, string> = {
+      '/tracker/.git/config': trackerGitConfig,
+      '/home/dev/upstream/.git/config': upstreamGitConfig,
+    };
+    const mockReadFile = async (p: string) => mockFs[p] || null;
+
+    test('1. cd <upstream> || exit 1 updates virtualCwd and blocks CVE commit', async () => {
+      const cmd = 'cd /home/dev/upstream || exit 1; git commit -m "Fix CVE-2026-1234 SSRF"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/tracker',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(res.blocked, true, 'cd || exit 1 must update virtualCwd to upstream and block CVE commit');
+    });
+
+    test('2. gh api /v3/repos/... normalizes endpoint and blocks CVE comment', async () => {
+      const cmd = 'gh api /v3/repos/apache/airflow/issues/1/comments -f body="Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/tracker',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(res.blocked, true, 'gh api /v3/repos/ must normalize to upstream and block CVE');
+    });
+
+    test('3. env -C <upstream> updates directory and blocks CVE commit', async () => {
+      const cmd = 'env -C /home/dev/upstream git commit -m "Fix CVE-2026-1234 SSRF"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/tracker',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(res.blocked, true, 'env -C must update directory context or fail closed');
+    });
+
+    test('4. git merge -m with CVE is classified and blocked', async () => {
+      const cmd = 'git merge --no-ff feature/fix -m "Merge security fix for CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/home/dev/upstream',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(res.blocked, true, 'git merge -m must be inspected and blocked on CVE');
+    });
+
+    test('5. git -C with .. path segments collapses and matches upstreamClonePath', async () => {
+      const cmd = 'git -C /home/dev/tracker/../upstream commit -m "Fix CVE-2026-1234 SSRF"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/home/dev/tracker',
+        projectConfig: {
+          trackerRepo: 'apache/magpie-tracker',
+          upstreamRepo: 'apache/airflow',
+          upstreamClonePath: '/home/dev/upstream',
+        },
+        readFile: async () => null,
+      });
+      assertStrictEqual(res.blocked, true, 'Relative path with .. must collapse and match upstreamClonePath');
+    });
+  });
 });
