@@ -424,6 +424,9 @@ export function splitShellSubcommands(commandLine: string): ShellSubcommand[] {
           }
         }
         if (delim) {
+          if (delim.startsWith('\\')) {
+            delim = delim.slice(1);
+          }
           pendingHeredocs.push({ delim, stripTabs });
         }
         current += commandLine.slice(i, pos);
@@ -1614,13 +1617,34 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           }
           break;
         }
-        if (/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+/.test(endpoint)) {
-          result.targetRepo = endpoint.toLowerCase();
+        const GITHUB_API_NON_REPO_ROUTES = new Set([
+          'orgs',
+          'users',
+          'user',
+          'teams',
+          'gists',
+          'notifications',
+          'search',
+          'rate_limit',
+          'emojis',
+          'events',
+          'feeds',
+          'issues',
+          'markdown',
+          'meta',
+          'app',
+          'installations',
+        ]);
+
+        const firstSegment = endpoint.split('/')[0].toLowerCase();
+        if (!GITHUB_API_NON_REPO_ROUTES.has(firstSegment) && /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+/.test(endpoint)) {
+          const parts = endpoint.split('/');
+          result.targetRepo = `${parts[0]}/${parts[1]}`.toLowerCase();
           break;
         }
 
         // If literal endpoint is not graphql and has no placeholders, mark it so cwd remote does not exempt it
-        if (token !== 'graphql') {
+        if (!isGraphql) {
           result.isLiteralUnknownEndpoint = true;
         }
         break;

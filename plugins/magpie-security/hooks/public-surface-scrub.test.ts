@@ -1698,6 +1698,25 @@ upstream_repo: apache/kafka
       assertStrictEqual(res.blocked, false, 'Neutral literal endpoint should pass');
     });
 
+    test('does not misparse /orgs/... as target repository and blocks on CVE', async () => {
+      const cmd = 'gh api /orgs/apache/teams -f note="Fix CVE-2026-1234"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => trackerGitConfig,
+      });
+      assertStrictEqual(res.blocked, true, 'Literal orgs endpoint must not be exempted as a third-party repo');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('allows neutral /orgs/... endpoint call', async () => {
+      const cmd = 'gh api /orgs/apache/teams -f note="Routine team setup"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => trackerGitConfig,
+      });
+      assertStrictEqual(res.blocked, false, 'Neutral orgs endpoint should pass');
+    });
+
     // 6. REST calls scan all field names
     test('scans non-body/title REST field (-f summary=...) and blocks on CVE', async () => {
       const cmd = 'gh api repos/apache/airflow/issues -f summary="Fix CVE-2026-1234"';
@@ -1741,6 +1760,16 @@ upstream_repo: apache/kafka
         readFile: async () => upstreamGitConfig,
       });
       assertStrictEqual(res.blocked, true, 'Subsequent git commit must be parsed and blocked on CVE');
+      assert(res.matchedTerms.includes('CVE id'));
+    });
+
+    test('consumes heredoc body with backslash-escaped delimiter <<\\EOF and evaluates subsequent git commit', async () => {
+      const cmd = "cat > msg.md <<\\EOF\nIt doesn't matter\nEOF\ngit commit -m \"Fix CVE-2026-1234 SSRF\"";
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        projectConfig: config,
+        readFile: async () => upstreamGitConfig,
+      });
+      assertStrictEqual(res.blocked, true, 'Subsequent git commit after <<\\EOF must be parsed and blocked on CVE');
       assert(res.matchedTerms.includes('CVE id'));
     });
 
