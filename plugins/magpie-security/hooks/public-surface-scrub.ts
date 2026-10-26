@@ -2180,6 +2180,8 @@ export async function evaluatePublicSurfaceCommand(
     const projectConfig = options?.projectConfig ?? (await resolveProjectConfig(options?.readFile, effectiveDir, options?.env));
     const trackerRepo = projectConfig.trackerRepo?.toLowerCase();
     let upstreamRepo = projectConfig.upstreamRepo?.toLowerCase();
+    // Set when the tracker cwd exemption was skipped under the session-root fallback.
+    let trackerFallbackHint: string | undefined;
 
     // 1. Exemption: Subcommand explicitly targets the private security tracker
     // GraphQL mutations address resources by global Node IDs, which the hook cannot resolve;
@@ -2263,6 +2265,7 @@ export async function evaluatePublicSurfaceCommand(
           if (options?.isSessionRootFallback) {
             // When scope comes from session-root fallback, cwd might not reflect an earlier cd ../<upstream>.
             // Do NOT apply tracker exemption; fall through to term scan!
+            trackerFallbackHint = trackerRepo;
           } else {
             finishSubcommand();
             continue; // Safe tracker repository
@@ -2342,10 +2345,16 @@ export async function evaluatePublicSurfaceCommand(
 
     if (matched.length > 0) {
       const uniqueTerms = Array.from(new Set(matched));
+      let reason = generateBlockingReason(parsed.commandType, uniqueTerms);
+      if (trackerFallbackHint) {
+        // The Bash tool call carries no cwd, so a command run in the tracker checkout cannot be
+        // told apart from one run after an earlier `cd ../<upstream>`; an explicit target can.
+        reason += `\nIf this command targets the private tracker, name it explicitly: \`--repo ${trackerFallbackHint}\`.`;
+      }
       return {
         blocked: true,
         matchedTerms: uniqueTerms,
-        reason: generateBlockingReason(parsed.commandType, uniqueTerms),
+        reason,
       };
     }
 

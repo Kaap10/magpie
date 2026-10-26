@@ -1878,6 +1878,9 @@ and tracked by the pre-commit sync check).
   is omitted in the tool call event), the tracker cwd exemption is disabled to protect
   against undetected in-session `cd ../<upstream>` transitions, falling through to the
   deterministic term scan.
+  The Bash tool call carries no `cwd`, so in practice this is always the case:
+  tracker commands that mention a CVE id need an explicit `--repo <tracker_repo>`, and the
+  block message says so.
 - **Upstream repository protection**: Subcommands targeting the public codebase
   (`upstream_repo` in `project.md`) or operating within an upstream working tree
   are scrubbed. Commands targeting unrelated third-party or adopter documentation

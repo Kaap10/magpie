@@ -2308,4 +2308,49 @@ upstream_repo: apache/kafka
     });
   });
 
+  describe('register() with no cwd in the event (session-root fallback)', () => {
+    const trackerProject = '\n| Key | Value |\n| tracker_repo | airflow-s/airflow-s |\n| upstream_repo | apache/airflow |\n';
+    const trackerGitConfig = '\n[remote "origin"]\n  url = https://github.com/airflow-s/airflow-s.git\n';
+
+    async function runInTracker(command: string): Promise<{ result: any; nextCalled: boolean }> {
+      let registeredHook: any = null;
+      register((event: string, filterOrHandler: any, handler?: any) => {
+        if (event === 'tool.call') {
+          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
+        }
+      });
+      let nextCalled = false;
+      // The Bash tool call carries only `command` (and timeout/description), never a cwd.
+      const result = await registeredHook(
+        {
+          session: { root: async () => '/home/dev/airflow-s' },
+          fs: {
+            read: async (p: string) => {
+              if (p === '/home/dev/airflow-s/.apache-magpie-overrides/project.md') return trackerProject;
+              if (p === '/home/dev/airflow-s/.git/config') return trackerGitConfig;
+              return null;
+            },
+          },
+          env: { get: async () => undefined },
+        },
+        { command },
+        () => {
+          nextCalled = true;
+        }
+      );
+      return { result, nextCalled };
+    }
+
+    test('a bare tracker comment with a CVE id is blocked and told to name the tracker', async () => {
+      const { result, nextCalled } = await runInTracker('gh issue comment 12 -b "Allocated CVE-2026-1234"');
+      assertStrictEqual(nextCalled, false);
+      assert(result.deny.includes('--repo airflow-s/airflow-s'), result.deny);
+    });
+
+    test('the same comment with an explicit tracker --repo passes', async () => {
+      const { nextCalled } = await runInTracker('gh issue comment 12 --repo airflow-s/airflow-s -b "Allocated CVE-2026-1234"');
+      assertStrictEqual(nextCalled, true);
+    });
+  });
+
 });
