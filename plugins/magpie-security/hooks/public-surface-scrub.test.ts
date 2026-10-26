@@ -21,6 +21,7 @@ import { describe, test } from 'claude-code/testing';
 import {
   evaluatePublicSurfaceCommand,
   findForbiddenTerms,
+  inspectDirectoryRemote,
   parseProjectManifest,
   parseSubcommand,
   register,
@@ -238,15 +239,18 @@ upstream_repo: apache/kafka
       const tagM = parseSubcommand('git tag -a v1.0.0 -m "Release v1.0.0"');
       assertStrictEqual(tagM.isPublicSurfaceCommand, true);
       assertStrictEqual(tagM.commandType, 'git tag');
-      assertDeepStrictEqual(tagM.extractedTexts, ['Release v1.0.0']);
+      assert(tagM.extractedTexts.includes('v1.0.0'));
+      assert(tagM.extractedTexts.includes('Release v1.0.0'));
 
       const tagF = parseSubcommand('git tag -F tag-notes.txt v1.0.0');
       assertStrictEqual(tagF.isPublicSurfaceCommand, true);
+      assert(tagF.extractedTexts.includes('v1.0.0'));
       assertDeepStrictEqual(tagF.referencedFiles, ['tag-notes.txt']);
 
-      // Lightweight tag without message is not a public surface publishing command
+      // Lightweight tag creation scans the tag name for forbidden disclosure terms
       const bareTag = parseSubcommand('git tag v1.0.0');
-      assertStrictEqual(bareTag.isPublicSurfaceCommand, false);
+      assertStrictEqual(bareTag.isPublicSurfaceCommand, true);
+      assertDeepStrictEqual(bareTag.extractedTexts, ['v1.0.0']);
     });
 
     test('identifies gh pr edit and gh pr review', () => {
@@ -832,13 +836,15 @@ upstream_repo: apache/kafka
       assertStrictEqual(res.blocked, false);
     });
 
-    test('allows commands in unrelated repository without Magpie config when remote is determined', async () => {
+    test('allows commands in unrelated repository without Magpie config when remote is determined and message is neutral', async () => {
       const gitConfig = `
 [remote "origin"]
   url = https://github.com/third-party/utility-lib.git
 `;
+      // When upstreamRepo is unknown, unconfigured repos fall through to term scan (Blocking #2 fix).
+      // Neutral commits pass:
       const res = await evaluatePublicSurfaceCommand(
-        'git commit -m "fix(generate-cve-json): tidy"',
+        'git commit -m "fix(generate-json): tidy"',
         {
           readFile: async (p: string) => {
             if (p.includes('.git/config')) return gitConfig;
@@ -847,6 +853,22 @@ upstream_repo: apache/kafka
         }
       );
       assertStrictEqual(res.blocked, false);
+
+      // Verified non-upstream remote (when upstreamRepo is configured) exempts even terms like cve:
+      const verifiedRes = await evaluatePublicSurfaceCommand(
+        'git commit -m "fix(generate-cve-json): tidy"',
+        {
+          projectConfig: {
+            trackerRepo: 'apache/magpie-tracker',
+            upstreamRepo: 'apache/airflow',
+          },
+          readFile: async (p: string) => {
+            if (p.includes('.git/config')) return gitConfig;
+            return null;
+          },
+        }
+      );
+      assertStrictEqual(verifiedRes.blocked, false);
     });
   });
 
@@ -1077,7 +1099,7 @@ upstream_repo: apache/kafka
       assert(result.deny.includes('SSRF'));
     });
 
-    test('allows bare git commit on private tracker repo when session root is tracker checkout', async () => {
+    test('allows bare git commit on private tracker repo when event provides explicit tracker cwd', async () => {
       let registeredHook: any = null;
       const on = (event: string, filterOrHandler: any, handler?: any) => {
         if (event === 'tool.call') {
@@ -1090,6 +1112,7 @@ upstream_repo: apache/kafka
       const mockTrackerGitConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow-security.git\n';
       let nextCalled = false;
       const mockEvent = {
+        cwd: '/home/dev/tracker',
         command: 'git commit -m "Fix CVE-2026-1234 SSRF in private tracker"',
       };
       const next = (e: any) => {
@@ -1114,7 +1137,32 @@ upstream_repo: apache/kafka
         mockEvent,
         next
       );
-      assertStrictEqual(nextCalled, true, 'next() must be called for safe commit in private tracker repo');
+      assertStrictEqual(nextCalled, true, 'next() must be called for verified tracker cwd commit');
+
+      // Under session root fallback (no event cwd), tracker exemption is disabled (Blocking #1 fix)
+      let fallbackNextCalled = false;
+      const fallbackEvent = {
+        command: 'git commit -m "Fix CVE-2026-1234 SSRF in private tracker"',
+      };
+      const fallbackResult = await registeredHook(
+        {
+          fs: {
+            read: async (p: string) => {
+              if (p.includes('project.md')) return mockProjectMd;
+              if (p.includes('/home/dev/tracker/.git/config') || p === '.git/config') return mockTrackerGitConfig;
+              return null;
+            },
+          },
+          session: {
+            root: async () => '/home/dev/tracker',
+          },
+          env: { get: async () => undefined },
+        },
+        fallbackEvent,
+        () => { fallbackNextCalled = true; }
+      );
+      assertStrictEqual(fallbackNextCalled, false, 'session root fallback must NOT exempt tracker from term scan');
+      assertStrictEqual(typeof fallbackResult?.deny, 'string', 'must deny when session root fallback encounters CVE');
     });
 
     test('passes non-string command through to next() unchanged', async () => {
@@ -1984,4 +2032,280 @@ upstream_repo: apache/kafka
       assertStrictEqual(res.blocked, true, 'Relative path with .. must collapse and match upstreamClonePath');
     });
   });
+
+  describe('Review #8 maintainer feedback & edge-case hardening', () => {
+    const config = {
+      trackerRepo: 'apache/magpie-tracker',
+      upstreamRepo: 'apache/airflow',
+      upstreamClonePath: '/home/dev/upstream',
+    };
+
+    const mockReadFile = async (p: string) => {
+      if (p.includes('/tracker/.git/config') || p === '.git/config') {
+        return '[remote "origin"]\nurl = https://github.com/apache/magpie-tracker.git\n';
+      }
+      if (p.includes('/upstream/.git/config')) {
+        return '[remote "origin"]\nurl = https://github.com/apache/airflow.git\n';
+      }
+      return null;
+    };
+
+    // 1. Blocking #1: Session root fallback disables tracker exemption and runs term scan
+    test('1. session root fallback bare commit runs term scan and blocks on CVE', async () => {
+      const cmd = 'git commit -m "Fix CVE-2026-1111 in auth module"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/tracker',
+        isSessionRootFallback: true,
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(res.blocked, true, 'Fallback session root must NOT exempt tracker remote from term scan');
+      assert(res.matchedTerms.includes('CVE id') || res.matchedTerms.includes('CVE'));
+
+      // Neutral commit passes term scan even under session root fallback
+      const neutral = await evaluatePublicSurfaceCommand('git commit -m "Refactor auth module"', {
+        cwd: '/tracker',
+        isSessionRootFallback: true,
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(neutral.blocked, false, 'Neutral commit under fallback session root must pass term scan');
+
+      // Verified explicit tracker cwd (non-fallback) exempts
+      const verified = await evaluatePublicSurfaceCommand('git commit -m "Fix CVE-2026-1111 in auth module"', {
+        cwd: '/tracker',
+        isSessionRootFallback: false,
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(verified.blocked, false, 'Verified tracker cwd exempts commit');
+    });
+
+    // 2. Blocking #2: Missing or placeholder upstreamRepo falls through to term scan
+    test('2. missing upstreamRepo falls through to term scan on bare commit', async () => {
+      const unconfiguredReadFile = async (p: string) => {
+        if (p.includes('.git/config')) {
+          return '[remote "origin"]\nurl = https://github.com/some-fork/airflow.git\n';
+        }
+        return null;
+      };
+
+      const res = await evaluatePublicSurfaceCommand('git commit -m "Fix CVE-2026-1234 vulnerability"', {
+        cwd: '/some-fork',
+        projectConfig: {
+          trackerRepo: 'apache/magpie-tracker',
+          // upstreamRepo is undefined/unconfigured!
+        },
+        readFile: unconfiguredReadFile,
+      });
+      assertStrictEqual(res.blocked, true, 'Unknown upstream repo must fail closed to term scan');
+      assert(res.matchedTerms.includes('CVE id') || res.matchedTerms.includes('CVE'));
+
+      // Neutral commit passes term scan
+      const neutral = await evaluatePublicSurfaceCommand('git commit -m "Neutral refactor"', {
+        cwd: '/some-fork',
+        projectConfig: {
+          trackerRepo: 'apache/magpie-tracker',
+        },
+        readFile: unconfiguredReadFile,
+      });
+      assertStrictEqual(neutral.blocked, false, 'Neutral commit must pass when upstream is unknown');
+    });
+
+    // 3. Edge Case #3: pushd and builtin cd directory tracking and safe read-only commands
+    test('3. pushd and builtin cd track directory changes across sequential operators', async () => {
+      const pushdCmd = 'pushd /home/dev/upstream && git commit -m "Fix CVE-2026-2222"';
+      const pushdRes = await evaluatePublicSurfaceCommand(pushdCmd, {
+        cwd: '/tracker',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(pushdRes.blocked, true, 'pushd must update virtual directory to upstream');
+
+      const builtinCmd = 'builtin cd /home/dev/upstream && git commit -m "Fix CVE-2026-2222"';
+      const builtinRes = await evaluatePublicSurfaceCommand(builtinCmd, {
+        cwd: '/tracker',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(builtinRes.blocked, true, 'builtin cd must update virtual directory to upstream');
+
+      // pushd is in SAFE_READONLY_COMMANDS so subsequent -F file read does not fail closed as dynamic input
+      const safeReadFile = async (p: string) => {
+        if (p.includes('msg.txt')) return 'Clean commit description';
+        return mockReadFile(p);
+      };
+      const safePushd = await evaluatePublicSurfaceCommand('pushd /home/dev/upstream && git commit -F msg.txt', {
+        cwd: '/tracker',
+        projectConfig: config,
+        readFile: safeReadFile,
+      });
+      assertStrictEqual(safePushd.blocked, false, 'pushd should be safe read-only and allow neutral -F file read');
+    });
+
+    // 4. Edge Case #4: missing gh write subcommands (issue create/edit, pr merge, release create, pr/issue close)
+    test('4. inspects gh write subcommands and blocks on forbidden terms', async () => {
+      // gh issue create -t / -b
+      const issCreate = await evaluatePublicSurfaceCommand('gh issue create -R apache/airflow -t "Security vulnerability in webserver" -b "Details on CVE-2026-3333"');
+      assertStrictEqual(issCreate.blocked, true, 'gh issue create must inspect title and body');
+
+      // gh issue edit -b
+      const issEdit = await evaluatePublicSurfaceCommand('gh issue edit 42 -R apache/airflow -b "Updated advisory for CVE-2026-3333"');
+      assertStrictEqual(issEdit.blocked, true, 'gh issue edit must inspect body');
+
+      // gh pr merge --subject / --body
+      const prMergeSub = await evaluatePublicSurfaceCommand('gh pr merge 101 -R apache/airflow --subject "Merge CVE-2026-3333 security fix"');
+      assertStrictEqual(prMergeSub.blocked, true, 'gh pr merge --subject must be inspected');
+
+      const prMergeBody = await evaluatePublicSurfaceCommand('gh pr merge 101 -R apache/airflow --body "Addresses CVE-2026-3333"');
+      assertStrictEqual(prMergeBody.blocked, true, 'gh pr merge --body must be inspected');
+
+      // gh release create <tag> -t / --notes
+      const relNotes = await evaluatePublicSurfaceCommand('gh release create v2.1.0 -R apache/airflow -t "Release 2.1.0" --notes "Fixes CVE-2026-3333"');
+      assertStrictEqual(relNotes.blocked, true, 'gh release create --notes must be inspected');
+
+      const relTag = await evaluatePublicSurfaceCommand('gh release create v2.1.0-cve-2026-3333 -R apache/airflow --notes "Clean notes"');
+      assertStrictEqual(relTag.blocked, true, 'gh release create tag name must be inspected');
+
+      // gh pr close -c / --comment
+      const prClose = await evaluatePublicSurfaceCommand('gh pr close 101 -R apache/airflow --comment "Closed in favor of CVE-2026-3333 patch"');
+      assertStrictEqual(prClose.blocked, true, 'gh pr close --comment must be inspected');
+
+      // gh issue close -c / --comment
+      const issClose = await evaluatePublicSurfaceCommand('gh issue close 42 -R apache/airflow -c "Resolved via CVE-2026-3333 fix"');
+      assertStrictEqual(issClose.blocked, true, 'gh issue close -c must be inspected');
+
+      // Neutral versions pass
+      const neutralIss = await evaluatePublicSurfaceCommand('gh issue create -R apache/airflow -t "Improve logging" -b "More debug logs"');
+      assertStrictEqual(neutralIss.blocked, false, 'Neutral gh issue create passes');
+
+      const neutralMerge = await evaluatePublicSurfaceCommand('gh pr merge 101 -R apache/airflow --subject "Clean feature merge"');
+      assertStrictEqual(neutralMerge.blocked, false, 'Neutral gh pr merge passes');
+
+      const neutralRel = await evaluatePublicSurfaceCommand('gh release create v2.1.0 -R apache/airflow -t "Release 2.1.0" -n "Release notes"');
+      assertStrictEqual(neutralRel.blocked, false, 'Neutral gh release create passes');
+    });
+
+    // 5. Edge Case #5: env -C composition and resolvePath argument order
+    test('5. env -C composes with git -C without overwriting directory context', async () => {
+      const cmd = 'env -C /home/dev/upstream git -C . commit -m "Fix CVE-2026-4444"';
+      const res = await evaluatePublicSurfaceCommand(cmd, {
+        cwd: '/tracker',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(res.blocked, true, 'env -C composed with git -C . must preserve upstream directory');
+    });
+
+    // 6. Edge Case #6: resolveProjectConfig reads user.md upstreamClonePath even when project.md defines both repos
+    test('6. resolveProjectConfig reads user.md upstream_clone when project.md defines both repos', async () => {
+      const mockConfigStore: Record<string, string> = {
+        '.apache-magpie-overrides/project.md': '| tracker_repo | apache/magpie-tracker |\n| upstream_repo | apache/airflow |',
+        '/home/user/.config/apache-magpie/user.md': '| upstream_clone | /home/user/workspace/airflow |',
+      };
+      const resolved = await resolveProjectConfig(
+        async (p) => mockConfigStore[p],
+        '/home/user/workspace/tracker',
+        { HOME: '/home/user' }
+      );
+      assertStrictEqual(resolved.trackerRepo, 'apache/magpie-tracker');
+      assertStrictEqual(resolved.upstreamRepo, 'apache/airflow');
+      assertStrictEqual(resolved.upstreamClonePath, '/home/user/workspace/airflow');
+    });
+
+    // 7. Edge Case #7: inspectDirectoryRemote reads commondir config for linked worktrees
+    test('7. inspectDirectoryRemote reads remotes from worktree common dir config', async () => {
+      const worktreeFs: Record<string, string> = {
+        '/worktree/branch-fix/.git': 'gitdir: /repo/main/.git/worktrees/branch-fix',
+        '/repo/main/.git/worktrees/branch-fix/config': '[core]\n\tbare = false\n',
+        '/repo/main/.git/config': '[remote "origin"]\n\turl = https://github.com/apache/airflow.git\n',
+      };
+      const res = await inspectDirectoryRemote(
+        '/worktree/branch-fix',
+        { upstreamRepo: 'apache/airflow' },
+        async (p) => worktreeFs[p]
+      );
+      assertStrictEqual(res.determined, true, 'Must resolve remote from worktree common dir config');
+      assertStrictEqual(res.isUpstream, true, 'Must detect upstream repository in worktree');
+    });
+
+    // 8. Nit #8: Scan git tag names and git merge branch refs
+    test('8. scans git tag names and git merge branch refs for forbidden terms', async () => {
+      // Lightweight tag with CVE name
+      const tagRes = await evaluatePublicSurfaceCommand('git tag CVE-2026-5555-fix', {
+        cwd: '/home/dev/upstream',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(tagRes.blocked, true, 'Tag name containing CVE must be blocked');
+
+      // Annotated tag with CVE in name
+      const annoTagRes = await evaluatePublicSurfaceCommand('git tag -a CVE-2026-5555-fix -m "Release"', {
+        cwd: '/home/dev/upstream',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(annoTagRes.blocked, true, 'Annotated tag with CVE in name must be blocked');
+
+      // Bare git merge of branch containing CVE
+      const mergeRes = await evaluatePublicSurfaceCommand('git merge cve-2026-5555-patch', {
+        cwd: '/home/dev/upstream',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(mergeRes.blocked, true, 'git merge with CVE branch ref must be blocked');
+
+      // Neutral tag and merge pass
+      const neutralTag = await evaluatePublicSurfaceCommand('git tag v1.0.0', {
+        cwd: '/home/dev/upstream',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(neutralTag.blocked, false, 'Neutral tag must pass');
+
+      const neutralMerge = await evaluatePublicSurfaceCommand('git merge feature/new-dashboard', {
+        cwd: '/home/dev/upstream',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(neutralMerge.blocked, false, 'Neutral merge must pass');
+    });
+
+    // 9. Nit #9: git commit -am ... --amend is not falsely flagged
+    test('9. git commit -am with --amend is not falsely flagged as dynamic reuse', async () => {
+      // Neutral commit message with -am and --amend passes
+      const neutralAmend = await evaluatePublicSurfaceCommand('git commit -am "Neutral amend message" --amend', {
+        cwd: '/home/dev/upstream',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(neutralAmend.blocked, false, '-am with --amend provides explicit message and must pass');
+
+      // Message with CVE is still blocked
+      const cveAmend = await evaluatePublicSurfaceCommand('git commit -am "Fix CVE-2026-6666" --amend', {
+        cwd: '/home/dev/upstream',
+        projectConfig: config,
+        readFile: mockReadFile,
+      });
+      assertStrictEqual(cveAmend.blocked, true, '-am with CVE must be blocked');
+    });
+
+    // 10. Nit #10: Shared helpers verify clustered flags and message/body flags
+    test('10. shared helpers parse attached and clustered message and body flags', () => {
+      // commit clustered -sam
+      const sam = parseSubcommand('git commit -sam "Signed commit"');
+      assertDeepStrictEqual(sam.extractedTexts, ['Signed commit']);
+
+      // pr merge attached -b
+      const prMerge = parseSubcommand('gh pr merge 123 --subject "Subject" -b"Attached body"');
+      assert(prMerge.extractedTexts.includes('Subject'));
+      assert(prMerge.extractedTexts.includes('Attached body'));
+
+      // issue create attached -t and -b
+      const iss = parseSubcommand('gh issue create -t"Title" -b"Body"');
+      assert(iss.extractedTexts.includes('Title'));
+      assert(iss.extractedTexts.includes('Body'));
+    });
+  });
+
 });

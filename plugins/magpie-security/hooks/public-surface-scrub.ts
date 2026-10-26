@@ -204,7 +204,7 @@ export async function resolveProjectConfig(
           }
           merged.upstreamClonePath = clonePath;
         }
-        if (merged.trackerRepo && merged.upstreamRepo) {
+        if (merged.trackerRepo && merged.upstreamRepo && merged.upstreamClonePath) {
           return merged;
         }
       }
@@ -776,6 +776,274 @@ function extractPositionalUrlRepo(tokens: string[], startIndex: number): string 
   return undefined;
 }
 
+/**
+ * Checks if tokens array contains an explicit message or file flag.
+ * Handles -m, -F, --message, --file, and clustered short flags like -am, -sam.
+ */
+export function hasMessageOrFileFlag(tokens: string[]): boolean {
+  return tokens.some((t) =>
+    t === '-m' ||
+    t === '-F' ||
+    t.startsWith('--message') ||
+    t.startsWith('--file') ||
+    (t.startsWith('-') && !t.startsWith('--') && (t.includes('m') || t.includes('F')))
+  );
+}
+
+/**
+ * Parses message and file options (-m, -F, --message, --file, clustered -am)
+ * for git commit, git tag, git merge.
+ * Returns the updated index i.
+ */
+export function parseMessageAndFileFlags(
+  tokens: string[],
+  i: number,
+  result: ParsedSubcommand
+): number {
+  const token = tokens[i];
+
+  // -F <file>, -F<file>, --file <file>, --file=<file>
+  if (token === '-F' || token === '--file') {
+    if (i + 1 < tokens.length) {
+      const file = tokens[i + 1];
+      if (file === '-') {
+        result.hasDynamicInput = true;
+      } else {
+        result.referencedFiles.push(file);
+      }
+      return i + 1;
+    }
+    return i;
+  }
+  if (token.startsWith('--file=')) {
+    const file = token.slice('--file='.length);
+    if (file === '-') {
+      result.hasDynamicInput = true;
+    } else {
+      result.referencedFiles.push(file);
+    }
+    return i;
+  }
+  if (token.startsWith('-F') && token.length > 2) {
+    const file = token.slice(2);
+    if (file === '-') {
+      result.hasDynamicInput = true;
+    } else {
+      result.referencedFiles.push(file);
+    }
+    return i;
+  }
+
+  // -m <msg>, -m<msg>, --message <msg>, --message=<msg>
+  if (token === '-m' || token === '--message') {
+    if (i + 1 < tokens.length) {
+      result.extractedTexts.push(tokens[i + 1]);
+      return i + 1;
+    }
+    return i;
+  }
+  if (token.startsWith('--message=')) {
+    result.extractedTexts.push(token.slice('--message='.length));
+    return i;
+  }
+  if (token.startsWith('-m') && token.length > 2) {
+    result.extractedTexts.push(token.slice(2));
+    return i;
+  }
+
+  // Clustered short flags ending in m or F: e.g. -am"msg", -am msg, -sam msg
+  if (token.startsWith('-') && !token.startsWith('--') && (token.includes('m') || token.includes('F'))) {
+    const mIdx = token.indexOf('m');
+    const fIdx = token.indexOf('F');
+    if (mIdx !== -1) {
+      if (mIdx < token.length - 1) {
+        result.extractedTexts.push(token.slice(mIdx + 1));
+      } else if (i + 1 < tokens.length) {
+        result.extractedTexts.push(tokens[i + 1]);
+        return i + 1;
+      }
+    } else if (fIdx !== -1) {
+      if (fIdx < token.length - 1) {
+        const file = token.slice(fIdx + 1);
+        if (file === '-') {
+          result.hasDynamicInput = true;
+        } else {
+          result.referencedFiles.push(file);
+        }
+      } else if (i + 1 < tokens.length) {
+        const file = tokens[i + 1];
+        if (file === '-') {
+          result.hasDynamicInput = true;
+        } else {
+          result.referencedFiles.push(file);
+        }
+        return i + 1;
+      }
+    }
+    return i;
+  }
+
+  return i;
+}
+
+/**
+ * Parses body and body-file options (-b, --body, -F, --body-file)
+ * for gh commands (pr create/edit/review/comment/merge, issue create/edit/comment).
+ * Returns the updated index i.
+ */
+export function parseBodyFlags(
+  tokens: string[],
+  i: number,
+  result: ParsedSubcommand,
+  bodyFileFlag: string = '--body-file'
+): number {
+  const token = tokens[i];
+
+  if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
+    result.extractedTexts.push(tokens[i + 1]);
+    return i + 1;
+  }
+  if (token.startsWith('-b') && token.length > 2) {
+    result.extractedTexts.push(token.slice(2));
+    return i;
+  }
+  if (token.startsWith('--body=')) {
+    result.extractedTexts.push(token.slice('--body='.length));
+    return i;
+  }
+  if ((token === '-F' || token === bodyFileFlag) && i + 1 < tokens.length) {
+    const file = tokens[i + 1];
+    if (file === '-') {
+      result.hasDynamicInput = true;
+    } else {
+      result.referencedFiles.push(file);
+    }
+    return i + 1;
+  }
+  if (token.startsWith('-F') && token.length > 2) {
+    const file = token.slice(2);
+    if (file === '-') {
+      result.hasDynamicInput = true;
+    } else {
+      result.referencedFiles.push(file);
+    }
+    return i;
+  }
+  if (token.startsWith(`${bodyFileFlag}=`)) {
+    const file = token.slice(`${bodyFileFlag}=`.length);
+    if (file === '-') {
+      result.hasDynamicInput = true;
+    } else {
+      result.referencedFiles.push(file);
+    }
+    return i;
+  }
+
+  return i;
+}
+
+/**
+ * Parses title options (-t, --title) for gh commands.
+ * Returns the updated index i.
+ */
+export function parseTitleFlags(
+  tokens: string[],
+  i: number,
+  result: ParsedSubcommand
+): number {
+  const token = tokens[i];
+  if ((token === '-t' || token === '--title') && i + 1 < tokens.length) {
+    result.extractedTexts.push(tokens[i + 1]);
+    return i + 1;
+  }
+  if (token.startsWith('-t') && token.length > 2) {
+    result.extractedTexts.push(token.slice(2));
+    return i;
+  }
+  if (token.startsWith('--title=')) {
+    result.extractedTexts.push(token.slice('--title='.length));
+    return i;
+  }
+  return i;
+}
+
+/**
+ * Parses comment options (-c, --comment) for gh pr/issue close commands.
+ * Returns the updated index i.
+ */
+export function parseCommentFlags(
+  tokens: string[],
+  i: number,
+  result: ParsedSubcommand
+): number {
+  const token = tokens[i];
+  if ((token === '-c' || token === '--comment') && i + 1 < tokens.length) {
+    result.extractedTexts.push(tokens[i + 1]);
+    return i + 1;
+  }
+  if (token.startsWith('-c') && token.length > 2) {
+    result.extractedTexts.push(token.slice(2));
+    return i;
+  }
+  if (token.startsWith('--comment=')) {
+    result.extractedTexts.push(token.slice('--comment='.length));
+    return i;
+  }
+  return i;
+}
+
+/**
+ * Parses release notes options (-n, --notes, -F, --notes-file) for gh release create.
+ * Returns the updated index i.
+ */
+export function parseReleaseNotesFlags(
+  tokens: string[],
+  i: number,
+  result: ParsedSubcommand
+): number {
+  const token = tokens[i];
+  if ((token === '-n' || token === '--notes') && i + 1 < tokens.length) {
+    result.extractedTexts.push(tokens[i + 1]);
+    return i + 1;
+  }
+  if (token.startsWith('-n') && token.length > 2) {
+    result.extractedTexts.push(token.slice(2));
+    return i;
+  }
+  if (token.startsWith('--notes=')) {
+    result.extractedTexts.push(token.slice('--notes='.length));
+    return i;
+  }
+  if ((token === '-F' || token === '--notes-file') && i + 1 < tokens.length) {
+    const file = tokens[i + 1];
+    if (file === '-') {
+      result.hasDynamicInput = true;
+    } else {
+      result.referencedFiles.push(file);
+    }
+    return i + 1;
+  }
+  if (token.startsWith('-F') && token.length > 2) {
+    const file = token.slice(2);
+    if (file === '-') {
+      result.hasDynamicInput = true;
+    } else {
+      result.referencedFiles.push(file);
+    }
+    return i;
+  }
+  if (token.startsWith('--notes-file=')) {
+    const file = token.slice('--notes-file='.length);
+    if (file === '-') {
+      result.hasDynamicInput = true;
+    } else {
+      result.referencedFiles.push(file);
+    }
+    return i;
+  }
+  return i;
+}
+
 export function parseSubcommand(subcommand: string): ParsedSubcommand {
   const result: ParsedSubcommand = {
     raw: subcommand,
@@ -846,6 +1114,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     'until',
     '{',
     '}',
+    'builtin',
   ]);
 
   // Unwrap common command wrappers (command, env) and environment variable assignments
@@ -866,15 +1135,15 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
       while (cmdIdx < tokens.length && tokens[cmdIdx].startsWith('-')) {
         const envTok = tokens[cmdIdx];
         if ((envTok === '-C' || envTok === '--chdir') && cmdIdx + 1 < tokens.length) {
-          result.gitCwd = result.gitCwd ? resolvePath(tokens[cmdIdx + 1], result.gitCwd) : tokens[cmdIdx + 1];
+          result.gitCwd = result.gitCwd ? resolvePath(result.gitCwd, tokens[cmdIdx + 1]) : tokens[cmdIdx + 1];
           cmdIdx += 2;
         } else if (envTok.startsWith('--chdir=')) {
           const dir = envTok.slice('--chdir='.length);
-          result.gitCwd = result.gitCwd ? resolvePath(dir, result.gitCwd) : dir;
+          result.gitCwd = result.gitCwd ? resolvePath(result.gitCwd, dir) : dir;
           cmdIdx++;
         } else if (envTok.startsWith('-C') && envTok.length > 2) {
           const dir = envTok.slice(2);
-          result.gitCwd = result.gitCwd ? resolvePath(dir, result.gitCwd) : dir;
+          result.gitCwd = result.gitCwd ? resolvePath(result.gitCwd, dir) : dir;
           cmdIdx++;
         } else if (envTok === '-u' && cmdIdx + 1 < tokens.length) {
           cmdIdx += 2;
@@ -947,7 +1216,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
   // If binary is neither 'git' nor 'gh' nor 'cd':
   // If it's a known wrapper, check if git or gh appears in command position after wrapper options or arguments.
   // Otherwise, ignore git/gh plain arguments (e.g. grep git notes.md, which gh, brew upgrade gh).
-  if (binary !== 'git' && binary !== 'gh' && binary !== 'cd') {
+  if (binary !== 'git' && binary !== 'gh' && binary !== 'cd' && binary !== 'pushd') {
     if (KNOWN_WRAPPERS.has(binary)) {
       for (let i = 1; i < tokens.length; i++) {
         const innerCmd = getCommandBasename(tokens[i]);
@@ -970,8 +1239,8 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     }
   }
 
-  // Handle cd command for tracking directory state
-  if (binary === 'cd' && cmdIdx + 1 < tokens.length) {
+  // Handle cd and pushd commands for tracking directory state
+  if ((binary === 'cd' || binary === 'pushd') && cmdIdx + 1 < tokens.length) {
     result.cdDir = tokens[cmdIdx + 1];
     return result;
   }
@@ -983,7 +1252,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
     }
 
     let subcmdIndex = -1;
-    let gitCwd: string | undefined = undefined;
+    let gitCwd: string | undefined = result.gitCwd;
 
     // Parse git global options before the git subcommand
     for (let i = cmdIdx + 1; i < tokens.length; i++) {
@@ -1049,7 +1318,6 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
         const token = tokens[i];
 
         // Message reuse options: dynamically reuse text from history -> flag as dynamic input (fail closed)
-        // Matches -C, -c, attached -CHEAD, -cHEAD, --reuse-message, etc.
         if (
           token === '-C' ||
           token === '-c' ||
@@ -1076,10 +1344,7 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
 
         if (token === '--amend') {
           // If amending without explicit message or file, flag as dynamic reuse
-          const hasExplicitMessage = tokens.slice(subcmdIndex + 1).some((t) =>
-            t === '-m' || t === '-F' || t.startsWith('-m') || t.startsWith('-F') ||
-            t.startsWith('--message') || t.startsWith('--file')
-          );
+          const hasExplicitMessage = hasMessageOrFileFlag(tokens.slice(subcmdIndex + 1));
           if (!hasExplicitMessage) {
             result.hasDynamicInput = true;
           }
@@ -1097,84 +1362,9 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           continue;
         }
 
-        // -F <file>, -F<file>, --file <file>, --file=<file>
-        if (token === '-F' || token === '--file') {
-          if (i + 1 < tokens.length) {
-            const file = tokens[i + 1];
-            if (file === '-') {
-              result.hasDynamicInput = true;
-            } else {
-              result.referencedFiles.push(file);
-            }
-            i++;
-          }
-          continue;
-        }
-        if (token.startsWith('--file=')) {
-          const file = token.slice('--file='.length);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
-        if (token.startsWith('-F') && token.length > 2) {
-          const file = token.slice(2);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
-
-        // -m <msg>, -m<msg>, --message <msg>, --message=<msg>
-        if (token === '-m' || token === '--message') {
-          if (i + 1 < tokens.length) {
-            result.extractedTexts.push(tokens[i + 1]);
-            i++;
-          }
-          continue;
-        }
-        if (token.startsWith('--message=')) {
-          result.extractedTexts.push(token.slice('--message='.length));
-          continue;
-        }
-        if (token.startsWith('-m') && token.length > 2) {
-          result.extractedTexts.push(token.slice(2));
-          continue;
-        }
-
-        // Handle clustered short flags ending in m or F: e.g. -am"msg", -am msg
-        if (token.startsWith('-') && !token.startsWith('--') && (token.includes('m') || token.includes('F'))) {
-          const mIdx = token.indexOf('m');
-          const fIdx = token.indexOf('F');
-          if (mIdx !== -1) {
-            if (mIdx < token.length - 1) {
-              result.extractedTexts.push(token.slice(mIdx + 1));
-            } else if (i + 1 < tokens.length) {
-              result.extractedTexts.push(tokens[i + 1]);
-              i++;
-            }
-          } else if (fIdx !== -1) {
-            if (fIdx < token.length - 1) {
-              const file = token.slice(fIdx + 1);
-              if (file === '-') {
-                result.hasDynamicInput = true;
-              } else {
-                result.referencedFiles.push(file);
-              }
-            } else if (i + 1 < tokens.length) {
-              const file = tokens[i + 1];
-              if (file === '-') {
-                result.hasDynamicInput = true;
-              } else {
-                result.referencedFiles.push(file);
-              }
-              i++;
-            }
-          }
+        const nextIdx = parseMessageAndFileFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
           continue;
         }
       }
@@ -1184,201 +1374,77 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
 
     // 2. git tag
     if (subcmd === 'tag') {
-      const hasMsg = tokens.slice(subcmdIndex + 1).some((t) =>
-        t === '-m' || t === '-F' ||
-        (t.startsWith('-') && !t.startsWith('--') && (t.includes('m') || t.includes('F'))) ||
-        t.startsWith('--message') || t.startsWith('--file')
+      const isTagListingOrDeleting = tokens.slice(subcmdIndex + 1).some((t) =>
+        t === '-d' || t === '-D' || t === '--delete' ||
+        t === '-v' || t === '--verify' ||
+        t === '-l' || t === '--list'
       );
-      if (hasMsg) {
-        result.isPublicSurfaceCommand = true;
-        result.commandType = result.hasGitDirOrWorkTree ? 'git tag (with --git-dir/GIT_DIR)' : 'git tag';
-
+      if (!isTagListingOrDeleting) {
+        let tagFound = false;
         for (let i = subcmdIndex + 1; i < tokens.length; i++) {
           const token = tokens[i];
 
-          // -F <file>, -F<file>, --file <file>, --file=<file>
-          if (token === '-F' || token === '--file') {
-            if (i + 1 < tokens.length) {
-              const file = tokens[i + 1];
-              if (file === '-') {
-                result.hasDynamicInput = true;
-              } else {
-                result.referencedFiles.push(file);
-              }
-              i++;
-            }
+          const nextIdx = parseMessageAndFileFlags(tokens, i, result);
+          if (nextIdx !== i) {
+            i = nextIdx;
             continue;
           }
-          if (token.startsWith('--file=')) {
-            const file = token.slice('--file='.length);
-            if (file === '-') {
-              result.hasDynamicInput = true;
-            } else {
-              result.referencedFiles.push(file);
-            }
-            continue;
-          }
-          if (token.startsWith('-F') && token.length > 2) {
-            const file = token.slice(2);
-            if (file === '-') {
-              result.hasDynamicInput = true;
-            } else {
-              result.referencedFiles.push(file);
+
+          if (token.startsWith('-')) {
+            if (token === '-u' && i + 1 < tokens.length) {
+              i++; // skip key-id argument
             }
             continue;
           }
 
-          // -m <msg>, -m<msg>, --message <msg>, --message=<msg>
-          if (token === '-m' || token === '--message') {
-            if (i + 1 < tokens.length) {
-              result.extractedTexts.push(tokens[i + 1]);
-              i++;
-            }
-            continue;
-          }
-          if (token.startsWith('--message=')) {
-            result.extractedTexts.push(token.slice('--message='.length));
-            continue;
-          }
-          if (token.startsWith('-m') && token.length > 2) {
-            result.extractedTexts.push(token.slice(2));
-            continue;
-          }
-
-          // Handle clustered flags like -am '...', -sm '...'
-          if (token.startsWith('-') && !token.startsWith('--') && (token.includes('m') || token.includes('F'))) {
-            const mIdx = token.indexOf('m');
-            const fIdx = token.indexOf('F');
-            if (mIdx !== -1) {
-              if (mIdx < token.length - 1) {
-                result.extractedTexts.push(token.slice(mIdx + 1));
-              } else if (i + 1 < tokens.length) {
-                result.extractedTexts.push(tokens[i + 1]);
-                i++;
-              }
-            } else if (fIdx !== -1) {
-              if (fIdx < token.length - 1) {
-                const file = token.slice(fIdx + 1);
-                if (file === '-') {
-                  result.hasDynamicInput = true;
-                } else {
-                  result.referencedFiles.push(file);
-                }
-              } else if (i + 1 < tokens.length) {
-                const file = tokens[i + 1];
-                if (file === '-') {
-                  result.hasDynamicInput = true;
-                } else {
-                  result.referencedFiles.push(file);
-                }
-                i++;
-              }
-            }
-            continue;
+          // First non-flag positional argument is the tag name
+          if (!tagFound) {
+            result.extractedTexts.push(token);
+            tagFound = true;
           }
         }
 
-        return result;
+        if (tagFound || result.extractedTexts.length > 0 || result.referencedFiles.length > 0 || result.hasDynamicInput) {
+          result.isPublicSurfaceCommand = true;
+          result.commandType = result.hasGitDirOrWorkTree ? 'git tag (with --git-dir/GIT_DIR)' : 'git tag';
+          return result;
+        }
       }
     }
 
     // 3. git merge
     if (subcmd === 'merge') {
-      const hasMsg = tokens.slice(subcmdIndex + 1).some((t) =>
-        t === '-m' || t === '-F' ||
-        (t.startsWith('-') && !t.startsWith('--') && (t.includes('m') || t.includes('F'))) ||
-        t.startsWith('--message') || t.startsWith('--file')
+      const isMergeStateCommand = tokens.slice(subcmdIndex + 1).some((t) =>
+        t === '--abort' || t === '--continue' || t === '--quit'
       );
-      if (hasMsg) {
-        result.isPublicSurfaceCommand = true;
-        result.commandType = result.hasGitDirOrWorkTree ? 'git merge (with --git-dir/GIT_DIR)' : 'git merge';
-
+      if (!isMergeStateCommand) {
+        let hasBranchRef = false;
         for (let i = subcmdIndex + 1; i < tokens.length; i++) {
           const token = tokens[i];
 
-          // -F <file>, -F<file>, --file <file>, --file=<file>
-          if (token === '-F' || token === '--file') {
-            if (i + 1 < tokens.length) {
-              const file = tokens[i + 1];
-              if (file === '-') {
-                result.hasDynamicInput = true;
-              } else {
-                result.referencedFiles.push(file);
-              }
-              i++;
-            }
+          const nextIdx = parseMessageAndFileFlags(tokens, i, result);
+          if (nextIdx !== i) {
+            i = nextIdx;
             continue;
           }
-          if (token.startsWith('--file=')) {
-            const file = token.slice('--file='.length);
-            if (file === '-') {
-              result.hasDynamicInput = true;
-            } else {
-              result.referencedFiles.push(file);
-            }
-            continue;
-          }
-          if (token.startsWith('-F') && token.length > 2) {
-            const file = token.slice(2);
-            if (file === '-') {
-              result.hasDynamicInput = true;
-            } else {
-              result.referencedFiles.push(file);
+
+          if (token.startsWith('-')) {
+            if ((token === '-s' || token === '--strategy' || token === '-X' || token === '--strategy-option') && i + 1 < tokens.length) {
+              i++; // skip strategy argument
             }
             continue;
           }
 
-          // -m <msg>, -m<msg>, --message <msg>, --message=<msg>
-          if (token === '-m' || token === '--message') {
-            if (i + 1 < tokens.length) {
-              result.extractedTexts.push(tokens[i + 1]);
-              i++;
-            }
-            continue;
-          }
-          if (token.startsWith('--message=')) {
-            result.extractedTexts.push(token.slice('--message='.length));
-            continue;
-          }
-          if (token.startsWith('-m') && token.length > 2) {
-            result.extractedTexts.push(token.slice(2));
-            continue;
-          }
-
-          // Handle clustered flags like -sm '...'
-          if (token.startsWith('-') && !token.startsWith('--') && (token.includes('m') || token.includes('F'))) {
-            const mIdx = token.indexOf('m');
-            const fIdx = token.indexOf('F');
-            if (mIdx !== -1) {
-              if (mIdx < token.length - 1) {
-                result.extractedTexts.push(token.slice(mIdx + 1));
-              } else if (i + 1 < tokens.length) {
-                result.extractedTexts.push(tokens[i + 1]);
-                i++;
-              }
-            } else if (fIdx !== -1) {
-              if (fIdx < token.length - 1) {
-                const file = token.slice(fIdx + 1);
-                if (file === '-') {
-                  result.hasDynamicInput = true;
-                } else {
-                  result.referencedFiles.push(file);
-                }
-              } else if (i + 1 < tokens.length) {
-                const file = tokens[i + 1];
-                if (file === '-') {
-                  result.hasDynamicInput = true;
-                } else {
-                  result.referencedFiles.push(file);
-                }
-                i++;
-              }
-            }
-            continue;
-          }
+          // Non-flag arguments are merge source branch/commit refs
+          result.extractedTexts.push(token);
+          hasBranchRef = true;
         }
 
-        return result;
+        if (hasBranchRef || result.extractedTexts.length > 0 || result.referencedFiles.length > 0 || result.hasDynamicInput) {
+          result.isPublicSurfaceCommand = true;
+          result.commandType = result.hasGitDirOrWorkTree ? 'git merge (with --git-dir/GIT_DIR)' : 'git merge';
+          return result;
+        }
       }
     }
   }
@@ -1429,58 +1495,14 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
           result.hasDynamicInput = true;
           continue;
         }
-        if ((token === '-t' || token === '--title') && i + 1 < tokens.length) {
-          result.extractedTexts.push(tokens[i + 1]);
-          i++;
+        let nextIdx = parseTitleFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
           continue;
         }
-        if (token.startsWith('-t') && token.length > 2) {
-          result.extractedTexts.push(token.slice(2));
-          continue;
-        }
-        if (token.startsWith('--title=')) {
-          result.extractedTexts.push(token.slice('--title='.length));
-          continue;
-        }
-        if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
-          result.extractedTexts.push(tokens[i + 1]);
-          i++;
-          continue;
-        }
-        if (token.startsWith('-b') && token.length > 2) {
-          result.extractedTexts.push(token.slice(2));
-          continue;
-        }
-        if (token.startsWith('--body=')) {
-          result.extractedTexts.push(token.slice('--body='.length));
-          continue;
-        }
-        if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
-          const file = tokens[i + 1];
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          i++;
-          continue;
-        }
-        if (token.startsWith('-F') && token.length > 2) {
-          const file = token.slice(2);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
-        if (token.startsWith('--body-file=')) {
-          const file = token.slice('--body-file='.length);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
+        nextIdx = parseBodyFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
           continue;
         }
       }
@@ -1493,59 +1515,14 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
       result.commandType = 'gh pr edit';
 
       for (let i = cmdIdx + 3; i < tokens.length; i++) {
-        const token = tokens[i];
-        if ((token === '-t' || token === '--title') && i + 1 < tokens.length) {
-          result.extractedTexts.push(tokens[i + 1]);
-          i++;
+        let nextIdx = parseTitleFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
           continue;
         }
-        if (token.startsWith('-t') && token.length > 2) {
-          result.extractedTexts.push(token.slice(2));
-          continue;
-        }
-        if (token.startsWith('--title=')) {
-          result.extractedTexts.push(token.slice('--title='.length));
-          continue;
-        }
-        if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
-          result.extractedTexts.push(tokens[i + 1]);
-          i++;
-          continue;
-        }
-        if (token.startsWith('-b') && token.length > 2) {
-          result.extractedTexts.push(token.slice(2));
-          continue;
-        }
-        if (token.startsWith('--body=')) {
-          result.extractedTexts.push(token.slice('--body='.length));
-          continue;
-        }
-        if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
-          const file = tokens[i + 1];
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          i++;
-          continue;
-        }
-        if (token.startsWith('-F') && token.length > 2) {
-          const file = token.slice(2);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
-        if (token.startsWith('--body-file=')) {
-          const file = token.slice('--body-file='.length);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
+        nextIdx = parseBodyFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
           continue;
         }
       }
@@ -1558,46 +1535,9 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
       result.commandType = 'gh pr review';
 
       for (let i = cmdIdx + 3; i < tokens.length; i++) {
-        const token = tokens[i];
-        if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
-          result.extractedTexts.push(tokens[i + 1]);
-          i++;
-          continue;
-        }
-        if (token.startsWith('-b') && token.length > 2) {
-          result.extractedTexts.push(token.slice(2));
-          continue;
-        }
-        if (token.startsWith('--body=')) {
-          result.extractedTexts.push(token.slice('--body='.length));
-          continue;
-        }
-        if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
-          const file = tokens[i + 1];
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          i++;
-          continue;
-        }
-        if (token.startsWith('-F') && token.length > 2) {
-          const file = token.slice(2);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
-        if (token.startsWith('--body-file=')) {
-          const file = token.slice('--body-file='.length);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
+        const nextIdx = parseBodyFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
           continue;
         }
       }
@@ -1610,99 +1550,153 @@ export function parseSubcommand(subcommand: string): ParsedSubcommand {
       result.commandType = 'gh pr comment';
 
       for (let i = cmdIdx + 3; i < tokens.length; i++) {
-        const token = tokens[i];
-        if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
-          result.extractedTexts.push(tokens[i + 1]);
-          i++;
-          continue;
-        }
-        if (token.startsWith('-b') && token.length > 2) {
-          result.extractedTexts.push(token.slice(2));
-          continue;
-        }
-        if (token.startsWith('--body=')) {
-          result.extractedTexts.push(token.slice('--body='.length));
-          continue;
-        }
-        if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
-          const file = tokens[i + 1];
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          i++;
-          continue;
-        }
-        if (token.startsWith('-F') && token.length > 2) {
-          const file = token.slice(2);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
-        }
-        if (token.startsWith('--body-file=')) {
-          const file = token.slice('--body-file='.length);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
+        const nextIdx = parseBodyFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
           continue;
         }
       }
       return result;
     }
 
-    // 5. gh issue comment
+    // 5. gh pr merge
+    if (sub1 === 'pr' && sub2 === 'merge') {
+      result.isPublicSurfaceCommand = true;
+      result.commandType = 'gh pr merge';
+
+      for (let i = cmdIdx + 3; i < tokens.length; i++) {
+        const token = tokens[i];
+        if (token === '--subject' && i + 1 < tokens.length) {
+          result.extractedTexts.push(tokens[i + 1]);
+          i++;
+          continue;
+        }
+        if (token.startsWith('--subject=')) {
+          result.extractedTexts.push(token.slice('--subject='.length));
+          continue;
+        }
+        const nextIdx = parseBodyFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
+          continue;
+        }
+      }
+      return result;
+    }
+
+    // 6. gh pr close
+    if (sub1 === 'pr' && sub2 === 'close') {
+      result.isPublicSurfaceCommand = true;
+      result.commandType = 'gh pr close';
+
+      for (let i = cmdIdx + 3; i < tokens.length; i++) {
+        const nextIdx = parseCommentFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
+          continue;
+        }
+      }
+      return result;
+    }
+
+    // 7. gh issue create
+    if (sub1 === 'issue' && sub2 === 'create') {
+      result.isPublicSurfaceCommand = true;
+      result.commandType = 'gh issue create';
+
+      for (let i = cmdIdx + 3; i < tokens.length; i++) {
+        let nextIdx = parseTitleFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
+          continue;
+        }
+        nextIdx = parseBodyFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
+          continue;
+        }
+      }
+      return result;
+    }
+
+    // 8. gh issue edit
+    if (sub1 === 'issue' && sub2 === 'edit') {
+      result.isPublicSurfaceCommand = true;
+      result.commandType = 'gh issue edit';
+
+      for (let i = cmdIdx + 3; i < tokens.length; i++) {
+        let nextIdx = parseTitleFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
+          continue;
+        }
+        nextIdx = parseBodyFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
+          continue;
+        }
+      }
+      return result;
+    }
+
+    // 9. gh issue comment
     if (sub1 === 'issue' && sub2 === 'comment') {
       result.isPublicSurfaceCommand = true;
       result.commandType = 'gh issue comment';
 
       for (let i = cmdIdx + 3; i < tokens.length; i++) {
+        const nextIdx = parseBodyFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
+          continue;
+        }
+      }
+      return result;
+    }
+
+    // 10. gh issue close
+    if (sub1 === 'issue' && sub2 === 'close') {
+      result.isPublicSurfaceCommand = true;
+      result.commandType = 'gh issue close';
+
+      for (let i = cmdIdx + 3; i < tokens.length; i++) {
+        const nextIdx = parseCommentFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
+          continue;
+        }
+      }
+      return result;
+    }
+
+    // 11. gh release create
+    if (sub1 === 'release' && sub2 === 'create') {
+      result.isPublicSurfaceCommand = true;
+      result.commandType = 'gh release create';
+
+      let tagFound = false;
+      for (let i = cmdIdx + 3; i < tokens.length; i++) {
         const token = tokens[i];
-        if ((token === '-b' || token === '--body') && i + 1 < tokens.length) {
-          result.extractedTexts.push(tokens[i + 1]);
-          i++;
+        let nextIdx = parseTitleFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
           continue;
         }
-        if (token.startsWith('-b') && token.length > 2) {
-          result.extractedTexts.push(token.slice(2));
+        nextIdx = parseReleaseNotesFlags(tokens, i, result);
+        if (nextIdx !== i) {
+          i = nextIdx;
           continue;
         }
-        if (token.startsWith('--body=')) {
-          result.extractedTexts.push(token.slice('--body='.length));
-          continue;
-        }
-        if ((token === '-F' || token === '--body-file') && i + 1 < tokens.length) {
-          const file = tokens[i + 1];
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          i++;
-          continue;
-        }
-        if (token.startsWith('-F') && token.length > 2) {
-          const file = token.slice(2);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
+        if (token.startsWith('-')) {
+          if ((token === '--target' || token === '--discussion-category') && i + 1 < tokens.length) {
+            i++;
           }
           continue;
         }
-        if (token.startsWith('--body-file=')) {
-          const file = token.slice('--body-file='.length);
-          if (file === '-') {
-            result.hasDynamicInput = true;
-          } else {
-            result.referencedFiles.push(file);
-          }
-          continue;
+        // First positional non-flag argument is the release tag
+        if (!tagFound) {
+          result.extractedTexts.push(token);
+          tagFound = true;
         }
       }
       return result;
@@ -1922,10 +1916,24 @@ export async function inspectDirectoryRemote(
         const gitDirMatch = gitFileContent.match(/gitdir:\s*([^\r\n]+)/i);
         if (gitDirMatch) {
           const resolvedGitDir = resolvePath(dir, gitDirMatch[1].trim());
-          const worktreeConfigPath = resolvePath(resolvedGitDir, 'config');
-          const raw = await readFile(worktreeConfigPath);
-          if (raw && typeof raw === 'string') {
-            configContent = raw;
+          const commonDir = resolvedGitDir.replace(/[\\/]worktrees[\\/][^\\/]+$/, '');
+          const candidateConfigPaths = [
+            resolvePath(commonDir, 'config'),
+            resolvePath(resolvedGitDir, 'config'),
+          ];
+          for (const cfgPath of candidateConfigPaths) {
+            try {
+              const raw = await readFile(cfgPath);
+              if (raw && typeof raw === 'string' && /url\s*=/i.test(raw)) {
+                configContent = raw;
+                break;
+              }
+              if (!configContent && raw && typeof raw === 'string') {
+                configContent = raw;
+              }
+            } catch {
+              // Try next candidate
+            }
           }
         }
       }
@@ -2015,6 +2023,7 @@ export async function inspectDirectoryRemote(
 
 export interface EvaluationOptions {
   cwd?: string;
+  isSessionRootFallback?: boolean;
   env?: { [key: string]: string | undefined };
   readFile?: FileReader;
   projectConfig?: ProjectRepos;
@@ -2045,6 +2054,9 @@ export function generateBlockingReason(commandType: string, terms: string[]): st
  */
 const SAFE_READONLY_COMMANDS = new Set([
   'cd',
+  'pushd',
+  'popd',
+  'dirs',
   'pwd',
   'test',
   '[',
@@ -2248,12 +2260,16 @@ export async function evaluatePublicSurfaceCommand(
         // Proceed directly to inspection and dynamic-input fail-closed check
       } else if (remoteInfo.determined) {
         if (remoteInfo.isTracker && !parsed.isLiteralUnknownEndpoint) {
+          if (options?.isSessionRootFallback) {
+            // When scope comes from session-root fallback, cwd might not reflect an earlier cd ../<upstream>.
+            // Do NOT apply tracker exemption; fall through to term scan!
+          } else {
+            finishSubcommand();
+            continue; // Safe tracker repository
+          }
+        } else if (upstreamRepo && !remoteInfo.isUpstream && !parsed.isLiteralUnknownEndpoint) {
           finishSubcommand();
-          continue; // Safe tracker repository
-        }
-        if (!remoteInfo.isUpstream && !parsed.isLiteralUnknownEndpoint) {
-          finishSubcommand();
-          continue; // Known non-upstream remote (e.g. unrelated third-party repo, adopter docs), allow through
+          continue; // Known non-upstream remote (only safe when upstreamRepo is known)
         }
       }
     }
@@ -2350,9 +2366,11 @@ export function register(on: any): void {
 
     if (typeof command === 'string') {
       let initialCwd: string | undefined = e?.cwd || e?.directory;
+      let isSessionRootFallback = false;
       if (!initialCwd) {
         try {
           initialCwd = await $.session.root();
+          isSessionRootFallback = true;
         } catch {
           // $.session may be absent in mock harnesses
         }
@@ -2366,6 +2384,7 @@ export function register(on: any): void {
       const hookEnv = allowBypass ? { MAGPIE_ALLOW_EMBARGO_TERMS: allowBypass } : {};
       const evaluation = await evaluatePublicSurfaceCommand(command, {
         cwd: initialCwd,
+        isSessionRootFallback,
         env: hookEnv,
         readFile: async (filePath: string) => {
           try {

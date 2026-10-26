@@ -1849,7 +1849,7 @@ reason mentioning the `mention` guard. A plain command
 For Claude Code harnesses using plugins (such as `magpie-security`),
 a deterministic TypeScript mod hook
 ([`plugins/magpie-security/hooks/public-surface-scrub.ts`](../../plugins/magpie-security/hooks/public-surface-scrub.ts))
-intercepts `Bash` tool calls (`git commit`, `git tag`, `gh pr create|edit|review|comment`, `gh api`)
+intercepts `Bash` tool calls (`git commit`, `git tag`, `git merge`, `gh pr create|edit|review|comment|merge|close`, `gh issue create|edit|comment|close`, `gh release create`, `gh api`)
 before execution to prevent accidental early disclosure of security vulnerabilities on public surfaces.
 
 ### Term canonicalization
@@ -1864,7 +1864,10 @@ and tracked by the pre-commit sync check).
 
 - **Private tracker exemption**: Subcommands explicitly targeting the private security
   tracker repository (`tracker_repo` in `project.md`, e.g. `-R airflow-s/airflow-s`)
-  are exempt.
+  are exempt. When working directory context falls back to `$.session.root()` (i.e. `cwd`
+  is omitted in the tool call event), the tracker cwd exemption is disabled to protect
+  against undetected in-session `cd ../<upstream>` transitions, falling through to the
+  deterministic term scan.
 - **Upstream repository protection**: Subcommands targeting the public codebase
   (`upstream_repo` in `project.md`) or operating within an upstream working tree
   are scrubbed. Commands targeting unrelated third-party or adopter documentation
