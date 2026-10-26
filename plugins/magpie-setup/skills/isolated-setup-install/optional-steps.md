@@ -176,8 +176,12 @@ sandbox-writable; a later session that derives a different one is refused
 until you delete that record (the log line names it).
 
 **L.2 — Hooks.** Wire a `SessionStart` hook running
-`container-gateway-hook.sh start` and a `SessionEnd` hook running
-`container-gateway-hook.sh stop` into the user settings, each
+`container-gateway-hook.sh start`, a `SessionEnd` hook running
+`container-gateway-hook.sh stop`, and a `PreToolUse` hook (matcher
+`Bash`, no `if` filter, `timeout` 30) running
+`container-gateway-hook.sh ensure`, which starts the gateway again
+before a container command when it exited mid-session, into the user
+settings, each
 **by the script's absolute path** with the home directory written out (a `~`
 there is expanded from `$HOME`, which the session environment can redirect),
 executed directly rather than through `bash`/`sh` (its `#!/bin/bash -p`
@@ -222,6 +226,12 @@ project-relative `unix://./…` value against the cwd — the URL
 authority is read as a host component, so `unix://./x` dials
 `/.//x` — and `allowUnixSockets` has no relative form either.
 Nothing gateway-related is committed to `.claude/settings.json`.
+On Linux, which ignores `allowUnixSockets`, the same diff also proposes
+`sandbox.network.allowAllUnixSockets: true` together with
+`sandbox.filesystem.denyRead` entries for each host daemon and IPC
+socket path that exists on the machine, never the flag alone; the path
+list and the `/run/user/<uid>` caveat are in
+[docs/setup/secure-agent-setup.md → Linux needs `allowAllUnixSockets`](../../../../docs/setup/secure-agent-setup.md#linux-needs-allowallunixsockets).
 Never propose the real
 daemon socket under any name; `tools/sandbox-lint` rejects an
 `allowUnixSockets` entry named `docker.sock` / `podman.sock` /
@@ -237,7 +247,9 @@ Tell the operator plainly, every time this step runs:
   serves the `docker` CLI, translated onto the Podman backend — the
   operator does not need both installed.
 - The hook lives in `~/.claude/scripts/`, runs outside the sandbox
-  on every `SessionStart` / `SessionEnd`, and — per L.1 — only ever
+  on every `SessionStart` / `SessionEnd` and before every `docker` /
+  `podman` command (where it restarts a gateway that exited
+  mid-session), and — per L.1 — only ever
   executes the copy installed here, never anything from the project
   tree it is about to serve.
 

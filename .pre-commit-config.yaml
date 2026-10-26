@@ -388,7 +388,7 @@ repos:
         name: check-claude-mods (claude plugin validate --strict / test)
         language: node
         entry: tools/dev/check-claude-mods.sh
-        additional_dependencies: ["@anthropic-ai/claude-code@2.1.302"]
+        additional_dependencies: ["@anthropic-ai/claude-code@2.1.308"]
         files: ^(.*/hooks/.*|.*\.claude-plugin/plugin\.json|tools/dev/check-claude-mods\.sh)$
         pass_filenames: false
         stages: [manual]
@@ -571,7 +571,7 @@ repos:
         name: render-preflight-fixtures (pre-flight eval cases vs the real checker)
         language: system
         entry: python3 tools/dev/render-preflight-fixtures.py
-        files: ^(plugins/magpie-setup/skills/setup/setup_preflight/.*|tools/skill-evals/evals/setup/preflight-floor/fixtures/.*|tools/dev/render-preflight-fixtures\.py)$
+        files: ^(plugins/magpie-setup/skills/setup/setup_preflight/.*|tools/skill-evals/evals/setup/(preflight-floor|welcome-first-run)/fixtures/.*|tools/dev/render-preflight-fixtures\.py)$
         pass_filenames: false
   # something else.
   - repo: local
@@ -608,6 +608,18 @@ repos:
         language: system
         entry: tools/dev/check-workspace-members.py
         files: ^((tools/[^/]+(/[^/]+)?|ai-tutors|skills)/pyproject\.toml|pyproject\.toml|.*/tests?/.*\.py|.*/test_[^/]+\.py|.*_test\.py)$
+        pass_filenames: false
+  # The hook-manager registry (tools/hook-manager/registry.json) is written
+  # into the shim, the whole-user dispatcher and sandbox-lint as generated
+  # blocks, since none of them can read it where they run; the settings that
+  # give each sandbox home are checked against it, not written.
+  - repo: local
+    hooks:
+      - id: sync-hook-managers
+        name: sync-hook-managers (hook-manager registry -> shim, dispatcher, sandbox-lint)
+        language: system
+        entry: tools/dev/sync-hook-managers.py
+        files: ^(tools/hook-manager/registry\.json|tools/dev/sync-hook-managers\.py|tools/agent-isolation/(hook-manager-shim|git-hook-dispatcher)\.sh|tools/sandbox-lint/src/sandbox_lint/__init__\.py|\.claude/settings\.json|tools/sandbox-lint/expected\.json)$
         pass_filenames: false
   # Tool-capability PR labels. `.github/labeler.yml` is generated from every
   # tool README's `**Capability:**` line; regenerate it whenever a README or

@@ -18,9 +18,9 @@ when_to_use: |
   `import last 30d` / `import all` for a backlog).
 argument-hint: "[import] [last Nd|all] [skip threadId]"
 capability: capability:intake
-surface_hash: sha256:e9c563d494821baf
+surface_hash: sha256:0db7a7686bad58b0
 license: Apache-2.0
-measured_tokens: 8152
+measured_tokens: 8245
 ---
 
 <!-- Placeholder convention (see AGENTS.md#placeholder-convention-used-in-skill-files):
@@ -44,14 +44,15 @@ Run the checker with this skill's own frontmatter `name:` and
 `surface_hash:`, and one `--requires` for each `requires_config:` entry:
 
 ```bash
-PYTHONPATH=".apache-magpie-local:$(git rev-parse --git-common-dir)/../.apache-magpie-local:$(git rev-parse --git-common-dir)/apache-magpie" \
+PYTHONPATH=".apache-magpie-local:$(git rev-parse --git-common-dir 2>/dev/null || echo .git)/../.apache-magpie-local:$(git rev-parse --git-common-dir 2>/dev/null || echo .git)/apache-magpie:.svn/apache-magpie" \
   python3 -m setup_preflight --skill <name> --hash <surface_hash> [--requires <file>]...
 ```
 
 The path finds the checker `/magpie-setup:setup config` installed in the
 personal layer: this checkout's `.apache-magpie-local/`, the main
-checkout's when this is a linked worktree, or the git directory's
-`apache-magpie/` when Magpie is only installed.
+checkout's when this is a linked worktree, or, when Magpie is only
+installed, the git directory's `apache-magpie/` (`.svn/apache-magpie/`
+in a Subversion working copy).
 
 - **`{"verdict": "ok"}`** → **silent**. Continue into the work the user
   asked for and say nothing about pre-flight. This is the ordinary answer.
@@ -63,12 +64,12 @@ checkout's when this is a linked worktree, or the git directory's
   `python3` — → never read that as a pass, and do not re-derive the check
   by hand: it lives in code so that there is one version of it. If the
   project has **no** `.apache-magpie.lock`, `.apache-magpie-overrides/`,
-  or personal layer (any of the three directories above),
+  or personal layer (any of the directories above),
   nothing has been set up here and there is
   nothing to reconcile — resolve this skill's `requires_config:` entries
   yourself (first match wins: `.apache-magpie-local/<file>`, the main
   checkout's `.apache-magpie-local/<file>`, `<git-common-dir>/apache-magpie/<file>`,
-  then `.apache-magpie-overrides/<file>`), stay silent if they all resolve, and
+  `.svn/apache-magpie/<file>`, then `.apache-magpie-overrides/<file>`), stay silent if they all resolve, and
   run `/magpie-setup:setup config` for this skill if any does not, which also
   installs the checker. Otherwise the project *is* set up and its checker
   is missing or stale: say so, propose `/magpie-setup:setup config` to install
@@ -323,6 +324,8 @@ A field the reporter did not supply stays `_No response_`; later `security-issue
 **Apply the redact-after-fetch protocol BEFORE extracting fields** ([`outcomes/redact-before-extract.md`](outcomes/redact-before-extract.md#step-4--redact-then-extract)):
 identify the third parties the body names, keep the reporter's own values and the Step 0 collaborators in the clear, and pass the rest to `pii-redact`.
 Every field below comes from the **redacted body**, so `N-…` / `E-…` identifiers appear where the reporter named someone else.
+
+**Attachments** (a PoC file, a patch, an encrypted ZIP with the password in the text): fetch, decrypt and record them per [`attachments.md`](attachments.md) before extracting the fields.
 
 The generic body-field schema lives in [`tools/github/issue-template.md`](../../../../tools/github/issue-template.md),
 and the project's field names in [`<project-config>/project.md`](../../../../<project-config>/project.md#issue-template-fields).

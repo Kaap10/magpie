@@ -60,6 +60,7 @@
   - [Container gateway](#container-gateway)
     - [Why install it](#why-install-it-1)
     - [Install (user-scope)](#install-user-scope-4)
+    - [Linux needs `allowAllUnixSockets`](#linux-needs-allowallunixsockets)
     - [Egress](#egress)
     - [Verify](#verify-4)
     - [Trade-offs](#trade-offs-3)
@@ -382,7 +383,7 @@ sandbox flags don't depend on a specific bubblewrap version (the
 `denyRead`/`allowRead` API has been stable since `0.6.x`).
 
 The framework's `tools/agent-isolation/check-tool-updates.sh` will
-still report upstream `0.13.0` / `1.8.1.3` as the pinned versions —
+still report upstream `0.13.1` / `1.8.1.3` as the pinned versions —
 that's the manifest's view of what's *upstream-current*, not what
 your distro shipped. If you want to silence the drift, override the
 manifest locally with a `pinned-versions.local.toml` (gitignored)
@@ -565,6 +566,9 @@ The full block below is the two merged, annotated.
       ]
     },
     "network": {
+      // Linux ignores allowUnixSockets and blocks every AF_UNIX socket; the gateway and
+      // ssh-agent signing need a per-machine `allowAllUnixSockets: true` there, never
+      // without the host-socket denyRead entries in "Linux needs allowAllUnixSockets" below.
       "allowUnixSockets": [        // macOS only (ignored on Linux): sockets a sandboxed Bash may connect(2) to. A read entry alone lets it stat the file, not talk to it.
         "/Users/<you>/.gnupg/S.gpg-agent.ssh"   // gpg-agent's ssh socket — needed for signed commits and pushes over ssh; absolute path (see "SSH agent / Yubikey appears unreachable" in sandbox-troubleshooting.md)
         // Per project, local settings (`.claude/settings.local.json`,
@@ -715,6 +719,7 @@ The full block below is the two merged, annotated.
       "Read(~/.config/gcloud/**)", "Read(~/.azure/**)",
       "Read(~/.config/uv/uv.toml)",             // the host-only uv cache-dir: unreadable inside the sandbox, so sandboxed uv keeps its own cache (see "Host-only uv state")
       "Edit(~/.config/uv/**)",
+      "Edit(~/.cache/ponymail-attachments/**)",  // PonyMail save_attachments root: readable in the sandbox, written only by the MCP server
       "Read(//**/.env)", "Read(//**/.env.local)", "Read(//**/.env.*.local)",
       "Bash(curl *)", "Bash(wget *)",           // network egress via Bash bypasses the sandbox proxy
       "Bash(aws *)", "Bash(gcloud *)", "Bash(az *)", "Bash(kubectl *)",
@@ -1054,7 +1059,7 @@ uv tool upgrade --all --reinstall
 
 The old `~/.cache/uv/` stays as the sandbox's cache; the host never reads it again.
 
-**prek has the same problem.** The git hooks of a commit you make in a terminal run prek outside the sandbox, from hook environments under its home: `~/.cache/prek/` by default, which the `~/.cache/` grant makes sandbox-writable. Nothing excluded from the sandbox runs prek, so the settings `env` (which only Claude Code's own commands see, never your terminal) does the split: `"PREK_HOME": "~/.cache/prek-sandbox"` gives sandboxed prek a home of its own, and `Edit(~/.cache/prek/**)` keeps sandboxed commands out of the terminal's. prek expands the `~`. The first sandboxed `prek run` after the switch rebuilds its hook environments there once. `sandbox-lint` fails a settings file whose `PREK_HOME` is missing or overlaps `~/.cache/prek`.
+**prek has the same problem.** The git hooks of a commit you make in a terminal run prek outside the sandbox, from hook environments under its home: `~/.cache/prek/` by default, which the `~/.cache/` grant makes sandbox-writable. Nothing excluded from the sandbox runs prek, so the settings `env` (which only Claude Code's own commands see, never your terminal) does the split: `"PREK_HOME": "~/.cache/prek-sandbox"` gives sandboxed prek a home of its own, and `Edit(~/.cache/prek/**)` keeps sandboxed commands out of the terminal's. prek expands the `~`. The first sandboxed `prek run` after the switch rebuilds its hook environments there once. When the project uses prek (a prek config at its root, or an installed git hook that runs prek), `sandbox-lint` fails a settings file whose `PREK_HOME` is missing or overlaps `~/.cache/prek`; with no project to inspect, it assumes prek is in use. The same split applies to every hook manager with a home in the [hook-manager registry](../../tools/hook-manager/registry.json); see the [contract](../../tools/hook-manager/README.md#home).
 
 The `env` also reaches a command Claude Code runs *outside* the sandbox (an approved bypass, often a signed commit). The whole-user [git-hook dispatcher](#whole-user-with-the-per-repo-dispatcher) covers that: a hook it runs with no `SANDBOX_RUNTIME` in the environment gets `PREK_HOME=~/.local/share/prek-host` and a host-only `XDG_CACHE_HOME` (for the pip, go, npm and uv caches the hooks use), whatever the env said. It only runs when git reaches it: a repository-level `core.hooksPath` (some `prek install` runs set one) overrides the global one and skips the dispatcher. magpie-setup's session-start hook removes one that points at the repository's own `.git/hooks` (redundant, since the dispatcher chains there anyway) and says so; any other value is reported, and `setup-isolated-setup-verify` flags it. With per-project scope there is no dispatcher, so do not bypass the sandbox for a commit there.
 
@@ -1419,24 +1424,29 @@ original argv + inherited stdin, so a failing local `pre-commit` /
 `pre-push` still aborts the git operation. A repo with **no** local
 hook is a clean no-op.
 
-**The `prek` PATH shim.** prek honours `core.hooksPath`, so a bare
+**The hook-manager PATH shim.** prek honours `core.hooksPath`, so a bare
 `prek install` under whole-user scope would write its shim into the
 *shared* dir, not the repo. The framework ships a transparent shim
-([`tools/agent-isolation/prek-shim.sh`](../../tools/agent-isolation/prek-shim.sh),
+([`tools/agent-isolation/hook-manager-shim.sh`](../../tools/agent-isolation/hook-manager-shim.sh),
 installed as `~/.claude/bin/prek` with `~/.claude/bin` prepended to
 PATH) that rewrites **only** `prek install` — injecting
 `--git-dir "$(git rev-parse --git-common-dir)"` so the shim lands
 in the repo-local `.git/hooks/` where the dispatcher finds it.
 Every other `prek` command passes straight through, and the shim is
 a no-op on hosts with no global `core.hooksPath`.
+The shim, the host-only homes and the sandbox-lint checks all follow the
+[hook-manager contract](../../tools/hook-manager/README.md):
+one script serves every adapter in its registry, keyed by the name it is
+installed under, and other hook managers (pre-commit, lefthook, husky, …)
+join by adding an adapter there.
 
 Validated behaviour under this flavour (`core.hooksPath` global +
-dispatchers + prek shim):
+dispatchers + hook-manager shim):
 
 | Repo's local hook | Result |
 |---|---|
 | prek shim in `.git/hooks/` (installed via the shim) | dispatcher → prek runs that repo's `.pre-commit-config.yaml` |
-| hand-written / husky / lefthook `.git/hooks/<name>` | dispatcher → that hook runs (heterogeneous tooling coexists) |
+| hand-written `.git/hooks/<name>`, or one a manager without an adapter put there | dispatcher → that hook runs (heterogeneous tooling coexists) |
 | none | dispatcher no-op; git operation proceeds cleanly |
 | local hook exits non-zero | exit code propagates; git operation aborts |
 | `post-checkout` | framework sandbox sync **and** repo-local `post-checkout` both run |
@@ -2935,7 +2945,20 @@ records which main checkout it confirmed the first time, under
 sandbox-writable; a later session that derives a different one is refused
 until you delete that record (the log line names it).
 
-Wire it as a `SessionStart` / `SessionEnd` pair in your user settings, alongside any other hooks already there, **by its absolute path** (your real home, `/home/<you>` on Linux). A `~` in a hook command is expanded from `$HOME` by the launching shell, and a session environment that redirects `$HOME` would run another script. Because that path is per-machine, it goes in `~/.claude/settings.local.json` when your `~/.claude/settings.json` is [synced across machines](#syncing-user-scope-config-across-machines) — a `/Users/<you>/...` path synced to a Linux box points at nothing, and the gateway never starts there; otherwise `~/.claude/settings.json` is fine. Claude Code merges hooks from both files:
+Wire it in your user settings, alongside any other hooks already there, **by its absolute path** (your real home, `/home/<you>` on Linux). A `~` in a hook command is expanded from `$HOME` by the launching shell, and a session environment that redirects `$HOME` would run another script. Because that path is per-machine, it goes in `~/.claude/settings.local.json` when your `~/.claude/settings.json` is [synced across machines](#syncing-user-scope-config-across-machines) — a `/Users/<you>/...` path synced to a Linux box points at nothing, and the gateway never starts there; otherwise `~/.claude/settings.json` is fine. Claude Code merges hooks from both files.
+
+Three events, one script:
+
+- `SessionStart` → `start` brings the gateway up with the session.
+- `SessionEnd` → `stop` ends it.
+- `PreToolUse` on `Bash` → `ensure` starts it again before a `docker` or `podman` command when it is gone mid-session.
+  It exits after its idle timeout (default 4 h), when another session on the same project ends and stops it, or when it or its backend dies; without `ensure` it stays down until the next session.
+  It is registered for every `Bash` call, with no `if` filter: a filter such as `Bash(docker *)` would miss `docker-compose`, `podman-compose` and `/usr/local/bin/docker`. The script reads the command itself and leaves within about 10 ms when it names neither CLI.
+  When the gateway is already running the check costs about half a second, on container commands only.
+  `ensure` runs every check `start` does, so it can start nothing that `start` would refuse.
+  It judges the directory the session started in, which Claude Code hands every hook as `CLAUDE_PROJECT_DIR`, never the directory the agent has `cd`'d into: judged from another directory, the session project's own write grants would go uncounted.
+  A settings `env` entry cannot override `CLAUDE_PROJECT_DIR`, and without it `ensure` does nothing.
+  `start` and `stop` judge it too, since `SessionStart` also fires after a compaction, `/clear` or resume, when the payload's directory has followed the agent's `cd`; they fall back to that directory only when the variable is unset.
 
 ```jsonc
 {
@@ -2945,19 +2968,26 @@ Wire it as a `SessionStart` / `SessionEnd` pair in your user settings, alongside
     ],
     "SessionEnd": [
       { "hooks": [ { "type": "command", "command": "/Users/<you>/.claude/scripts/container-gateway-hook.sh stop" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [ { "type": "command", "timeout": 30, "command": "/Users/<you>/.claude/scripts/container-gateway-hook.sh ensure" } ] }
     ]
   }
 }
 ```
 
-**Fixing your other machines.** If the hook was registered in a synced `~/.claude/settings.json`, move it: delete the two `container-gateway-hook.sh` entries from the synced file (once, on any machine), then on **every** machine add them to its own `~/.claude/settings.local.json` with that machine's home:
+**Fixing your other machines.** If the hook was registered in a synced `~/.claude/settings.json`, move it: delete the `container-gateway-hook.sh` entries from the synced file (once, on any machine), then on **every** machine add them to its own `~/.claude/settings.local.json` with that machine's home:
 
 ```bash
 jq --arg h "$(cd ~ && pwd -P)" '
-  .hooks.SessionStart += [{"hooks":[{"type":"command","command":($h+"/.claude/scripts/container-gateway-hook.sh start")}]}]
-  | .hooks.SessionEnd += [{"hooks":[{"type":"command","command":($h+"/.claude/scripts/container-gateway-hook.sh stop")}]}]
+  ($h+"/.claude/scripts/container-gateway-hook.sh") as $s
+  | .hooks.SessionStart += [{"hooks":[{"type":"command","command":($s+" start")}]}]
+  | .hooks.SessionEnd += [{"hooks":[{"type":"command","command":($s+" stop")}]}]
+  | .hooks.PreToolUse += [{"matcher":"Bash","hooks":[{"type":"command","timeout":30,"command":($s+" ensure")}]}]
 ' ~/.claude/settings.local.json > ~/.claude/settings.local.json.new && mv ~/.claude/settings.local.json.new ~/.claude/settings.local.json
 ```
+
+A machine wired before `ensure` existed already has the first two; add only the `PreToolUse` entry there.
 
 `setup-isolated-setup-verify` (check 12a) and `setup-isolated-setup-update` flag a hook whose registered path does not exist on the machine they run on.
 
@@ -2995,13 +3025,65 @@ The CLIs do not resolve it against the cwd: a `unix://` URL's authority is parse
 
 Never add the real daemon socket to `allowUnixSockets` under any name: the framework's `sandbox-lint` tool rejects an entry whose basename is `docker.sock`, `podman.sock`, or ends in `-api.sock`, unless its parent directory is the gateway's run directory, `<project>/.apache-magpie-local/run` or `<git-common-dir>/apache-magpie/run/<worktree-id>`.
 
+### Linux needs `allowAllUnixSockets`
+
+The `allowUnixSockets` entries above are macOS-only: Claude Code ignores them on Linux, where its seccomp filter rejects `socket(AF_UNIX, …)` before any path is consulted ([SSH agent / Yubikey appears unreachable](sandbox-troubleshooting.md#ssh-agent--yubikey-appears-unreachable-from-inside-the-sandbox)).
+On Linux the sandboxed `podman` / `docker` CLI reaches the gateway, and a sandboxed `git` reaches the ssh agent to sign, only with `sandbox.network.allowAllUnixSockets: true`, which skips that filter.
+Keep the `allowUnixSockets` entries anyway: they are inert on Linux and keep the block valid on a Mac.
+
+`allowAllUnixSockets` lets a sandboxed command connect to **every** Unix socket whose path it can see, and the reference `denyRead: ["~/"]` hides nothing outside your home.
+Pair it with `sandbox.filesystem.denyRead` entries, as absolute paths, for the host's daemon and IPC sockets.
+Each one is a way out of the sandbox:
+
+| Path | What a sandboxed command could do through it |
+|---|---|
+| `/run/docker.sock`, `/var/run/docker.sock` | Drive the Docker daemon: root-equivalent when you are in the `docker` group |
+| `/run/docker-cli.sock` | The same, through Docker Desktop's CLI socket |
+| `/run/podman` | Drive rootful Podman's daemon (`podman.sock`) |
+| `/run/user/<uid>` | Run commands outside the sandbox through the systemd user manager, over the user D-Bus (`bus`) or its own `systemd/private` socket (`systemd-run --user`); drive rootless Podman (`podman/podman.sock`); reach editor askpass sockets (`vscode-git-*.sock`) and systemd's ssh agent |
+| `/run/dbus` | Talk to the system D-Bus |
+| `/tmp/.X11-unix` | Inject keystrokes into your X11 session |
+| `/run/WSL` (WSL only) | Launch Windows executables outside the sandbox through the interop sockets |
+| `/mnt/wslg` (WSL only) | Reach the WSLg display and audio sockets |
+
+Deny `/run/user/<uid>` whole: the user manager answers on `systemd/private` even with the bus denied, so denying single sockets in it leaves a way out.
+One channel stays open whatever `denyRead` says: on Linux the flag also unblocks `AF_VSOCK` sockets (per Claude Code's settings schema), which have no path to deny. On WSL2 that is a channel to the Windows host. Treat it as residual risk.
+
+```jsonc
+// per machine: ~/.claude/settings.local.json, or the project's .claude/settings.local.json
+{
+  "sandbox": {
+    "network": { "allowAllUnixSockets": true },
+    "filesystem": {
+      "denyRead": [
+        "/run/docker.sock", "/var/run/docker.sock", "/run/docker-cli.sock", "/run/podman",
+        "/run/user/<uid>", "/run/dbus", "/tmp/.X11-unix",
+        "/run/WSL", "/mnt/wslg"   // WSL only
+      ]
+    }
+  }
+}
+```
+
+Replace `<uid>` with the output of `id -u` (for example `/run/user/1000`). Pasted as-is, the entry names a path that does not exist and hides nothing; sandbox-lint and check 12e both flag it.
+
+The gateway's sockets are unaffected: its run directory is inside the project tree or the git directory (`<project>/.apache-magpie-local/run/` or `<git-common-dir>/apache-magpie/run/<worktree-id>/`), never under `/run/user`.
+The ssh agent may not be: run `echo "$SSH_AUTH_SOCK"` in your own terminal.
+An agent socket under `/tmp` (the classic `ssh-agent`) needs nothing.
+When it is under `/run/user/<uid>/`, add the socket path itself to `allowRead`, or the agent's own subdirectory for gpg-agent (`gnupg/`) and gnome-keyring (`keyring/`) — never `/run/user/<uid>/` itself, where systemd's agent socket sits directly and an entry would re-open the whole directory.
+`allowRead` takes precedence inside a `denyRead` the same way `~/.gnupg/` does under `~/`; a single-file `allowRead` inside a denied directory has not been verified on Linux, so test signing after adding it.
+
+Keep both halves in one per-machine file. `allowAllUnixSockets` lifts socket blocking on macOS too, so a user-scope `~/.claude/settings.json` [synced across machines](#syncing-user-scope-config-across-machines) would carry it to a Mac without the Linux denials.
+Inside the sandbox each denied path that exists is replaced by an empty directory or a `/dev/null` device, so `test -S /run/docker.sock` reports no socket there.
+`sandbox-lint` rejects `allowAllUnixSockets: true` in the project's settings layers without `denyRead` cover for every path in the table (it does not read user-scope files), and `setup-isolated-setup-verify` check 12e flags each one that exists on the host and is not denied, in any scope.
+
 ### Egress
 
 At start, the gateway resolves the egress gateway's address for each backend and probes it once.
 `inject-if-available` (the default) injects `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` into every container it creates when that probe succeeds, and logs a warning instead of failing when it does not.
 `require` refuses container creation with `403` while the egress gateway is unreachable, for adopters who want a hard failure rather than a silent gap.
 `off` never injects, for adopters running their own container-level filtering.
-Set the mode with `MAGPIE_CONTAINER_GATEWAY_ARGS="--egress require"` (or `off`) before the `SessionStart` hook runs.
+Set the mode with `MAGPIE_CONTAINER_GATEWAY_ARGS="--egress require"` (or `off`) in the environment the hooks run in; it applies whenever `start` or `ensure` starts the gateway.
 
 On Linux, the address the gateway hands a container for the egress gateway is a fixed guess: `172.17.0.1` for dockerd's default bridge, `10.88.0.1` for rootless Podman.
 Neither is guaranteed to match every Linux install's actual bridge address.
@@ -3016,7 +3098,7 @@ podman run --rm -v "$HOME/.ssh:/x" alpine true # expected: 403 container-gateway
 ```
 
 `status` prints a JSON object (`running`, `pid`, `sockets`, `serving`) and exits 0 when the gateway is up for this project, 3 otherwise.
-The `podman info` call should succeed from inside the sandbox once the hook has started the gateway and the two `allowUnixSockets` entries are in place.
+The `podman info` call should succeed from inside the sandbox once the hook has started the gateway and the two `allowUnixSockets` entries (macOS) or `allowAllUnixSockets` with its `denyRead` entries (Linux) are in place.
 The `podman run` call is expected to fail: a bind mount outside the project root (and any `--extra-bind-root`) is exactly what the policy refuses, and the `403` message is the gateway working as intended.
 
 ### Trade-offs
@@ -3296,7 +3378,7 @@ Three reasons make this non-negotiable:
 Public dotfile repos are fine for shell aliases and editor configs;
 they are the wrong shape for agent-runtime files.
 
-**Per-machine entries stay out of the synced file.** Anything that names an absolute path under your home — the container gateway's `SessionStart` / `SessionEnd` hooks above, a pinned interpreter, socket paths — differs between macOS (`/Users/<you>`) and Linux (`/home/<you>`). Keep those in each machine's `~/.claude/settings.local.json`, which is never synced; Claude Code merges hooks and settings from both files.
+**Per-machine entries stay out of the synced file.** Anything that names an absolute path under your home — the container gateway's `SessionStart` / `SessionEnd` / `PreToolUse` hooks above, a pinned interpreter, socket paths — differs between macOS (`/Users/<you>`) and Linux (`/home/<you>`). Keep those in each machine's `~/.claude/settings.local.json`, which is never synced; Claude Code merges hooks and settings from both files.
 
 ## Adopter setup
 
@@ -3691,11 +3773,16 @@ below and report ✓ done / ✗ missing / ⚠ partial, with the evidence
       hook running `container-gateway-hook.sh stop`, by an absolute
       path that exists on this machine (✗ if it names another
       machine's home), and `~/.claude/scripts/container-gateway-hook.sh`
-      exists and is executable.
+      exists and is executable. A missing `PreToolUse` `Bash` hook
+      running `container-gateway-hook.sh ensure` is ◐: the gateway
+      still starts with each session, but stays down once it exits
+      mid-session.
     - The project `.claude/settings.json` or
       `.claude/settings.local.json` has `env.CONTAINER_HOST` and
       `env.DOCKER_HOST`, and both gateway sockets appear in
-      `sandbox.network.allowUnixSockets`.
+      `sandbox.network.allowUnixSockets`. On Linux, which ignores
+      `allowUnixSockets`, the socket half is instead
+      `sandbox.network.allowAllUnixSockets: true` in any scope.
     - No scope (project, project-local, or user) lists a raw
       daemon socket in `allowUnixSockets` — an entry whose
       basename is `docker.sock`, `podman.sock`, or ends in
@@ -3706,6 +3793,16 @@ below and report ✓ done / ✗ missing / ⚠ partial, with the evidence
     On any ✗, point at
     [`docs/setup/sandbox-troubleshooting.md` → Docker / Podman command fails with a socket error](sandbox-troubleshooting.md#docker--podman-command-fails-with-a-socket-error)
     rather than re-explaining the fix.
+    Separately, and even when the rest of this check is n/a (the flag
+    may be set only for ssh-agent signing): on Linux, when any scope
+    sets `sandbox.network.allowAllUnixSockets: true`, each of
+    `/run/docker.sock`, `/var/run/docker.sock`, `/run/docker-cli.sock`,
+    `/run/podman`, `/run/user/<uid>`, `/run/dbus`, `/tmp/.X11-unix`,
+    `/run/WSL` and `/mnt/wslg` that exists on this host must be
+    covered by a `sandbox.filesystem.denyRead` entry (the path or a
+    directory above it) in some scope; each one that is not is ✗,
+    naming the path (see
+    [Linux needs `allowAllUnixSockets`](#linux-needs-allowallunixsockets)).
 13. **Eval-harness exclusion**, if installed (optional — report
     n/a when neither the exclusion nor the script is present;
     not running eval suites is a normal posture). When either is:
@@ -3838,8 +3935,8 @@ A project turns the warning off for every contributor with `isolation_warning: o
 Invoke the skill directly at any time: `/magpie-setup:isolated-setup-update` on a marketplace install, `/magpie-setup-isolated-setup-update` on a pinned snapshot.
 The pre-flight state is recorded when the run finishes, so a manual run also resets the timer.
 
-On a marketplace install, the pre-flight checker in your personal layer sees a new fingerprint once `/magpie-setup:setup upgrade` has refreshed it.
-The upgrade prompt after each plugin update tells you to run that.
+On a marketplace install, the pre-flight checker in your personal layer sees a new fingerprint once `/magpie-setup:complete-upgrade` (or `/magpie-setup:setup upgrade`) has refreshed it.
+The prompt after each plugin update tells you to run `/magpie-setup:complete-upgrade`, which covers that refresh in one approved run.
 
 ### Direct steps
 

@@ -254,9 +254,10 @@ reading this file; read the section for a check whose condition holds.
 
 ## Check 12 — container gateway wired
 
-12. **Container gateway wired.** Only meaningful when `podman` or
-    `docker` is on `PATH`; if neither is installed, report **n/a**
-    for the whole check. Four sub-checks:
+12. **Container gateway wired.** 12a–12d are only meaningful when
+    `podman` or `docker` is on `PATH`; if neither is installed, report
+    them **n/a**. 12e has its own condition, so with no container
+    runtime check 12 reports 12e alone. Five sub-checks:
 
     - **12a — hooks wired.** User-scope `~/.claude/settings.json`
       or `~/.claude/settings.local.json` has a `SessionStart` hook
@@ -272,13 +273,23 @@ reading this file; read the section for a check whose condition holds.
       and so is one that runs it through `bash`/`sh` rather than
       directly (its `#!/bin/bash -p` shebang is what keeps `BASH_ENV`
       and exported functions out).
+      A missing `PreToolUse` hook (matcher `Bash`) running
+      `container-gateway-hook.sh ensure` is ◐, not ✗: the gateway
+      still starts with each session, but once it exits mid-session
+      (idle timeout, another session on the project ending, a crash)
+      container commands fail until the next session. The same
+      path, `~` and `bash`/`sh` rules apply to it.
     - **12b — hook script present.** `~/.claude/scripts/container-gateway-hook.sh`
       exists and is executable. Missing or non-executable is ✗.
     - **12c — project wiring.** The gitignored
       `.claude/settings.local.json` has `env.CONTAINER_HOST` and
       `env.DOCKER_HOST`, and both gateway sockets appear in
-      `sandbox.network.allowUnixSockets`. Either half missing
-      (the `env` pair or the socket allow-list pair) is ✗; report
+      `sandbox.network.allowUnixSockets`. On Linux, which ignores
+      `allowUnixSockets`, the socket half is instead
+      `sandbox.network.allowAllUnixSockets: true` in any scope;
+      `allowUnixSockets` entries there are inert and neither satisfy
+      nor fail it. Either half missing
+      (the `env` pair or the socket half) is ✗; report
       which half. All four values must be **absolute** paths: the
       CLIs read a `unix://` URL's authority as a host component, so
       a project-relative `unix://./…` value dials a path that does
@@ -302,6 +313,23 @@ reading this file; read the section for a check whose condition holds.
       > gateway (<project>/.apache-magpie-local/run/*.sock,
       > or <git-common-dir>/apache-magpie/run/<worktree-id>/*.sock when the
       > project has not adopted Magpie) instead`
+
+    - **12e — Linux host sockets hidden.** Runs whenever any scope
+      sets `sandbox.network.allowAllUnixSockets: true`, even when
+      12a–12d are n/a (no container runtime: the flag may be there only
+      for ssh-agent signing); with the flag absent or not on Linux it
+      is n/a. The flag makes every Unix socket the sandbox can see
+      connectable, so for each of `/run/docker.sock`,
+      `/var/run/docker.sock`, `/run/docker-cli.sock`, `/run/podman`,
+      `/run/user/<uid>` (`<uid>` from `id -u`), `/run/dbus`,
+      `/tmp/.X11-unix`, `/run/WSL` and `/mnt/wslg` that exists on the
+      host, some scope's `sandbox.filesystem.denyRead` must hold the
+      path or a directory above it. Denying single sockets inside
+      `/run/user/<uid>` (`bus`, `podman`) does not count: the systemd
+      user manager also listens on `systemd/private`. Each one that
+      exists and is not covered is ✗, naming the path; a path the host
+      does not have needs no entry. Point at
+      [Linux needs `allowAllUnixSockets`](../../../../docs/setup/secure-agent-setup.md#linux-needs-allowallunixsockets).
 
     Install detail:
     [`docs/setup/secure-agent-setup.md` → Container gateway](../../../../docs/setup/secure-agent-setup.md#container-gateway).

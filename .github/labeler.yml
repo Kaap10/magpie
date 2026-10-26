@@ -69,6 +69,7 @@ capability:intake:
 capability:platform:
   - changed-files:
       - any-glob-to-any-file:
+          - 'plugins/magpie-setup/skills/complete-upgrade/**'
           - 'plugins/magpie-setup/skills/isolated-setup-doctor/**'
           - 'plugins/magpie-setup/skills/isolated-setup-install/**'
           - 'plugins/magpie-setup/skills/isolated-setup-update/**'
@@ -82,6 +83,7 @@ capability:platform:
           - 'plugins/magpie-setup/skills/welcome-guide/**'
           - 'plugins/magpie-utilities/skills/report-framework-issue/**'
           - 'tools/skill-evals/evals/report-framework-issue/**'
+          - 'tools/skill-evals/evals/setup-complete-upgrade/**'
           - 'tools/skill-evals/evals/setup-isolated-setup-doctor/**'
           - 'tools/skill-evals/evals/setup-isolated-setup-install/**'
           - 'tools/skill-evals/evals/setup-isolated-setup-update/**'
@@ -388,6 +390,7 @@ family:setup:
           - '.apache-magpie.lock'
           - 'docs/setup/**'
           - 'plugins/magpie-setup/**'
+          - 'tools/skill-evals/evals/setup-complete-upgrade/**'
           - 'tools/skill-evals/evals/setup-isolated-setup-doctor/**'
           - 'tools/skill-evals/evals/setup-isolated-setup-install/**'
           - 'tools/skill-evals/evals/setup-isolated-setup-update/**'
@@ -461,6 +464,12 @@ contract:cve-authority:
               - 'tools/cve-org/**'
               - 'tools/cve-tool/**'
               - 'tools/cve-tool-vulnogram/**'
+
+contract:hook-manager:
+  - any:
+      - changed-files:
+          - any-glob-to-any-file:
+              - 'tools/hook-manager/**'
 
 contract:mail-archive:
   - any:
