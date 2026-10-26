@@ -1442,10 +1442,17 @@ dispatchers + hook-manager shim):
 | Repo's local hook | Result |
 |---|---|
 | prek shim in `.git/hooks/` (installed via the shim) | dispatcher → prek runs that repo's `.pre-commit-config.yaml` |
+| local hook installed by a manager requiring no install fix (`simple-git-hooks`, `cargo-husky`, `git-code-format-maven-plugin`, `git-build-hook`) | dispatcher → local hook runs natively (installs straight to `.git/hooks/` ignoring global `core.hooksPath`) |
 | hand-written `.git/hooks/<name>`, or one a manager without an adapter put there | dispatcher → that hook runs (heterogeneous tooling coexists) |
 | none | dispatcher no-op; git operation proceeds cleanly |
 | local hook exits non-zero | exit code propagates; git operation aborts |
 | `post-checkout` | framework sandbox sync **and** repo-local `post-checkout` both run |
+
+Managers using the `none` install strategy (`tools/hook-manager/README.md`) require no binary PATH shim because their installers already target the repository-local `.git/hooks/` directory directly regardless of global `core.hooksPath`:
+- **`simple-git-hooks` (JavaScript):** Installs directly into `.git/hooks/` and coexists cleanly.
+- **`cargo-husky` (Rust):** Installs directly into `.git/hooks/`. Note: `cargo-husky` fails with `GitDirNotFound` in linked worktrees because its `build.rs` expects `.git` to be a directory rather than a `gitdir:` file.
+- **`git-code-format-maven-plugin` (Java):** Installs directly into `.git/hooks/` and coexists cleanly.
+- **`git-build-hook` (Java):** Installs directly into `.git/hooks/`. Note: running `mvn git-build-hook:configure` can write a repository-local `core.hooksPath`, which overrides Magpie's whole-user dispatcher.
 
 Reversal is the same as simple whole-user (`git config --global
 --unset core.hooksPath`), plus removing `~/.claude/bin` from PATH to

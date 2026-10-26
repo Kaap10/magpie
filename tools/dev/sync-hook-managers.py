@@ -54,7 +54,7 @@ SANDBOX_LINT = Path("tools/sandbox-lint/src/sandbox_lint/__init__.py")
 SETTINGS = (Path(".claude/settings.json"), Path("tools/sandbox-lint/expected.json"))
 
 #: Install strategies the shim implements. A new one lands with its shim branch.
-STRATEGIES = {"git-dir-flag"}
+STRATEGIES = {"git-dir-flag", "none"}
 
 _NAME = re.compile(r"^[a-z][a-z0-9-]*$")
 _ENV = re.compile(r"^[A-Z][A-Z0-9_]*$")
@@ -105,19 +105,23 @@ def validate(registry: dict[str, Any]) -> list[str]:
         if not isinstance(install, dict):
             errors.append(f"{where}.install: missing")
         else:
-            if install.get("strategy") not in STRATEGIES:
+            strategy = install.get("strategy")
+            if strategy not in STRATEGIES:
                 errors.append(
-                    f"{where}.install.strategy: {install.get('strategy')!r} is not one the shim implements "
+                    f"{where}.install.strategy: {strategy!r} is not one the shim implements "
                     f"({', '.join(sorted(STRATEGIES))})"
                 )
-            if not isinstance(install.get("subcommand"), str) or not _NAME.match(install["subcommand"]):
-                errors.append(f"{where}.install.subcommand: missing")
-            if install.get("strategy") == "git-dir-flag" and not (
-                isinstance(install.get("flag"), str) and _FLAG.match(install["flag"])
-            ):
-                errors.append(
-                    f"{where}.install.flag: git-dir-flag needs the long option that takes the git dir"
-                )
+            if strategy != "none":
+                if not isinstance(install.get("subcommand"), str) or not _NAME.match(install["subcommand"]):
+                    errors.append(f"{where}.install.subcommand: missing")
+                if strategy == "git-dir-flag" and not (
+                    isinstance(install.get("flag"), str) and _FLAG.match(install["flag"])
+                ):
+                    errors.append(
+                        f"{where}.install.flag: git-dir-flag needs the long option that takes the git dir"
+                    )
+            elif "flag" in install:
+                errors.append(f"{where}.install.flag: strategy 'none' takes no flag")
         home = adapter.get("home")
         if home is None:
             continue  # a manager that keeps nothing outside the repository
@@ -154,6 +158,8 @@ def render(registry: dict[str, Any]) -> dict[Path, str]:
     cases = []
     for name, adapter in sorted(adapters.items()):
         install = adapter["install"]
+        if install.get("strategy") == "none":
+            continue
         fields = [f"install_subcommand={install['subcommand']}", f"install_strategy={install['strategy']}"]
         if "flag" in install:
             fields.append(f"install_flag={install['flag']}")

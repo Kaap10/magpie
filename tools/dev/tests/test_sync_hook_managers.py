@@ -104,6 +104,23 @@ def test_a_manager_without_a_home_is_allowed(registry: dict[str, Any]) -> None:
     assert mod.render(registry)[mod.DISPATCHER] == 'hook_manager_homes=""\n'
 
 
+def test_strategy_none_adapter_omits_shim_and_needs_no_subcommand(registry: dict[str, Any]) -> None:
+    assert mod.validate(registry) == []
+    shim = mod.render(registry)[mod.SHIM]
+    # Tools with strategy: none must not emit a case in the shim
+    for tool in ("cargo-husky", "git-build-hook", "git-code-format-maven-plugin", "simple-git-hooks"):
+        assert f"    {tool})" not in shim
+    # Prek (git-dir-flag) must still emit a case
+    assert "    prek) install_subcommand=install; install_strategy=git-dir-flag; install_flag=--git-dir ;;" in shim
+
+
+def test_strategy_none_with_flag_is_refused(registry: dict[str, Any]) -> None:
+    broken = copy.deepcopy(registry)
+    broken["adapters"]["simple-git-hooks"]["install"]["flag"] = "--git-dir"
+    errors = mod.validate(broken)
+    assert any("strategy 'none' takes no flag" in e for e in errors), errors
+
+
 def _add_demo(tree: Path, registry: dict[str, Any]) -> None:
     extra = copy.deepcopy(registry["adapters"]["prek"])
     extra["detect"] = {"config_files": ["demo.toml"], "nested": False, "hook_marker": "demo"}

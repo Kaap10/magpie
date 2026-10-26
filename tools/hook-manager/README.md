@@ -74,7 +74,7 @@ It leaves the install alone when the caller already chose a target, asked for he
 | `git-dir-flag` | Inserts `<flag> <common dir>` after the install subcommand (prek: `--git-dir`; prek refuses a bare install while a global `core.hooksPath` is set). | implemented |
 | `hide-global-config` | Runs the install with `GIT_CONFIG_GLOBAL=/dev/null`, for a manager that writes to the common dir but refuses while a global `core.hooksPath` is set (pre-commit, lefthook). | planned |
 | `hooks-path-env` | Runs the install with `GIT_CONFIG_COUNT=1`, `GIT_CONFIG_KEY_0=core.hooksPath`, `GIT_CONFIG_VALUE_0=<common dir>/hooks`, for a manager that writes into whatever `core.hooksPath` names (overcommit, CaptainHook). The value must be that absolute path: git treats an empty `core.hooksPath` as set, and hooks then resolve against the filesystem root. | planned |
-| `none` | The manager already writes to the repository's own hooks directory whatever the global value (simple-git-hooks, cargo-husky, the JGit-based Maven plugins). | planned |
+| `none` | The manager already writes to the repository's own hooks directory whatever the global value (simple-git-hooks, cargo-husky, the JGit-based Maven plugins). | implemented |
 
 A manager whose install the shim cannot reach (one run from `node_modules/.bin` by an npm script, from `vendor/bin` by a composer plugin, or from a `build.rs`, all ahead of `~/.claude/bin` or off `PATH` entirely) needs a strategy outside the shim, and a manager that writes a repository-level `core.hooksPath` itself (husky on every `npm install`) needs the dispatcher to chain to that directory instead; the adapter issues name the candidates.
 
@@ -172,7 +172,16 @@ What a repository or an operator configures is where each manager's environments
 
 | Adapter | Language | Install strategy | Home | Status |
 |---|---|---|---|---|
+| `cargo-husky` | Rust | `none`; detected by `Cargo.toml` or a hook mentioning `cargo-husky` | none (no external home) | shipping (fails in linked worktrees: `build.rs` expects `.git` to be a directory) |
+| `git-build-hook` | Java | `none`; detected by `pom.xml` (nested too) or a hook mentioning `git-build-hook` | none (no external home) | shipping (JGit resolves `<worktree>/hooks` in linked worktrees; `configure` goal can set repo-local `core.hooksPath`) |
+| `git-code-format-maven-plugin` | Java | `none`; detected by `pom.xml` (nested too) or a hook mentioning `git-code-format-maven-plugin` | none (no external home) | shipping (JGit resolves `<worktree>/hooks` in linked worktrees) |
 | `prek` | Rust | `git-dir-flag` (`--git-dir`); detected by `prek.toml`, `.pre-commit-config.yaml` or `.pre-commit-config.yml` (nested too) or a hook mentioning `prek` | `PREK_HOME`: `~/.cache/prek` → sandbox `~/.cache/prek-sandbox`, host `~/.local/share/prek-host` | shipping |
+| `simple-git-hooks` | JavaScript | `none`; detected by `package.json`, `.simple-git-hooks.{js,cjs,json}`, `simple-git-hooks.{js,cjs,json}` or a hook mentioning `simple-git-hooks` | none (no external home) | shipping |
+
+*Ecosystem notes:*
+- **JGit in linked worktrees (Maven):** Both Maven plugins use JGit (`Repository.getGitDir()`), which evaluates to `<commondir>/worktrees/<name>/hooks` in linked worktrees rather than the common dir's hooks directory.
+- **Gradle & Go hook tools:** Standard Gradle hook plugins (e.g. `gradle-git-hook`, `git-hooks-gradle-plugin`) and Go hook utilities (other than `lefthook`, which refuses global hooks paths) install directly into `.git/hooks/` and naturally coexist under strategy `none`.
+
 
 ## Adding an adapter
 
