@@ -111,7 +111,10 @@ def test_strategy_none_adapter_omits_shim_and_needs_no_subcommand(registry: dict
     for tool in ("cargo-husky", "git-build-hook", "git-code-format-maven-plugin", "simple-git-hooks"):
         assert f"    {tool})" not in shim
     # Prek (git-dir-flag) must still emit a case
-    assert "    prek) install_subcommand=install; install_strategy=git-dir-flag; install_flag=--git-dir ;;" in shim
+    assert (
+        "    prek) install_subcommand=install; install_strategy=git-dir-flag; install_flag=--git-dir ;;"
+        in shim
+    )
 
 
 def test_strategy_none_with_flag_is_refused(registry: dict[str, Any]) -> None:

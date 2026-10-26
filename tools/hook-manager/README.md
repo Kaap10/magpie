@@ -182,7 +182,6 @@ What a repository or an operator configures is where each manager's environments
 - **JGit in linked worktrees (Maven):** Both Maven plugins use JGit (`Repository.getGitDir()`), which evaluates to `<commondir>/worktrees/<name>/hooks` in linked worktrees rather than the common dir's hooks directory.
 - **Gradle & Go hook tools:** Standard Gradle hook plugins (e.g. `gradle-git-hook`, `git-hooks-gradle-plugin`) and Go hook utilities (other than `lefthook`, which refuses global hooks paths) install directly into `.git/hooks/` and naturally coexist under strategy `none`.
 
-
 ## Adding an adapter
 
 1. Read the manager's source for the answers the registry needs — where its install writes and whether it honours, refuses or sets `core.hooksPath`; whether a `PATH` shim can reach the install; the home variable, its default, and whether it expands `~`; whether a hook run executes code from the home.
