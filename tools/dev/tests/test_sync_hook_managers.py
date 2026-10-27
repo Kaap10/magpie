@@ -188,3 +188,16 @@ def test_a_missing_block_is_reported(tree: Path) -> None:
     shim = tree / mod.SHIM
     shim.write_text(shim.read_text().replace("# BEGIN generated", "# BEGIN removed"))
     assert mod.main(["--root", str(tree)]) == 1
+
+
+def test_empty_config_files_allowed_with_hook_marker(registry: dict[str, Any]) -> None:
+    valid = copy.deepcopy(registry)
+    valid["adapters"]["cargo-husky"]["detect"]["config_files"] = []
+    valid["adapters"]["cargo-husky"]["detect"]["hook_marker"] = "cargo-husky"
+    assert mod.validate(valid) == []
+
+    broken = copy.deepcopy(registry)
+    broken["adapters"]["cargo-husky"]["detect"]["config_files"] = []
+    broken["adapters"]["cargo-husky"]["detect"]["hook_marker"] = ""
+    errors = mod.validate(broken)
+    assert any("detect.config_files" in e for e in errors)

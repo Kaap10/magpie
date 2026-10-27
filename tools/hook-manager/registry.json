@@ -5,9 +5,7 @@
       "language": "Rust",
       "upstream": "https://github.com/rhysd/cargo-husky",
       "detect": {
-        "config_files": [
-          "Cargo.toml"
-        ],
+        "config_files": [],
         "nested": false,
         "hook_marker": "cargo-husky"
       },
