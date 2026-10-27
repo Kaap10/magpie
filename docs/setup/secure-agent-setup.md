@@ -1465,9 +1465,11 @@ Managers using the `none` install strategy (`tools/hook-manager/README.md`) requ
   Commits and pushes chain through dispatcher.
   In linked worktrees, `build.rs` searches for a `.git` directory and skips hook installation with a warning (`Warning: .git directory was not found`).
 - **`git-code-format-maven-plugin` (Java):**
+  From upstream source; not yet run under the whole-user dispatcher.
   Installs into `$(git rev-parse --git-common-dir)/hooks/` via JGit (`com.cosium.code:git-code-format-maven-plugin` 5.3).
   Commits in main checkout and linked worktrees chain through dispatcher cleanly.
 - **`git-build-hook` (Java):**
+  From upstream source; not yet run under the whole-user dispatcher.
   Installs into `.git/hooks/` via JGit (`getGitDir()`, v3.6.0).
   Commits in main checkout chain through dispatcher.
   In linked worktrees, JGit resolves `<commondir>/worktrees/<name>/hooks/`, which C-git ignores on commit.
