@@ -937,7 +937,7 @@ upstream_repo: apache/kafka
     test('honors MAGPIE_ALLOW_EMBARGO_TERMS=1 via $.env.get in register()', async ($: any, on: any) => {
       on('fs.read', () => ({ value: null }));
       on('env.get', (_: any, e: any) => {
-        if (e.name === 'MAGPIE_ALLOW_EMBARGO_TERMS' || e.key === 'MAGPIE_ALLOW_EMBARGO_TERMS') return { value: '1' };
+        if (e.name === 'MAGPIE_ALLOW_EMBARGO_TERMS') return { value: '1' };
         return { value: undefined };
       });
       on('tool.call', () => ({ result: { stdout: 'executed' } }));
@@ -953,7 +953,7 @@ upstream_repo: apache/kafka
       on('fs.read', (_: any, e: any) => {
         const p = (e.path || '').replace(/\\/g, '/');
         if (p.endsWith('user.md')) return { value: mockUserMd };
-        if (p.includes('/home/dev/upstream-airflow/.git/config') || p.endsWith('.git/config')) return { value: mockGitConfig };
+        if (p.includes('/home/dev/upstream-airflow/.git/config')) return { value: mockGitConfig };
         return { value: null };
       });
       on('env.get', () => ({ value: undefined }));
@@ -973,7 +973,7 @@ upstream_repo: apache/kafka
       on('fs.read', (_: any, e: any) => {
         const p = (e.path || '').replace(/\\/g, '/');
         if (p.endsWith('user.md')) return { value: mockUserMd };
-        if (p.includes('/home/dev/upstream-airflow/.git/config') || p.endsWith('.git/config')) return { value: mockGitConfig };
+        if (p.includes('/home/dev/upstream-airflow/.git/config')) return { value: mockGitConfig };
         return { value: null };
       });
       on('env.get', () => ({ value: undefined }));
@@ -994,7 +994,7 @@ upstream_repo: apache/kafka
       on('fs.read', (_: any, e: any) => {
         const p = (e.path || '').replace(/\\/g, '/');
         if (p.endsWith('user.md')) return { value: mockUserMd };
-        if (p.includes('/home/dev/upstream-airflow/.git/config') || p.endsWith('.git/config')) return { value: mockGitConfig };
+        if (p.includes('/home/dev/upstream-airflow/.git/config')) return { value: mockGitConfig };
         return { value: null };
       });
       on('env.get', () => ({ value: undefined }));
@@ -1017,7 +1017,7 @@ upstream_repo: apache/kafka
       on('fs.read', (_: any, e: any) => {
         const p = (e.path || '').replace(/\\/g, '/');
         if (p.endsWith('project.md')) return { value: mockProjectMd };
-        if (p.includes('/home/dev/tracker/.git/config') || p.endsWith('.git/config')) return { value: mockTrackerConfig };
+        if (p.includes('/home/dev/tracker/.git/config') || p === '.git/config') return { value: mockTrackerConfig };
         return { value: null };
       });
       on('env.get', () => ({ value: undefined }));
@@ -1039,7 +1039,7 @@ upstream_repo: apache/kafka
       on('fs.read', (_: any, e: any) => {
         const p = (e.path || '').replace(/\\/g, '/');
         if (p.endsWith('project.md')) return { value: mockProjectMd };
-        if (p.includes('/home/dev/tracker/.git/config') || p.endsWith('.git/config')) return { value: mockTrackerConfig };
+        if (p.includes('/home/dev/tracker/.git/config') || p === '.git/config') return { value: mockTrackerConfig };
         return { value: null };
       });
       on('env.get', () => ({ value: undefined }));
@@ -2188,8 +2188,8 @@ upstream_repo: apache/kafka
       on('session.root', () => ({ value: '/home/dev/airflow-s' }));
       on('fs.read', (_: any, e: any) => {
         const p = (e.path || '').replace(/\\/g, '/');
-        if (p.endsWith('project.md')) return { value: trackerProject };
-        if (p.endsWith('.git/config')) return { value: trackerGitConfig };
+        if (p === '/home/dev/airflow-s/.apache-magpie-overrides/project.md') return { value: trackerProject };
+        if (p === '/home/dev/airflow-s/.git/config') return { value: trackerGitConfig };
         return { value: null };
       });
       on('env.get', () => ({ value: undefined }));
