@@ -93,13 +93,10 @@ def validate(registry: dict[str, Any]) -> list[str]:
             files = detect.get("config_files")
             if not isinstance(files, list) or not all(isinstance(f, str) and _FILE.match(f) for f in files):
                 errors.append(f"{where}.detect.config_files: a list of file names")
-            elif not files:
-                if adapter.get("home"):
-                    errors.append(
-                        f"{where}.detect.config_files: a manager with a home must have root config_files"
-                    )
-                elif not detect.get("hook_marker"):
-                    errors.append(f"{where}.detect.config_files: needs either config_files or hook_marker")
+            elif not files and adapter.get("home"):
+                errors.append(
+                    f"{where}.detect.config_files: a manager with a home must have root config_files"
+                )
             if not isinstance(detect.get("nested"), bool):
                 errors.append(f"{where}.detect.nested: whether a config below the root counts")
             if not isinstance(detect.get("hook_marker"), str) or not _MARKER.match(detect["hook_marker"]):

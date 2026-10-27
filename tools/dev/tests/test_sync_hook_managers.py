@@ -196,8 +196,11 @@ def test_empty_config_files_allowed_with_hook_marker(registry: dict[str, Any]) -
     valid["adapters"]["cargo-husky"]["detect"]["hook_marker"] = "cargo-husky"
     assert mod.validate(valid) == []
 
-    broken = copy.deepcopy(registry)
-    broken["adapters"]["cargo-husky"]["detect"]["config_files"] = []
-    broken["adapters"]["cargo-husky"]["detect"]["hook_marker"] = ""
-    errors = mod.validate(broken)
-    assert any("detect.config_files" in e for e in errors)
+
+def test_none_strategy_generates_no_shim_case(registry: dict[str, Any]) -> None:
+    """Adapters with strategy 'none' get no shim case in hook-manager-shim.sh."""
+    blocks = mod.render(registry)
+    shim_body = blocks[mod.SHIM]
+    for name, adapter in registry["adapters"].items():
+        if adapter["install"]["strategy"] == "none":
+            assert f"{name})" not in shim_body
