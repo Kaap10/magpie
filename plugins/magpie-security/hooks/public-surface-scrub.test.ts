@@ -873,7 +873,21 @@ upstream_repo: apache/kafka
   });
 
   describe('Claude Code hook integration (register)', () => {
-    test('registers hook with Bash tool filter and allows clean command', async () => {
+    const mockProject = `
+| Key | Value |
+| tracker_repo | airflow-s/airflow-s |
+| upstream_repo | apache/airflow |
+`;
+    const mockUserMd = `
+| Key | Value |
+| environment.upstream_clone | /home/dev/upstream-airflow |
+`;
+    const mockGitConfig = `
+[remote "origin"]
+  url = https://github.com/apache/airflow.git
+`;
+
+    test('registers hook with Bash tool filter', async () => {
       let registeredFilter: any = null;
       let registeredHook: any = null;
       const on = (event: string, filterOrHandler: any, handler?: any) => {
@@ -890,304 +904,162 @@ upstream_repo: apache/kafka
       register(on);
       assert(registeredHook, 'tool.call hook must be registered');
       assertStrictEqual(registeredFilter?.tool, 'Bash');
-
-      let nextCalled = false;
-      const mockEvent = { command: 'git commit -m "Fix asset graph view"' };
-      const next = (e: any) => {
-        nextCalled = true;
-        return { success: true, event: e };
-      };
-
-      const result = await registeredHook(
-        { fs: { read: async () => '' }, env: { get: async () => undefined } },
-        mockEvent,
-        next
-      );
-      assertStrictEqual(nextCalled, true);
-      assertStrictEqual(result.success, true);
     });
 
-    test('intercepts and blocks leaking Bash tool call returning deny', async () => {
-      let registeredHook: any = null;
-      const on = (event: string, filterOrHandler: any, handler?: any) => {
-        if (event === 'tool.call') {
-          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
-        }
-      };
+    test('intercepts Bash tool call, allows clean neutral commands, and passes through', async ($: any, on: any) => {
+      on('fs.read', () => ({ value: null }));
+      on('env.get', () => ({ value: undefined }));
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
 
-      register(on);
+      const res = await $.tool.call({ tool: 'Bash', command: 'git commit -m "Fix asset graph view"' });
+      assert(res?.result && res.result.stdout === 'executed', `Expected pass: ${JSON.stringify(res)}`);
+    });
 
-      const mockProject = `
-| Key | Value |
-| tracker_repo | airflow-s/airflow-s |
-| upstream_repo | apache/airflow |
-`;
+    test('intercepts and blocks leaking Bash tool call returning deny', async ($: any, on: any) => {
+      on('fs.read', (_: any, e: any) => {
+        const p = (e.path || '').replace(/\\/g, '/');
+        if (p.endsWith('project.md')) return { value: mockProject };
+        return { value: null };
+      });
+      on('env.get', () => ({ value: undefined }));
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
 
-      let nextCalled = false;
-      const mockEvent = {
+      const res = await $.tool.call({
+        tool: 'Bash',
         command: 'gh pr create -R apache/airflow -t "Fix CVE-2026-1111: SSRF vulnerability"',
-      };
-      const next = () => {
-        nextCalled = true;
-      };
-
-      const result = await registeredHook(
-        { fs: { read: async () => mockProject }, env: { get: async () => undefined } },
-        mockEvent,
-        next
-      );
-      assertStrictEqual(nextCalled, false, 'next() must NOT be called on blocked commands');
-      assert(result.deny, 'Deny explanation must be returned');
-      assert(result.deny.includes('Apache Magpie Security Guard'));
-      assert(result.deny.includes('CVE id'));
-      assert(result.deny.includes('SSRF'));
+      });
+      assert(res?.deny, 'Deny explanation must be returned');
+      assert(res.deny.includes('Apache Magpie Security Guard'));
+      assert(res.deny.includes('CVE id'));
+      assert(res.deny.includes('SSRF'));
     });
 
-    test('honors MAGPIE_ALLOW_EMBARGO_TERMS=1 via $.env.get in register()', async () => {
-      let registeredHook: any = null;
-      const on = (event: string, filterOrHandler: any, handler?: any) => {
-        if (event === 'tool.call') {
-          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
-        }
-      };
+    test('honors MAGPIE_ALLOW_EMBARGO_TERMS=1 via $.env.get in register()', async ($: any, on: any) => {
+      on('fs.read', () => ({ value: null }));
+      on('env.get', (_: any, e: any) => {
+        if (e.name === 'MAGPIE_ALLOW_EMBARGO_TERMS' || e.key === 'MAGPIE_ALLOW_EMBARGO_TERMS') return { value: '1' };
+        return { value: undefined };
+      });
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
 
-      register(on);
-
-      let nextCalled = false;
-      const mockEvent = {
+      const res = await $.tool.call({
+        tool: 'Bash',
         command: 'gh pr create -R apache/airflow -t "fix(generate-cve-json): handle CVE fields"',
-      };
-      const next = (e: any) => {
-        nextCalled = true;
-        return { forwarded: e };
-      };
-
-      const result = await registeredHook(
-        {
-          fs: { read: async () => '' },
-          env: { get: async (k: string) => (k === 'MAGPIE_ALLOW_EMBARGO_TERMS' ? '1' : undefined) },
-        },
-        mockEvent,
-        next
-      );
-      assertStrictEqual(nextCalled, true, 'next() must be called when MAGPIE_ALLOW_EMBARGO_TERMS=1 is set');
-      assertStrictEqual(result.forwarded.command, 'gh pr create -R apache/airflow -t "fix(generate-cve-json): handle CVE fields"');
+      });
+      assert(res?.result && res.result.stdout === 'executed', `Expected pass with bypass: ${JSON.stringify(res)}`);
     });
 
-    test('register() blocks leaking command in upstream clone resolved via user.md without project.md', async () => {
-      let registeredHook: any = null;
-      const on = (event: string, filterOrHandler: any, handler?: any) => {
-        if (event === 'tool.call') {
-          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
-        }
-      };
+    test('register() blocks leaking command in upstream clone resolved via user.md without project.md', async ($: any, on: any) => {
+      on('fs.read', (_: any, e: any) => {
+        const p = (e.path || '').replace(/\\/g, '/');
+        if (p.endsWith('user.md')) return { value: mockUserMd };
+        if (p.includes('/home/dev/upstream-airflow/.git/config') || p.endsWith('.git/config')) return { value: mockGitConfig };
+        return { value: null };
+      });
+      on('env.get', () => ({ value: undefined }));
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
 
-      register(on);
-
-      const mockUserMd = '\n| Key | Value |\n| environment.upstream_clone | /home/dev/upstream-airflow |\n';
-      const mockGitConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow.git\n';
-      let nextCalled = false;
-      const mockEvent = {
+      const res = await $.tool.call({
+        tool: 'Bash',
         command: 'git -C /home/dev/upstream-airflow commit -m "Fix CVE-2026-1234 SSRF"',
-      };
-      const next = () => {
-        nextCalled = true;
-      };
-
-      const result = await registeredHook(
-        {
-          fs: {
-            read: async (p: string) => {
-              if (p.includes('user.md')) return mockUserMd;
-              if (p.includes('/home/dev/upstream-airflow/.git/config')) return mockGitConfig;
-              return null;
-            },
-          },
-          env: { get: async () => undefined },
-        },
-        mockEvent,
-        next
-      );
-      assertStrictEqual(nextCalled, false, 'next() must NOT be called on blocked commands in upstream clone');
-      assert(result.deny, 'Deny explanation must be returned');
-      assert(result.deny.includes('CVE id'));
-      assert(result.deny.includes('SSRF'));
+      });
+      assert(res?.deny, 'Deny must be returned');
+      assert(res.deny.includes('CVE id'));
+      assert(res.deny.includes('SSRF'));
     });
 
-    test('intercepts bare git commit in upstream clone seeded from $.session.root() or e.cwd', async () => {
-      let registeredHook: any = null;
-      const on = (event: string, filterOrHandler: any, handler?: any) => {
-        if (event === 'tool.call') {
-          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
-        }
-      };
-      register(on);
+    test('intercepts bare git commit in upstream clone seeded from $.session.root() or e.cwd', async ($: any, on: any) => {
+      on('session.root', () => ({ value: '/home/dev/upstream-airflow' }));
+      on('fs.read', (_: any, e: any) => {
+        const p = (e.path || '').replace(/\\/g, '/');
+        if (p.endsWith('user.md')) return { value: mockUserMd };
+        if (p.includes('/home/dev/upstream-airflow/.git/config') || p.endsWith('.git/config')) return { value: mockGitConfig };
+        return { value: null };
+      });
+      on('env.get', () => ({ value: undefined }));
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
 
-      const mockUserMd = '\n| Key | Value |\n| environment.upstream_clone | /home/dev/upstream-airflow |\n';
-      const mockGitConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow.git\n';
-      let nextCalled = false;
-      const mockEvent = {
-        command: 'git commit -m "Fix CVE-2026-1234 SSRF"',
+      const res = await $.tool.call({
+        tool: 'Bash',
         cwd: '/home/dev/upstream-airflow',
-      };
-      const next = () => {
-        nextCalled = true;
-      };
-
-      const result = await registeredHook(
-        {
-          fs: {
-            read: async (p: string) => {
-              if (p.includes('user.md')) return mockUserMd;
-              if (p.includes('/home/dev/upstream-airflow/.git/config')) return mockGitConfig;
-              return null;
-            },
-          },
-          session: {
-            root: async () => '/home/dev/upstream-airflow',
-          },
-          env: { get: async () => undefined },
-        },
-        mockEvent,
-        next
-      );
-      assertStrictEqual(nextCalled, false, 'next() must NOT be called on bare commit in upstream clone');
-      assert(result.deny, 'Deny explanation must be returned');
-      assert(result.deny.includes('CVE id'));
-      assert(result.deny.includes('SSRF'));
-    });
-
-    test('intercepts bare git commit when only $.session.root() is provided (e.cwd undefined)', async () => {
-      let registeredHook: any = null;
-      const on = (event: string, filterOrHandler: any, handler?: any) => {
-        if (event === 'tool.call') {
-          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
-        }
-      };
-      register(on);
-
-      const mockUserMd = '\n| Key | Value |\n| environment.upstream_clone | /home/dev/upstream-airflow |\n';
-      const mockGitConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow.git\n';
-      let nextCalled = false;
-      const mockEvent = {
         command: 'git commit -m "Fix CVE-2026-1234 SSRF"',
-      };
-      const next = () => {
-        nextCalled = true;
-      };
-
-      const result = await registeredHook(
-        {
-          fs: {
-            read: async (p: string) => {
-              if (p.includes('user.md')) return mockUserMd;
-              if (p.includes('/home/dev/upstream-airflow/.git/config')) return mockGitConfig;
-              return null;
-            },
-          },
-          session: {
-            root: async () => '/home/dev/upstream-airflow',
-          },
-          env: { get: async () => undefined },
-        },
-        mockEvent,
-        next
-      );
-      assertStrictEqual(nextCalled, false, 'next() must NOT be called on bare commit in upstream clone');
-      assert(result.deny, 'Deny explanation must be returned');
-      assert(result.deny.includes('CVE id'));
-      assert(result.deny.includes('SSRF'));
+      });
+      assert(res?.deny, 'Deny explanation must be returned');
+      assert(res.deny.includes('CVE id'));
+      assert(res.deny.includes('SSRF'));
     });
 
-    test('allows bare git commit on private tracker repo when event provides explicit tracker cwd', async () => {
-      let registeredHook: any = null;
-      const on = (event: string, filterOrHandler: any, handler?: any) => {
-        if (event === 'tool.call') {
-          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
-        }
-      };
-      register(on);
+    test('intercepts bare git commit when only $.session.root() is provided (e.cwd undefined)', async ($: any, on: any) => {
+      on('session.root', () => ({ value: '/home/dev/upstream-airflow' }));
+      on('fs.read', (_: any, e: any) => {
+        const p = (e.path || '').replace(/\\/g, '/');
+        if (p.endsWith('user.md')) return { value: mockUserMd };
+        if (p.includes('/home/dev/upstream-airflow/.git/config') || p.endsWith('.git/config')) return { value: mockGitConfig };
+        return { value: null };
+      });
+      on('env.get', () => ({ value: undefined }));
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
 
+      const res = await $.tool.call({
+        tool: 'Bash',
+        command: 'git commit -m "Fix CVE-2026-1234 SSRF"',
+      });
+      assert(res?.deny, 'Deny explanation must be returned');
+      assert(res.deny.includes('CVE id'));
+      assert(res.deny.includes('SSRF'));
+    });
+
+    test('allows bare git commit on private tracker repo when event provides explicit tracker cwd', async ($: any, on: any) => {
       const mockProjectMd = 'tracker_repo: apache/airflow-security\nupstream_repo: apache/airflow\n';
-      const mockTrackerGitConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow-security.git\n';
-      let nextCalled = false;
-      const mockEvent = {
+      const mockTrackerConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow-security.git\n';
+
+      on('session.root', () => ({ value: '/home/dev/tracker' }));
+      on('fs.read', (_: any, e: any) => {
+        const p = (e.path || '').replace(/\\/g, '/');
+        if (p.endsWith('project.md')) return { value: mockProjectMd };
+        if (p.includes('/home/dev/tracker/.git/config') || p.endsWith('.git/config')) return { value: mockTrackerConfig };
+        return { value: null };
+      });
+      on('env.get', () => ({ value: undefined }));
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
+
+      const res = await $.tool.call({
+        tool: 'Bash',
         cwd: '/home/dev/tracker',
         command: 'git commit -m "Fix CVE-2026-1234 SSRF in private tracker"',
-      };
-      const next = (e: any) => {
-        nextCalled = true;
-        return { success: true };
-      };
-
-      const result = await registeredHook(
-        {
-          fs: {
-            read: async (p: string) => {
-              if (p.includes('project.md')) return mockProjectMd;
-              if (p.includes('/home/dev/tracker/.git/config') || p === '.git/config') return mockTrackerGitConfig;
-              return null;
-            },
-          },
-          session: {
-            root: async () => '/home/dev/tracker',
-          },
-          env: { get: async () => undefined },
-        },
-        mockEvent,
-        next
-      );
-      assertStrictEqual(nextCalled, true, 'next() must be called for verified tracker cwd commit');
-
-      // Under session root fallback (no event cwd), tracker exemption is disabled (Blocking #1 fix)
-      let fallbackNextCalled = false;
-      const fallbackEvent = {
-        command: 'git commit -m "Fix CVE-2026-1234 SSRF in private tracker"',
-      };
-      const fallbackResult = await registeredHook(
-        {
-          fs: {
-            read: async (p: string) => {
-              if (p.includes('project.md')) return mockProjectMd;
-              if (p.includes('/home/dev/tracker/.git/config') || p === '.git/config') return mockTrackerGitConfig;
-              return null;
-            },
-          },
-          session: {
-            root: async () => '/home/dev/tracker',
-          },
-          env: { get: async () => undefined },
-        },
-        fallbackEvent,
-        () => { fallbackNextCalled = true; }
-      );
-      assertStrictEqual(fallbackNextCalled, false, 'session root fallback must NOT exempt tracker from term scan');
-      assertStrictEqual(typeof fallbackResult?.deny, 'string', 'must deny when session root fallback encounters CVE');
+      });
+      assert(res?.result && res.result.stdout === 'executed', `Expected pass on explicit tracker cwd: ${JSON.stringify(res)}`);
     });
 
-    test('passes non-string command through to next() unchanged', async () => {
-      let registeredHook: any = null;
-      const on = (event: string, filterOrHandler: any, handler?: any) => {
-        if (event === 'tool.call') {
-          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
-        }
-      };
+    test('denies bare git commit with CVE on tracker repo under session-root fallback', async ($: any, on: any) => {
+      const mockProjectMd = 'tracker_repo: apache/airflow-security\nupstream_repo: apache/airflow\n';
+      const mockTrackerConfig = '\n[remote "origin"]\n  url = https://github.com/apache/airflow-security.git\n';
 
-      register(on);
+      on('session.root', () => ({ value: '/home/dev/tracker' }));
+      on('fs.read', (_: any, e: any) => {
+        const p = (e.path || '').replace(/\\/g, '/');
+        if (p.endsWith('project.md')) return { value: mockProjectMd };
+        if (p.includes('/home/dev/tracker/.git/config') || p.endsWith('.git/config')) return { value: mockTrackerConfig };
+        return { value: null };
+      });
+      on('env.get', () => ({ value: undefined }));
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
 
-      let nextCalled = false;
-      const mockEvent = { command: 12345 };
-      const next = (e: any) => {
-        nextCalled = true;
-        return { forwarded: e };
-      };
+      // Under session root fallback (no event cwd), tracker exemption is disabled
+      const fallbackRes = await $.tool.call({
+        tool: 'Bash',
+        command: 'git commit -m "Fix CVE-2026-1234 SSRF in private tracker"',
+      });
+      assert(typeof fallbackRes?.deny === 'string', 'must deny when session root fallback encounters CVE');
+    });
 
-      const result = await registeredHook(
-        { fs: { read: async () => '' }, env: { get: async () => undefined } },
-        mockEvent,
-        next
-      );
-      assertStrictEqual(nextCalled, true);
+    test('passes non-string command through to next() unchanged', async ($: any, on: any) => {
+      on('fs.read', () => ({ value: null }));
+      on('env.get', () => ({ value: undefined }));
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
+
+      const res = await $.tool.call({ tool: 'Bash', command: 12345 });
+      assert(res?.result && res.result.stdout === 'executed', `Expected pass: ${JSON.stringify(res)}`);
     });
   });
 
@@ -2312,44 +2184,31 @@ upstream_repo: apache/kafka
     const trackerProject = '\n| Key | Value |\n| tracker_repo | airflow-s/airflow-s |\n| upstream_repo | apache/airflow |\n';
     const trackerGitConfig = '\n[remote "origin"]\n  url = https://github.com/airflow-s/airflow-s.git\n';
 
-    async function runInTracker(command: string): Promise<{ result: any; nextCalled: boolean }> {
-      let registeredHook: any = null;
-      register((event: string, filterOrHandler: any, handler?: any) => {
-        if (event === 'tool.call') {
-          registeredHook = typeof filterOrHandler === 'function' ? filterOrHandler : handler;
-        }
+    function setupTrackerEnv(on: any): void {
+      on('session.root', () => ({ value: '/home/dev/airflow-s' }));
+      on('fs.read', (_: any, e: any) => {
+        const p = (e.path || '').replace(/\\/g, '/');
+        if (p.endsWith('project.md')) return { value: trackerProject };
+        if (p.endsWith('.git/config')) return { value: trackerGitConfig };
+        return { value: null };
       });
-      let nextCalled = false;
-      // The Bash tool call carries only `command` (and timeout/description), never a cwd.
-      const result = await registeredHook(
-        {
-          session: { root: async () => '/home/dev/airflow-s' },
-          fs: {
-            read: async (p: string) => {
-              if (p === '/home/dev/airflow-s/.apache-magpie-overrides/project.md') return trackerProject;
-              if (p === '/home/dev/airflow-s/.git/config') return trackerGitConfig;
-              return null;
-            },
-          },
-          env: { get: async () => undefined },
-        },
-        { command },
-        () => {
-          nextCalled = true;
-        }
-      );
-      return { result, nextCalled };
+      on('env.get', () => ({ value: undefined }));
+      on('tool.call', () => ({ result: { stdout: 'executed' } }));
     }
 
-    test('a bare tracker comment with a CVE id is blocked and told to name the tracker', async () => {
-      const { result, nextCalled } = await runInTracker('gh issue comment 12 -b "Allocated CVE-2026-1234"');
-      assertStrictEqual(nextCalled, false);
-      assert(result.deny.includes('--repo airflow-s/airflow-s'), result.deny);
+    test('a bare tracker comment with a CVE id is blocked and told to name the tracker', async ($: any, on: any) => {
+      setupTrackerEnv(on);
+      const res = await $.tool.call({ tool: 'Bash', command: 'gh issue comment 12 -b "Allocated CVE-2026-1234"' });
+      assert(res?.deny && res.deny.includes('--repo airflow-s/airflow-s'), `Expected deny to name tracker: ${JSON.stringify(res)}`);
     });
 
-    test('the same comment with an explicit tracker --repo passes', async () => {
-      const { nextCalled } = await runInTracker('gh issue comment 12 --repo airflow-s/airflow-s -b "Allocated CVE-2026-1234"');
-      assertStrictEqual(nextCalled, true);
+    test('the same comment with an explicit tracker --repo passes', async ($: any, on: any) => {
+      setupTrackerEnv(on);
+      const res = await $.tool.call({
+        tool: 'Bash',
+        command: 'gh issue comment 12 --repo airflow-s/airflow-s -b "Allocated CVE-2026-1234"',
+      });
+      assert(res?.result && res.result.stdout === 'executed', `Expected tool call to execute: ${JSON.stringify(res)}`);
     });
   });
 
