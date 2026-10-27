@@ -74,7 +74,7 @@ It leaves the install alone when the caller already chose a target, asked for he
 | `git-dir-flag` | Inserts `<flag> <common dir>` after the install subcommand (prek: `--git-dir`; prek refuses a bare install while a global `core.hooksPath` is set). | implemented |
 | `hide-global-config` | Runs the install with `GIT_CONFIG_GLOBAL=/dev/null`, for a manager that writes to the common dir but refuses while a global `core.hooksPath` is set (pre-commit, lefthook). | planned |
 | `hooks-path-env` | Runs the install with `GIT_CONFIG_COUNT=1`, `GIT_CONFIG_KEY_0=core.hooksPath`, `GIT_CONFIG_VALUE_0=<common dir>/hooks`, for a manager that writes into whatever `core.hooksPath` names (overcommit, CaptainHook). The value must be that absolute path: git treats an empty `core.hooksPath` as set, and hooks then resolve against the filesystem root. | planned |
-| `none` | The manager already writes to the repository's own hooks directory whatever the global value (simple-git-hooks, cargo-husky, the JGit-based Maven plugins). | planned |
+| `none` | The manager already writes to the repository's own hooks directory whatever the global value (simple-git-hooks, cargo-husky, the JGit-based Maven plugins). | implemented |
 
 A manager whose install the shim cannot reach (one run from `node_modules/.bin` by an npm script, from `vendor/bin` by a composer plugin, or from a `build.rs`, all ahead of `~/.claude/bin` or off `PATH` entirely) needs a strategy outside the shim, and a manager that writes a repository-level `core.hooksPath` itself (husky on every `npm install`) needs the dispatcher to chain to that directory instead; the adapter issues name the candidates.
 
@@ -106,7 +106,7 @@ Detection decides what the setup configures *for a repository*; it never decides
 | Integration | Scope | Rule |
 |---|---|---|
 | Sandbox home (`env.<var>`) | per repository | `sandbox-lint` (`uses_hook_manager`) requires it only for a project that uses the manager; with no project to look at, every manager counts. A project without it is still safe: its sandboxed runs of the manager fail on the denied default home. The generator checks the framework's own settings the same way, from the root config files. |
-| Shim | per host, for the repositories the operator works in | `setup-isolated-setup-install` installs `~/.claude/bin/<tool>` only when such a repository uses the manager. |
+| Shim | per host, for the repositories the operator works in | `setup-isolated-setup-install` installs `~/.claude/bin/<tool>` only when such a repository uses the manager, and only for adapters with an install strategy other than `none` (managers requiring no install fix need no shim). |
 | Verify check 19d | per repository | **n/a** for a project that does not use prek. |
 | Default-home deny (`Edit(<default>/**)`) | per user | Always, for every registered manager: another repository's terminal commits run from that home. |
 | Host home (dispatcher) | per user | Always, outside the sandbox, for every registered manager: an unused variable is harmless, a missed detection would let a bypassed command inherit the sandbox home. |
@@ -172,7 +172,40 @@ What a repository or an operator configures is where each manager's environments
 
 | Adapter | Language | Install strategy | Home | Status |
 |---|---|---|---|---|
+| `cargo-husky` | Rust | `none`; detected by a hook mentioning `cargo-husky` | none (no external home) | shipping (in linked worktrees `build.rs` skips hook install: searches for a `.git` directory) |
+| `git-build-hook` | Java | `none`; detected by `pom.xml` (nested too) or a hook mentioning `git-build-hook` | none (no external home) | shipping (JGit `getGitDir()` targets `<worktree>/hooks` in linked worktrees; `configure` goal can set repo-local `core.hooksPath`) |
+| `git-code-format-maven-plugin` | Java | `none`; detected by `pom.xml` (nested too) or a hook mentioning `git-code-format-maven-plugin` | none (no external home) | shipping (JGit `getCommonDirectory()` targets common hooks dir, coexisting cleanly in linked worktrees) |
 | `prek` | Rust | `git-dir-flag` (`--git-dir`); detected by `prek.toml`, `.pre-commit-config.yaml` or `.pre-commit-config.yml` (nested too) or a hook mentioning `prek` | `PREK_HOME`: `~/.cache/prek` → sandbox `~/.cache/prek-sandbox`, host `~/.local/share/prek-host` | shipping |
+| `simple-git-hooks` | JavaScript | `none`; detected by `package.json`, `.simple-git-hooks.{js,cjs,json}`, `simple-git-hooks.{js,cjs,json}` or a hook mentioning `simple-git-hooks` | none (no external home) | shipping |
+
+*Ecosystem notes:*
+- **Behavior and verification under whole-user dispatcher:**
+  - `simple-git-hooks` (v2.14.0, empirically verified):
+    Installs to `$(git rev-parse --git-common-dir)/hooks/` directly, ignoring global `core.hooksPath`.
+    Commits chain through the dispatcher to the local hook.
+    In linked worktrees, commits chain through the dispatcher to the common hooks directory, and running install within a worktree resolves `commondir` without error.
+  - `cargo-husky` (v1.5.0, empirically verified):
+    Installs to `.git/hooks/pre-push` via `build.rs`.
+    Commits and pushes chain through the dispatcher.
+    In a linked worktree, `build.rs` expects `.git` to be a directory.
+    Encountering a worktree `.git` file, it logs `Warning: .git directory was not found` to stderr and skips hook installation without failing the build.
+    Detection relies solely on installed hook markers (`config_files: []`) so generic Rust checkouts with `Cargo.toml` are not falsely detected as `cargo-husky` repos.
+  - `git-build-hook` (v3.6.0, verified from upstream source):
+    Installs hooks directly into JGit's `Repository.getGitDir() + "/hooks"` (`InstallMojo.java:53`).
+    Commits in the main checkout chain through the dispatcher.
+    In linked worktrees, `getGitDir()` evaluates to `<commondir>/worktrees/<name>`, placing hooks in `<worktree>/hooks/` which C-git ignores on commit.
+    Running `mvn git-build-hook:configure` can write a repo-local `core.hooksPath`, overriding the dispatcher.
+  - `git-code-format-maven-plugin` (`com.cosium.code:git-code-format-maven-plugin` 5.3, verified from upstream source):
+    `AbstractMavenGitCodeFormatMojo.getOrCreateHooksDirectory()` uses `gitRepository().getCommonDirectory().toPath().resolve(HOOKS_DIR)`.
+    Because it targets the common directory, hooks land in `$(git rev-parse --git-common-dir)/hooks/` and coexist cleanly in linked worktrees.
+    Installs a bash wrapper invoking `mvn git-code-format-maven-plugin:format-code`.
+- **JGit in linked worktrees (Maven):**
+  The linked-worktree limitation applies only to `git-build-hook` (`InstallMojo`), which uses `getGitDir()` and creates hooks under `<commondir>/worktrees/<name>/hooks/`.
+  Because C-git commits read hooks exclusively from `$(git rev-parse --git-common-dir)/hooks/`, hooks installed by `git-build-hook` from within a worktree are ignored by Git.
+  Conversely, `git-code-format-maven-plugin` explicitly calls `getCommonDirectory()`, so its hooks populate the common directory and function across worktrees.
+- **Gradle & Go hook tools:**
+  Standard Gradle plugins and Go hook utilities remain unadapted and unregistered until someone tests them under the dispatcher.
+  `lefthook` (Go) refuses install when a global `core.hooksPath` is set and is reserved for the planned `hide-global-config` install strategy.
 
 ## Adding an adapter
 

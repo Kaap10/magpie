@@ -333,7 +333,10 @@ for the full rationale + the validated behaviour matrix.
    into `~/.claude/bin/<tool>` (or symlink from
    `~/.claude-config/bin/<tool>`), mode `0755`, once for each adapter in the
    [hook-manager registry](../../../../tools/hook-manager/registry.json)
+   with an install strategy other than `none`
    that a repository the operator works in uses — `~/.claude/bin/prek` today.
+   A manager whose install strategy is `none` needs no install fix
+   and gets no shim.
    A repository uses a manager when one of its config files is at the root
    (or tracked below it, for prek's nested projects) or one of its installed
    hooks runs it ([Detection](../../../../tools/hook-manager/README.md#detection));

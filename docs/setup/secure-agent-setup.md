@@ -1448,10 +1448,30 @@ dispatchers + hook-manager shim):
 | Repo's local hook | Result |
 |---|---|
 | prek shim in `.git/hooks/` (installed via the shim) | dispatcher → prek runs that repo's `.pre-commit-config.yaml` |
+| local hook installed by a manager requiring no install fix (`simple-git-hooks`, `cargo-husky`, `git-code-format-maven-plugin`, `git-build-hook`) | dispatcher → local hook runs natively (installs straight to `.git/hooks/` ignoring global `core.hooksPath`) |
 | hand-written `.git/hooks/<name>`, or one a manager without an adapter put there | dispatcher → that hook runs (heterogeneous tooling coexists) |
 | none | dispatcher no-op; git operation proceeds cleanly |
 | local hook exits non-zero | exit code propagates; git operation aborts |
 | `post-checkout` | framework sandbox sync **and** repo-local `post-checkout` both run |
+
+Managers using the `none` install strategy (`tools/hook-manager/README.md`) require no binary PATH shim because their installers already target the repository-local `.git/hooks/` directory directly regardless of global `core.hooksPath`:
+- **`simple-git-hooks` (JavaScript):**
+  Verified under whole-user dispatcher (v2.14.0).
+  Installs directly into `$(git rev-parse --git-common-dir)/hooks/`.
+  Commits in main checkout and linked worktrees chain to the local hook cleanly.
+- **`cargo-husky` (Rust):**
+  Verified under whole-user dispatcher (v1.5.0).
+  Installs into `.git/hooks/pre-push`.
+  Commits and pushes chain through dispatcher.
+  In linked worktrees, `build.rs` searches for a `.git` directory and skips hook installation with a warning (`Warning: .git directory was not found`).
+- **`git-code-format-maven-plugin` (Java):**
+  Installs into `$(git rev-parse --git-common-dir)/hooks/` via JGit (`com.cosium.code:git-code-format-maven-plugin` 5.3).
+  Commits in main checkout and linked worktrees chain through dispatcher cleanly.
+- **`git-build-hook` (Java):**
+  Installs into `.git/hooks/` via JGit (`getGitDir()`, v3.6.0).
+  Commits in main checkout chain through dispatcher.
+  In linked worktrees, JGit resolves `<commondir>/worktrees/<name>/hooks/`, which C-git ignores on commit.
+  Note: running `mvn git-build-hook:configure` can write a repository-local `core.hooksPath`, which overrides Magpie's whole-user dispatcher.
 
 Reversal is the same as simple whole-user (`git config --global
 --unset core.hooksPath`), plus removing `~/.claude/bin` from PATH to
