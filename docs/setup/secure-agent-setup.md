@@ -1442,10 +1442,13 @@ a no-op on hosts with no global `core.hooksPath`.
 When the dispatcher chains into an overcommit hook, it exports the same
 `core.hooksPath` override so overcommit's run-time self-check accepts the
 hook instead of looking for its hook in the shared dir.
+lefthook refuses to install at all while a global `core.hooksPath` is set, so the same shim installed as `~/.claude/bin/lefthook` runs `lefthook install` with `GIT_CONFIG_GLOBAL=/dev/null` whenever the global config holds one, and lefthook then resolves its own target to the common dir.
+`lefthook install --force` and `--reset-hooks-path` would still get that override through the shim (they cannot reach the shared dir or unset the setup), and the agent-guard `lefthook-hooks-path` guard blocks an agent from trying.
+The shim covers the CLI only: an npm `postinstall` runs `node_modules/.bin/lefthook`, ahead of `~/.claude/bin` on PATH.
 The shim, the host-only homes and the sandbox-lint checks all follow the
 [hook-manager contract](../../tools/hook-manager/README.md):
 one script serves every adapter in its registry, keyed by the name it is
-installed under, and other hook managers (pre-commit, lefthook, husky, …)
+installed under, and other hook managers (pre-commit, husky, …)
 join by adding an adapter there.
 
 Validated behaviour under this flavour (`core.hooksPath` global +

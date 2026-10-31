@@ -53,6 +53,54 @@ def _setup(tmp_path: Path, name: str = "prek") -> tuple[dict[str, str], Path]:
     return env, argv
 
 
+def _setup_lefthook(tmp_path: Path) -> tuple[dict[str, str], Path, Path]:
+    """A fake lefthook that refuses while a global core.hooksPath is visible.
+
+    It records the global config it was given, then installs a hook where
+    `git rev-parse --git-path hooks` resolves, as lefthook does.
+    """
+    real = tmp_path / "real"
+    real.mkdir()
+    record = tmp_path / "record"
+    shared = tmp_path / "shared-hooks"
+    (real / "lefthook").write_text(
+        "#!/bin/sh\n"
+        f'printf "GIT_CONFIG_GLOBAL=%s\\n" "${{GIT_CONFIG_GLOBAL-<unset>}}" > {record}\n'
+        f'printf "%s\\n" "$@" >> {record}\n'
+        'for arg in "$@"; do\n'
+        '  case "$arg" in -h|--help) exit 0 ;; esac\n'
+        "done\n"
+        'if [ "$1" = install ]; then\n'
+        '  if [ "${GIT_CONFIG_GLOBAL-}" != /dev/null ] '
+        '&& [ -n "$(git config --global --get core.hooksPath 2>/dev/null)" ]; then\n'
+        '    echo "core.hooksPath is set globally" >&2\n'
+        "    exit 1\n"
+        "  fi\n"
+        '  hooks="$(git rev-parse --path-format=absolute --git-path hooks)"\n'
+        '  mkdir -p "$hooks" && printf "#!/bin/sh\\n" > "$hooks/pre-commit"\n'
+        "fi\n"
+    )
+    (real / "lefthook").chmod(0o755)
+    shims = tmp_path / "shims"
+    shims.mkdir()
+    (shims / "lefthook").symlink_to(SHIM)
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".gitconfig").write_text(f"[core]\n\thooksPath = {shared}\n")
+    env = dict(os.environ)
+    for name in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"):
+        env.pop(name, None)
+    env.update(PATH=f"{shims}:{real}:/usr/bin:/bin", HOME=str(home), GIT_CONFIG_NOSYSTEM="1")
+    return env, record, shared
+
+
+def _set_global_hooks_path(env: dict[str, str], value: str | None) -> None:
+    """Rewrite the fake home's global config: a `core.hooksPath`, or none."""
+    (Path(env["HOME"]) / ".gitconfig").write_text(
+        f"[core]\n\thooksPath = {value}\n" if value else "[user]\n\tname = t\n"
+    )
+
+
 def _run(
     env: dict[str, str], cwd: Path, *args: str, name: str = "prek"
 ) -> subprocess.CompletedProcess[str]:
@@ -210,6 +258,117 @@ def test_a_linked_worktree_targets_the_main_checkout(tmp_path: Path) -> None:
         "--git-dir",
         str((repo / ".git").resolve()),
     ]
+
+
+def test_lefthook_install_hides_the_global_hooks_path(tmp_path: Path) -> None:
+    env, record, shared = _setup_lefthook(tmp_path)
+    repo = _repo(tmp_path)
+    assert _run(env, repo, "install", name="lefthook").returncode == 0
+    assert record.read_text().splitlines() == ["GIT_CONFIG_GLOBAL=/dev/null", "install"]
+    assert (repo / ".git" / "hooks" / "pre-commit").is_file()
+    assert not (shared / "pre-commit").exists()
+
+
+def test_lefthook_install_hides_a_custom_global_hooks_path(tmp_path: Path) -> None:
+    env, record, _shared = _setup_lefthook(tmp_path)
+    other = tmp_path / "other-hooks"
+    _set_global_hooks_path(env, str(other))
+    repo = _repo(tmp_path)
+    assert _run(env, repo, "install", name="lefthook").returncode == 0
+    assert record.read_text().splitlines() == ["GIT_CONFIG_GLOBAL=/dev/null", "install"]
+    assert (repo / ".git" / "hooks" / "pre-commit").is_file()
+    assert not (other / "pre-commit").exists()
+
+
+def test_lefthook_install_without_a_global_hooks_path_keeps_the_global_config(
+    tmp_path: Path,
+) -> None:
+    env, record, _shared = _setup_lefthook(tmp_path)
+    _set_global_hooks_path(env, None)
+    repo = _repo(tmp_path)
+    assert _run(env, repo, "install", name="lefthook").returncode == 0
+    assert record.read_text().splitlines() == ["GIT_CONFIG_GLOBAL=<unset>", "install"]
+    assert (repo / ".git" / "hooks" / "pre-commit").is_file()
+
+
+def test_lefthook_install_in_a_linked_worktree_targets_the_main_checkout(
+    tmp_path: Path,
+) -> None:
+    env, record, _shared = _setup_lefthook(tmp_path)
+    repo = _repo(tmp_path)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "x"],
+        check=True,
+        env=dict(
+            os.environ,
+            GIT_AUTHOR_NAME="t",
+            GIT_AUTHOR_EMAIL="t@t",
+            GIT_COMMITTER_NAME="t",
+            GIT_COMMITTER_EMAIL="t@t",
+        ),
+    )
+    worktree = tmp_path / "wt"
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-q", str(worktree)], check=True
+    )
+    assert _run(env, worktree, "install", name="lefthook").returncode == 0
+    assert record.read_text().splitlines()[0] == "GIT_CONFIG_GLOBAL=/dev/null"
+    assert (repo / ".git" / "hooks" / "pre-commit").is_file()
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["install", "--force"],
+        ["install", "-f"],
+        ["install", "--reset-hooks-path"],
+        ["install", "-r"],
+        ["install", "-fr"],
+    ],
+)
+def test_lefthook_destructive_flags_cannot_reach_the_global_dir(
+    tmp_path: Path, args: list[str]
+) -> None:
+    env, record, shared = _setup_lefthook(tmp_path)
+    repo = _repo(tmp_path)
+    assert _run(env, repo, *args, name="lefthook").returncode == 0
+    assert record.read_text().splitlines()[0] == "GIT_CONFIG_GLOBAL=/dev/null"
+    assert (repo / ".git" / "hooks" / "pre-commit").is_file()
+    assert not (shared / "pre-commit").exists()
+
+
+def test_lefthook_other_invocations_pass_through(tmp_path: Path) -> None:
+    env, record, _shared = _setup_lefthook(tmp_path)
+    assert (
+        _run(env, _repo(tmp_path), "run", "pre-commit", name="lefthook").returncode == 0
+    )
+    assert record.read_text().splitlines() == [
+        "GIT_CONFIG_GLOBAL=<unset>",
+        "run",
+        "pre-commit",
+    ]
+
+
+@pytest.mark.parametrize("help_flag", ["-h", "--help"])
+def test_lefthook_help_passes_through(tmp_path: Path, help_flag: str) -> None:
+    env, record, _shared = _setup_lefthook(tmp_path)
+    assert (
+        _run(env, _repo(tmp_path), "install", help_flag, name="lefthook").returncode == 0
+    )
+    assert record.read_text().splitlines() == [
+        "GIT_CONFIG_GLOBAL=<unset>",
+        "install",
+        help_flag,
+    ]
+
+
+def test_lefthook_install_outside_a_work_tree_passes_through(tmp_path: Path) -> None:
+    env, record, _shared = _setup_lefthook(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    env["GIT_CEILING_DIRECTORIES"] = str(tmp_path)
+    assert _run(env, outside, "install", name="lefthook").returncode == 1
+    assert record.read_text().splitlines() == ["GIT_CONFIG_GLOBAL=<unset>", "install"]
 
 
 @pytest.mark.parametrize(

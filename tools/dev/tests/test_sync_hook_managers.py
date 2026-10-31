@@ -159,13 +159,22 @@ def test_strategy_none_adapter_omits_shim_and_needs_no_subcommand(registry: dict
         "    prek) install_subcommand=install; install_strategy=git-dir-flag; install_flag=--git-dir ;;"
         in shim
     )
+    # Lefthook needs a rewrite too, but has no flag to inject
+    assert "    lefthook) install_subcommand=install; install_strategy=hide-global-config ;;" in shim
 
 
 def test_strategy_none_with_flag_is_refused(registry: dict[str, Any]) -> None:
     broken = copy.deepcopy(registry)
     broken["adapters"]["simple-git-hooks"]["install"]["flag"] = "--git-dir"
     errors = mod.validate(broken)
-    assert any("strategy 'none' takes no flag" in e for e in errors), errors
+    assert any("takes no flag" in e for e in errors), errors
+
+
+def test_hide_global_config_with_flag_is_refused(registry: dict[str, Any]) -> None:
+    broken = copy.deepcopy(registry)
+    broken["adapters"]["lefthook"]["install"]["flag"] = "--git-dir"
+    errors = mod.validate(broken)
+    assert any("takes no flag" in e for e in errors), errors
 
 
 def test_strategy_none_with_aliases_is_refused(registry: dict[str, Any]) -> None:

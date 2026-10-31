@@ -364,6 +364,12 @@ See `docs/adapters/goose.md`.
   `tools/agent-isolation/hook-manager-shim.sh` (installed as
   `~/.claude/bin/<tool>`, keyed by that name), the dispatcher and
   `sandbox-lint`, and checks the committed settings against it.
+  The shim's per-adapter install strategy keeps the target local: prek
+  gets `--git-dir`, and lefthook, which refuses while a global
+  `core.hooksPath` is set, gets `GIT_CONFIG_GLOBAL=/dev/null` and has no
+  home (#1822).
+  The `lefthook-hooks-path` agent guard blocks `lefthook install --force`
+  and `--reset-hooks-path` while that path is the framework's.
   The settings template likewise denies `Edit(~/.cache/ponymail-attachments/**)`
   (#1828): the PonyMail MCP saves report attachments there from outside the
   sandbox, and a sandboxed command that could rename directories under that
@@ -382,9 +388,10 @@ See `docs/adapters/goose.md`.
   shim, verify check 19d; the default-home deny and the dispatcher's host
   home stay on for every registered manager, because both homes are per
   user (#1819).
-  `registry.json` registers prek (install strategy `git-dir-flag`) and
+  `registry.json` registers prek (install strategy `git-dir-flag`),
   overcommit (`hooks-path-env`, with `install.runtime_env` so the
-  dispatcher exports the same `core.hooksPath` at run time), plus four
+  dispatcher exports the same `core.hooksPath` at run time), lefthook
+  (`hide-global-config`, no home), plus four
   managers with install strategy `none`, which already write to the
   repository's own hooks directory whatever the global `core.hooksPath`:
   `simple-git-hooks`, `cargo-husky`, `git-build-hook` and

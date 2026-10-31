@@ -55,7 +55,7 @@ SANDBOX_LINT = Path("tools/sandbox-lint/src/sandbox_lint/__init__.py")
 SETTINGS = (Path(".claude/settings.json"), Path("tools/sandbox-lint/expected.json"))
 
 #: Install strategies the shim implements. A new one lands with its shim branch.
-STRATEGIES = {"git-dir-flag", "hooks-path-env", "none"}
+STRATEGIES = {"git-dir-flag", "hooks-path-env", "hide-global-config", "none"}
 
 _NAME = re.compile(r"^[a-z][a-z0-9-]*$")
 _SUBCOMMAND = re.compile(r"^(?:--)?[a-z][a-z0-9-]*$")
@@ -136,6 +136,8 @@ def validate(registry: dict[str, Any]) -> list[str]:
                     errors.append(
                         f"{where}.install.flag: git-dir-flag needs the long option that takes the git dir"
                     )
+                elif strategy != "git-dir-flag" and "flag" in install:
+                    errors.append(f"{where}.install.flag: strategy {strategy!r} takes no flag")
             else:
                 for key in ("flag", "aliases"):
                     if key in install:
